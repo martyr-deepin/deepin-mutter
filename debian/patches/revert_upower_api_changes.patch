@@ -1,0 +1,61 @@
+From b095e0a39df3837d3a03c9832803fafd742a8171 Mon Sep 17 00:00:00 2001
+From: Tim Lunn <tim@feathertop.org>
+Date: Thu, 14 Nov 2013 21:10:46 +1100
+Subject: [PATCH] Revert "MonitorConfig: Use new UPower API"
+
+This reverts commit a9a10aaa2070d726c255b035f4664079373f733a.
+---
+ configure.ac              |  2 +-
+ src/core/monitor-config.c | 12 +++++-------
+ 2 files changed, 6 insertions(+), 8 deletions(-)
+
+Index: mutter-3.12.2/configure.ac
+===================================================================
+--- mutter-3.12.2.orig/configure.ac
++++ mutter-3.12.2/configure.ac
+@@ -77,7 +77,7 @@ MUTTER_PC_MODULES="
+    xcomposite >= 0.2 xfixes xrender xdamage xi >= 1.6.0
+    $CLUTTER_PACKAGE >= 1.15.90
+    cogl-1.0 >= 1.15.6
+-   upower-glib >= 0.99.0
++   upower-glib >= 0.9.11
+    gnome-desktop-3.0
+ "
+ 
+Index: mutter-3.12.2/src/core/monitor-config.c
+===================================================================
+--- mutter-3.12.2.orig/src/core/monitor-config.c
++++ mutter-3.12.2/src/core/monitor-config.c
+@@ -98,9 +98,8 @@ static gboolean meta_monitor_config_assi
+                                                   GPtrArray          *crtcs,
+                                                   GPtrArray          *outputs);
+ 
+-static void     power_client_changed_cb (UpClient   *client,
+-                                         GParamSpec *pspec,
+-                                         gpointer    user_data);
++static void     power_client_changed_cb (UpClient *client,
++                                         gpointer  user_data);
+ 
+ static void
+ free_output_key (MetaOutputKey *key)
+@@ -232,7 +231,7 @@ meta_monitor_config_init (MetaMonitorCon
+   self->up_client = up_client_new ();
+   self->lid_is_closed = up_client_get_lid_is_closed (self->up_client);
+ 
+-  g_signal_connect_object (self->up_client, "notify::lid-is-closed",
++  g_signal_connect_object (self->up_client, "changed",
+                            G_CALLBACK (power_client_changed_cb), self, 0);
+ }
+ 
+@@ -1386,9 +1385,8 @@ turn_off_laptop_display (MetaMonitorConf
+ }
+ 
+ static void
+-power_client_changed_cb (UpClient   *client,
+-                         GParamSpec *pspec,
+-                         gpointer    user_data)
++power_client_changed_cb (UpClient *client,
++                         gpointer  user_data)
+ {
+   MetaMonitorManager *manager = meta_monitor_manager_get ();
+   MetaMonitorConfig *self = user_data;
