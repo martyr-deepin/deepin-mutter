@@ -4,7 +4,7 @@
 srcdir=`dirname $0`
 test -z "$srcdir" && srcdir=.
 
-PKG_NAME="mutter"
+PKG_NAME="deepin-mutter"
 REQUIRED_AUTOMAKE_VERSION=1.10
 
 (test -f $srcdir/configure.ac \

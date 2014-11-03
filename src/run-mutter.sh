@@ -96,7 +96,7 @@ if test -z "$ONLY_WM"; then
   if test -e ~/.Xmodmap; then
       DISPLAY=$CLIENT_DISPLAY xmodmap ~/.Xmodmap
   fi
- 
+
   usleep 50000
 
   for I in `seq 0 $MAX_SCREEN`; do
@@ -105,5 +105,5 @@ if test -z "$ONLY_WM"; then
 fi
 
 if test -z "$ONLY_SETUP"; then
-  MUTTER_VERBOSE=1 MUTTER_USE_LOGFILE=1 MUTTER_DEBUG_BUTTON_GRABS=1 exec $DEBUG ./mutter $OPTIONS
+  MUTTER_VERBOSE=1 MUTTER_USE_LOGFILE=1 MUTTER_DEBUG_BUTTON_GRABS=1 exec $DEBUG ./deepin-mutter $OPTIONS
 fi

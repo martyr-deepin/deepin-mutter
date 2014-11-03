@@ -1,3 +1,9 @@
+deepin-mutter (3.12.2-1deepin1) trusty; urgency=medium
+
+  Rename package name to deepin-mutter
+
+ -- xufasheng <fasheng.xu@gmail.com>  Mon, 3 Nov 2014 16:56:57 +0800
+
 mutter (3.12.2-1ubuntu99~elementary0.3.4) trusty; urgency=medium
 
   * debian/patches: Add backported upstream patches from 3.12

@@ -17,7 +17,7 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_SRCDIR(src/core/display.c)
 AC_CONFIG_HEADERS(config.h)
 
-AM_INIT_AUTOMAKE([1.11 no-dist-gzip dist-xz tar-ustar])
+AM_INIT_AUTOMAKE([1.11 no-dist-gzip dist-xz tar-ustar subdir-objects])
 m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])],)
 AM_MAINTAINER_MODE([enable])
 
@@ -30,13 +30,16 @@ AC_SUBST(MUTTER_MINOR_VERSION)
 AC_SUBST(MUTTER_MICRO_VERSION)
 AC_SUBST(MUTTER_PLUGIN_API_VERSION)
 
-MUTTER_PLUGIN_DIR="$libdir/$PACKAGE/plugins"
+pkglibdir='${libdir}/'deepin-${PACKAGE}
+AC_SUBST([pkglibdir])
+
+MUTTER_PLUGIN_DIR="$pkglibdir/plugins"
 AC_SUBST(MUTTER_PLUGIN_DIR)
 
 # Honor aclocal flags
 AC_SUBST(ACLOCAL_AMFLAGS, "\${ACLOCAL_FLAGS}")
 
-GETTEXT_PACKAGE=mutter
+GETTEXT_PACKAGE=deepin-mutter
 AC_SUBST(GETTEXT_PACKAGE)
 AC_DEFINE_UNQUOTED(GETTEXT_PACKAGE,"$GETTEXT_PACKAGE",[Name of default gettext domain])
 
@@ -432,8 +435,8 @@ doc/man/Makefile
 doc/reference/Makefile
 doc/reference/meta-docs.sgml
 src/Makefile
-src/libmutter.pc
-src/mutter-plugins.pc
+src/libdeepin-mutter.pc
+src/deepin-mutter-plugins.pc
 src/compositor/plugins/Makefile
 po/Makefile.in
 ])

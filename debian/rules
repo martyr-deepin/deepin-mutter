@@ -4,9 +4,10 @@
 	dh $@
 
 override_dh_auto_configure:
-	./autogen.sh --prefix=/usr --sysconfdir=/etc \
-		--libexecdir=/usr/lib/mutter \
-		--localstatedir=/var \
+	./autogen.sh --prefix=/usr \
+		--sysconfdir=/etc \
+		--enable-gtk-doc\
 		--disable-schemas-compile \
 		--enable-compile-warnings=minimum \
-		--enable-gtk-doc\
+		# --localstatedir=/var \
+		# --libexecdir=/usr/lib/deepin-mutter \

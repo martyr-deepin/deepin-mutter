@@ -9,7 +9,7 @@ AUTOMAKE_OPTIONS = 1.6
 # of using the various options.
 
 # The name of the module, e.g. 'glib'.
-DOC_MODULE=meta
+DOC_MODULE=deepin-mutter
 
 # Uncomment for versioned docs and specify the version of the module, e.g. '2'.
 #DOC_MODULE_VERSION=2
@@ -140,7 +140,7 @@ expand_content_files= \
 # e.g. GTKDOC_CFLAGS=-I$(top_srcdir) -I$(top_builddir) $(GTK_DEBUG_FLAGS)
 # e.g. GTKDOC_LIBS=$(top_builddir)/gtk/$(gtktargetlib)
 GTKDOC_CFLAGS=$(MUTTER_CFLAGS)
-GTKDOC_LIBS=$(MUTTER_LIBS) $(top_builddir)/src/libmutter.la
+GTKDOC_LIBS=$(MUTTER_LIBS) $(top_builddir)/src/libdeepin-mutter.la
 
 # This includes the standard gtk-doc make rules, copied by gtkdocize.
 include $(top_srcdir)/gtk-doc.make

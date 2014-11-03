@@ -7,7 +7,7 @@ Subject: [PATCH] prefs: Add center-new-windows setting
  src/core/place.c                    | 17 ++++++++++++++---
  src/core/prefs.c                    | 17 +++++++++++++++++
  src/meta/prefs.h                    |  5 ++++-
- src/org.gnome.mutter.gschema.xml.in |  9 +++++++++
+ src/com.deepin.dde.mutter.gschema.xml.in |  9 +++++++++
  4 files changed, 44 insertions(+), 4 deletions(-)
 
 Index: b/src/core/place.c
@@ -124,10 +124,10 @@ Index: b/src/meta/prefs.h
  
  void                        meta_prefs_get_button_layout (MetaButtonLayout *button_layout);
  
-Index: b/src/org.gnome.mutter.gschema.xml.in
+Index: b/src/com.deepin.dde.mutter.gschema.xml.in
 ===================================================================
---- a/src/org.gnome.mutter.gschema.xml.in
-+++ b/src/org.gnome.mutter.gschema.xml.in
+--- a/src/com.deepin.dde.mutter.gschema.xml.in
++++ b/src/com.deepin.dde.mutter.gschema.xml.in
 @@ -93,6 +93,15 @@
        </_description>
      </key>
@@ -141,6 +141,6 @@ Index: b/src/org.gnome.mutter.gschema.xml.in
 +      </_description>
 +    </key>
 +
-     <child name="keybindings" schema="org.gnome.mutter.keybindings"/>
+     <child name="keybindings" schema="com.deepin.dde.mutter.keybindings"/>
  
    </schema>

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<KeyListEntries schema="org.gnome.desktop.wm.keybindings"
+<KeyListEntries schema="com.deepin.dde.wm.keybindings"
                 group="system"
                 _name="Windows"
-                wm_name="Mutter"
-                package="mutter">
+                wm_name="Deepin Mutter"
+                package="deepin-mutter">
 
 	<KeyListEntry name="activate-window-menu" _description="Activate the window menu"/>
 
@@ -39,12 +39,11 @@
 	<KeyListEntry name="maximize-horizontally" _description="Maximize window horizontally"/>
 
 	<KeyListEntry name="toggle-tiled-left"
-                      schema="org.gnome.mutter.keybindings"
+                      schema="com.deepin.dde.wm.keybindings"
                       _description="View split on left"/>
 
 	<KeyListEntry name="toggle-tiled-right"
-                      schema="org.gnome.mutter.keybindings"
+                      schema="com.deepin.dde.wm.keybindings"
                       _description="View split on right"/>
 
 </KeyListEntries>
-

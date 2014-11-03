@@ -47,7 +47,7 @@ class Test(object):
 tests_by_name = {}
 tests_by_bug_number = {}
 
-pristine_copy = '/usr/local/src/mutter'
+pristine_copy = '/usr/local/src/deepin-mutter'
 working_directory = pristine_copy
 homepath = os.getcwd ()
 
@@ -169,20 +169,20 @@ class BuildTest(Test):
         if not run('make', 'env %s make %s' % (' '.join(flags), command)):
             raise TestFailure('Build failed; can\'t really go on from here.')
 
-        binary = 'src/mutter' # or 'mutter/src/mutter' sometimes. hmm....
+        binary = 'src/deepin-mutter' # or 'deepin-mutter/src/deepin-mutter' sometimes. hmm....
 
         if not os.path.lexists(binary):
             raise TestFailure('Binary was not built.')
 
         output = commands.getoutput("env LANG=C %s --version" % binary)
 
-        if not output.startswith('mutter '):
+        if not output.startswith('deepin-mutter '):
             raise TestFailure('Built program fails to identify itself: ['+output+']')
 
         # Should also test what it says about its flags
         # (and make it show its flags)
 
-        if not run ('recopy', 'cp %s %s/mutter-%s' % (binary, homepath, self.executable_name())):
+        if not run ('recopy', 'cp %s %s/deepin-mutter-%s' % (binary, homepath, self.executable_name())):
             raise TestFailure('Couldn\'t copy binary somewhere safe')
 
         # Should clear up build if it's temp directory

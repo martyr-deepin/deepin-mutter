@@ -1,7 +1,7 @@
 # Flag build for parallelism; see https://savannah.gnu.org/patch/?6905
 .AUTOPARALLEL:
 
-lib_LTLIBRARIES = libmutter.la
+lib_LTLIBRARIES = libdeepin-mutter.la
 
 SUBDIRS=compositor/plugins
 
@@ -19,7 +19,7 @@ INCLUDES=								\
 	-DMUTTER_LOCALEDIR=\"$(prefix)/@DATADIRNAME@/locale\"		\
 	-DMUTTER_PKGDATADIR=\"$(pkgdatadir)\"				\
 	-DMUTTER_DATADIR=\"$(datadir)\"					\
-	-DG_LOG_DOMAIN=\"mutter\"					\
+	-DG_LOG_DOMAIN=\"deepin-mutter\"					\
 	-DSN_API_NOT_YET_FROZEN=1					\
 	-DMUTTER_MAJOR_VERSION=$(MUTTER_MAJOR_VERSION)			\
 	-DMUTTER_MINOR_VERSION=$(MUTTER_MINOR_VERSION)			\
@@ -35,7 +35,7 @@ mutter_built_sources = \
 	mutter-enum-types.h		\
 	mutter-enum-types.c
 
-libmutter_la_SOURCES =				\
+libdeepin_mutter_la_SOURCES =				\
 	core/async-getprop.c			\
 	core/async-getprop.h			\
 	core/barrier.c				\
@@ -167,15 +167,15 @@ libmutter_la_SOURCES =				\
 	ui/theme-private.h			\
 	ui/ui.c
 
-nodist_libmutter_la_SOURCES =			\
+nodist_libdeepin_mutter_la_SOURCES =			\
 	$(mutter_built_sources)
 
-libmutter_la_LDFLAGS = -no-undefined
-libmutter_la_LIBADD  = $(MUTTER_LIBS)
+libdeepin_mutter_la_LDFLAGS = -no-undefined
+libdeepin_mutter_la_LIBADD  = $(MUTTER_LIBS)
 
 # Headers installed for plugins; introspected information will
 # be extracted into Mutter-<version>.gir
-libmutterinclude_base_headers =		\
+libdeepin_mutterinclude_base_headers =		\
 	meta/barrier.h				\
 	meta/boxes.h				\
 	meta/common.h				\
@@ -206,19 +206,19 @@ libmutterinclude_base_headers =		\
 
 # Excluded from scanning for introspection but installed
 # atomnames.h: macros cause problems for scanning process
-libmutterinclude_extra_headers =		\
+libdeepin_mutterinclude_extra_headers =		\
 	meta/atomnames.h
 
-libmutterincludedir = $(includedir)/mutter/meta
+libdeepin_mutterincludedir = $(includedir)/deepin-mutter/meta
 
-libmutterinclude_HEADERS =			\
-	$(libmutterinclude_base_headers)	\
-	$(libmutterinclude_extra_headers)
+libdeepin_mutterinclude_HEADERS =			\
+	$(libdeepin_mutterinclude_base_headers)	\
+	$(libdeepin_mutterinclude_extra_headers)
 
-bin_PROGRAMS=mutter
+bin_PROGRAMS=deepin-mutter
 
-mutter_SOURCES = core/mutter.c
-mutter_LDADD = $(MUTTER_LIBS) libmutter.la
+deepin_mutter_SOURCES = core/mutter.c
+deepin_mutter_LDADD = $(MUTTER_LIBS) libdeepin-mutter.la
 
 if HAVE_INTROSPECTION
 include $(INTROSPECTION_MAKEFILE)
@@ -240,15 +240,15 @@ typelib_DATA = Meta-$(api_version).typelib
 
 INTROSPECTION_GIRS = Meta-$(api_version).gir
 
-Meta-$(api_version).gir: libmutter.la
+Meta-$(api_version).gir: libdeepin-mutter.la
 @META_GIR@_INCLUDES = GObject-2.0 GDesktopEnums-3.0 Gdk-3.0 Gtk-3.0 Clutter-1.0 xlib-2.0 xfixes-4.0 Cogl-1.0
-@META_GIR@_EXPORT_PACKAGES = libmutter
+@META_GIR@_EXPORT_PACKAGES = libdeepin-mutter
 @META_GIR@_CFLAGS = $(INCLUDES)
-@META_GIR@_LIBS = libmutter.la
+@META_GIR@_LIBS = libdeepin-mutter.la
 @META_GIR@_FILES =				\
 	mutter-enum-types.h			\
-	$(libmutterinclude_base_headers)	\
-	$(filter %.c,$(libmutter_la_SOURCES) $(nodist_libmutter_la_SOURCES))
+	$(libdeepin_mutterinclude_base_headers)	\
+	$(filter %.c,$(libdeepin_mutter_la_SOURCES) $(nodist_libdeepin_mutter_la_SOURCES))
 @META_GIR@_SCANNERFLAGS = --warn-all --warn-error
 
 endif
@@ -259,40 +259,40 @@ testasyncgetprop_SOURCES = core/testasyncgetprop.c
 
 noinst_PROGRAMS=testboxes testgradient testasyncgetprop
 
-testboxes_LDADD = $(MUTTER_LIBS) libmutter.la
-testgradient_LDADD = $(MUTTER_LIBS) libmutter.la
-testasyncgetprop_LDADD = $(MUTTER_LIBS) libmutter.la
+testboxes_LDADD = $(MUTTER_LIBS) libdeepin-mutter.la
+testgradient_LDADD = $(MUTTER_LIBS) libdeepin-mutter.la
+testasyncgetprop_LDADD = $(MUTTER_LIBS) libdeepin-mutter.la
 
 @INTLTOOL_DESKTOP_RULE@
 
 desktopfilesdir=$(datadir)/applications
-desktopfiles_in_files=mutter.desktop.in
+desktopfiles_in_files=deepin-mutter.desktop.in
 desktopfiles_files=$(desktopfiles_in_files:.desktop.in=.desktop)
 desktopfiles_DATA = $(desktopfiles_files)
 
 wmpropertiesdir=$(datadir)/gnome/wm-properties
-wmproperties_in_files=mutter-wm.desktop.in
+wmproperties_in_files=deepin-mutter-wm.desktop.in
 wmproperties_files=$(wmproperties_in_files:.desktop.in=.desktop)
 wmproperties_DATA = $(wmproperties_files)
 
 xmldir       = @GNOME_KEYBINDINGS_KEYSDIR@
 xml_in_files = \
-        50-mutter-navigation.xml.in	\
-        50-mutter-system.xml.in		\
-        50-mutter-windows.xml.in
+        50-deepin-mutter-navigation.xml.in	\
+        50-deepin-mutter-system.xml.in		\
+        50-deepin-mutter-windows.xml.in
 xml_DATA     = $(xml_in_files:.xml.in=.xml)
 
-gsettings_SCHEMAS = org.gnome.mutter.gschema.xml
+gsettings_SCHEMAS = com.deepin.dde.wm.mutter.gschema.xml
 @INTLTOOL_XML_NOMERGE_RULE@
 @GSETTINGS_RULES@
 
 convertdir = $(datadir)/GConf/gsettings
-convert_DATA = mutter-schemas.convert
+convert_DATA = deepin-mutter-schemas.convert
 
 CLEANFILES =					\
-	mutter.desktop				\
-	mutter-wm.desktop			\
-	org.gnome.mutter.gschema.xml		\
+	deepin-mutter.desktop				\
+	deepin-mutter-wm.desktop			\
+	com.deepin.dde.wm.mutter.gschema.xml		\
 	$(xml_DATA)				\
 	$(mutter_built_sources)			\
 	$(typelib_DATA)				\
@@ -300,7 +300,7 @@ CLEANFILES =					\
 
 pkgconfigdir = $(libdir)/pkgconfig
 
-pkgconfig_DATA = libmutter.pc mutter-plugins.pc
+pkgconfig_DATA = libdeepin-mutter.pc deepin-mutter-plugins.pc
 
 EXTRA_DIST=$(desktopfiles_files) 	\
 	$(wmproperties_files)		\
@@ -308,12 +308,12 @@ EXTRA_DIST=$(desktopfiles_files) 	\
 	$(desktopfiles_in_files)	\
 	$(wmproperties_in_files)	\
 	$(xml_in_files)			\
-	org.gnome.mutter.gschema.xml.in \
+	com.deepin.dde.wm.mutter.gschema.xml.in \
 	idle-monitor.xml \
 	xrandr.xml \
-	mutter-schemas.convert \
-	libmutter.pc.in \
-	mutter-plugins.pc.in  \
+	deepin-mutter-schemas.convert \
+	libdeepin-mutter.pc.in \
+	deepin-mutter-plugins.pc.in  \
 	mutter-enum-types.h.in \
 	mutter-enum-types.c.in
 
@@ -323,11 +323,11 @@ CLEANFILES += $(MUTTER_STAMP_FILES)
 
 mutter-enum-types.h: stamp-mutter-enum-types.h Makefile
 	@true
-stamp-mutter-enum-types.h: $(libmutterinclude_base_headers) mutter-enum-types.h.in
+stamp-mutter-enum-types.h: $(libdeepin_mutterinclude_base_headers) mutter-enum-types.h.in
 	$(AM_V_GEN) ( cd $(srcdir) && \
 	  $(GLIB_MKENUMS) \
 	    --template mutter-enum-types.h.in \
-	  $(libmutterinclude_base_headers) ) >> xgen-teth && \
+	  $(libdeepin_mutterinclude_base_headers) ) >> xgen-teth && \
 	(cmp -s xgen-teth mutter-enum-types.h || cp xgen-teth mutter-enum-types.h) && \
 	rm -f xgen-teth && \
 	echo timestamp > $(@F)
@@ -336,7 +336,7 @@ mutter-enum-types.c: stamp-mutter-enum-types.h mutter-enum-types.c.in
 	  $(AM_V_GEN) ( cd $(srcdir) && \
 	  $(GLIB_MKENUMS) \
 	    --template mutter-enum-types.c.in \
-	  $(libmutterinclude_base_headers) ) >> xgen-tetc && \
+	  $(libdeepin_mutterinclude_base_headers) ) >> xgen-tetc && \
 	cp xgen-tetc mutter-enum-types.c && \
 	rm -f xgen-tetc
 
@@ -344,7 +344,7 @@ dbus_xrandr_built_sources = meta-dbus-xrandr.c meta-dbus-xrandr.h
 
 $(dbus_xrandr_built_sources) : Makefile.am xrandr.xml
 	$(AM_V_GEN)gdbus-codegen							\
-		--interface-prefix org.gnome.Mutter					\
+		--interface-prefix com.deepin.Mutter					\
 		--c-namespace MetaDBus							\
 		--generate-c-code meta-dbus-xrandr					\
 		$(srcdir)/xrandr.xml
@@ -353,7 +353,7 @@ dbus_idle_built_sources = meta-dbus-idle-monitor.c meta-dbus-idle-monitor.h
 
 $(dbus_idle_built_sources) : Makefile.am idle-monitor.xml
 	$(AM_V_GEN)gdbus-codegen							\
-		--interface-prefix org.gnome.Mutter					\
+		--interface-prefix com.deepin.Mutter					\
 		--c-namespace MetaDBus							\
 		--generate-c-code meta-dbus-idle-monitor				\
 		--c-generate-object-manager						\

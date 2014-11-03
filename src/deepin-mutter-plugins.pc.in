@@ -9,8 +9,8 @@ mutter_minor_version=@MUTTER_MINOR_VERSION@
 mutter_micro_version=@MUTTER_MICRO_VERSION@
 mutter_plugin_api_version=@MUTTER_PLUGIN_API_VERSION@
 
-Name: mutter-plugins
-Description: Dev parameters for mutter plugins
+Name: deepin-mutter-plugins
+Description: Dev parameters for deepin-mutter plugins
 Requires: @CLUTTER_PACKAGE@
 Version: @VERSION@
 Libs: @CLUTTER_LIBS@

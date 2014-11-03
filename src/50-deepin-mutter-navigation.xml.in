@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<KeyListEntries schema="org.gnome.desktop.wm.keybindings"
+<KeyListEntries schema="com.deepin.dde.wm.keybindings"
                 group="system"
                 _name="Navigation"
-                wm_name="Mutter"
-                package="mutter">
+                wm_name="Deepin Mutter"
+                package="deepin-mutter">
 
 	<KeyListEntry name="move-to-workspace-1"
 	              _description="Move window to workspace 1" />

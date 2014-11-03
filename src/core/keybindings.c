@@ -53,7 +53,7 @@
 #endif
 
 #define SCHEMA_COMMON_KEYBINDINGS "org.gnome.desktop.wm.keybindings"
-#define SCHEMA_MUTTER_KEYBINDINGS "org.gnome.mutter.keybindings"
+#define SCHEMA_MUTTER_KEYBINDINGS "com.deepin.dde.wm.mutter.keybindings"
 
 static gboolean add_builtin_keybinding (MetaDisplay          *display,
                                         const char           *name,
