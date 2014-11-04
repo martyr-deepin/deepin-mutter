@@ -1921,7 +1921,10 @@ build_and_scan_frame_mask (MetaWindowActor       *self,
     {
       mask_texture = meta_texture_rectangle_new (tex_width, tex_height,
                                                  COGL_PIXEL_FORMAT_A_8,
-                                                 stride, mask_data);
+                                                 COGL_PIXEL_FORMAT_A_8,
+                                                 stride,
+                                                 mask_data,
+                                                 NULL /* error */);
     }
   else
     {
