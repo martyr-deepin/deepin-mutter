@@ -88,7 +88,9 @@ typedef enum
   STATE_WINDOW,
   /* things we don't use any more but we can still parse: */
   STATE_MENU_ICON,
-  STATE_FALLBACK
+  STATE_FALLBACK,
+  /* an ubuntu specific ignore-this-element state */
+  UBUNTU_STATE_IGNORE  
 } ParseState;
 
 typedef struct
@@ -1308,7 +1310,19 @@ parse_toplevel_element (GMarkupParseContext  *context,
        */
       push_state (info, STATE_FALLBACK);
     }
-   else
+  else if (ELEMENT_IS ("shadow"))
+    {
+       /* ubuntu specific, workaround for light-themes: silently ignore shadow tag.
+        */
+      push_state (info, UBUNTU_STATE_IGNORE);
+    }
+  else if (ELEMENT_IS ("padding"))
+    {
+       /* ubuntu specific, workaround for light-themes: silently ignore padding tag.
+        */
+      push_state (info, UBUNTU_STATE_IGNORE);
+    }
+  else
     {
       set_error (error, context,
                  G_MARKUP_ERROR, G_MARKUP_ERROR_PARSE,
@@ -3029,6 +3043,18 @@ parse_style_element (GMarkupParseContext  *context,
       
       push_state (info, STATE_BUTTON);
     }
+  else if (ELEMENT_IS ("shadow"))
+    {
+       /* ubuntu specific, workaround for light-themes: silently ignore shadow tag.
+        */
+      push_state (info, UBUNTU_STATE_IGNORE);
+    }
+  else if (ELEMENT_IS ("padding"))
+    {
+       /* ubuntu specific, workaround for light-themes: silently ignore padding tag.
+        */
+      push_state (info, UBUNTU_STATE_IGNORE);
+    }
   else
     {
       set_error (error, context,
@@ -3670,6 +3696,8 @@ start_element_handler (GMarkupParseContext *context,
                  _("Element <%s> is not allowed inside a <%s> element"),
                  element_name, "fallback");
       break;
+    case UBUNTU_STATE_IGNORE:
+      break;
     }
 }
 
@@ -3959,6 +3987,9 @@ end_element_handler (GMarkupParseContext *context,
       pop_state (info);
       g_assert (peek_state (info) == STATE_THEME);
       break;
+    case UBUNTU_STATE_IGNORE:
+      pop_state (info);
+      break;
     }
 
   pop_required_version (info);
@@ -4163,6 +4194,9 @@ text_handler (GMarkupParseContext *context,
       break;
     case STATE_FALLBACK:
       NO_TEXT ("fallback");
+      break;
+    case UBUNTU_STATE_IGNORE:
+      NO_TEXT ("ignored_element");
       break;
     }
 }
