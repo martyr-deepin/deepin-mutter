@@ -13,4 +13,3 @@ git_revert_cogl_changes-002.patch
 01_Wcast-align.patch
 prevent-double-lock-deadlock.patch
 04_ignore_shadow_and_padding.patch
-revert_upower_api_changes.patch
