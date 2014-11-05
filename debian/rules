@@ -9,3 +9,6 @@ override_dh_auto_configure:
 		--enable-gtk-doc\
 		--disable-schemas-compile \
 		--enable-compile-warnings=minimum \
+
+override_dh_strip:
+	dh_strip --dbg-package=deepin-mutter-dbg
