@@ -435,8 +435,8 @@ doc/man/Makefile
 doc/reference/Makefile
 doc/reference/meta-docs.sgml
 src/Makefile
-src/libdeepin-mutter.pc
-src/deepin-mutter-plugins.pc
+src/libmutter.pc
+src/mutter-plugins.pc
 src/compositor/plugins/Makefile
 po/Makefile.in
 ])

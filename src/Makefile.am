@@ -29,7 +29,7 @@ INCLUDES=								\
 	-DMUTTER_PLUGIN_DIR=\"@MUTTER_PLUGIN_DIR@\"			\
 	-DGETTEXT_PACKAGE=\"$(GETTEXT_PACKAGE)\"
 
-mutter_built_sources = \
+deepin_mutter_built_sources = \
 	$(dbus_idle_built_sources)	\
 	$(dbus_xrandr_built_sources)	\
 	mutter-enum-types.h		\
@@ -168,7 +168,7 @@ libdeepin_mutter_la_SOURCES =				\
 	ui/ui.c
 
 nodist_libdeepin_mutter_la_SOURCES =			\
-	$(mutter_built_sources)
+	$(deepin_mutter_built_sources)
 
 libdeepin_mutter_la_LDFLAGS = -no-undefined
 libdeepin_mutter_la_LIBADD  = $(MUTTER_LIBS)
@@ -266,41 +266,41 @@ testasyncgetprop_LDADD = $(MUTTER_LIBS) libdeepin-mutter.la
 @INTLTOOL_DESKTOP_RULE@
 
 desktopfilesdir=$(datadir)/applications
-desktopfiles_in_files=deepin-mutter.desktop.in
+desktopfiles_in_files=mutter.desktop.in
 desktopfiles_files=$(desktopfiles_in_files:.desktop.in=.desktop)
 desktopfiles_DATA = $(desktopfiles_files)
 
 wmpropertiesdir=$(datadir)/gnome/wm-properties
-wmproperties_in_files=deepin-mutter-wm.desktop.in
+wmproperties_in_files=mutter-wm.desktop.in
 wmproperties_files=$(wmproperties_in_files:.desktop.in=.desktop)
 wmproperties_DATA = $(wmproperties_files)
 
 xmldir       = @GNOME_KEYBINDINGS_KEYSDIR@
 xml_in_files = \
-        50-deepin-mutter-navigation.xml.in	\
-        50-deepin-mutter-system.xml.in		\
-        50-deepin-mutter-windows.xml.in
+        50-mutter-navigation.xml.in	\
+        50-mutter-system.xml.in		\
+        50-mutter-windows.xml.in
 xml_DATA     = $(xml_in_files:.xml.in=.xml)
 
-gsettings_SCHEMAS = com.deepin.dde.wm.mutter.gschema.xml
+gsettings_SCHEMAS = org.gnome.mutter.gschema.xml
 @INTLTOOL_XML_NOMERGE_RULE@
 @GSETTINGS_RULES@
 
 convertdir = $(datadir)/GConf/gsettings
-convert_DATA = deepin-mutter-schemas.convert
+convert_DATA = mutter-schemas.convert
 
 CLEANFILES =					\
-	deepin-mutter.desktop				\
-	deepin-mutter-wm.desktop			\
-	com.deepin.dde.wm.mutter.gschema.xml		\
+	mutter.desktop				\
+	mutter-wm.desktop			\
+	org.gnome.mutter.gschema.xml		\
 	$(xml_DATA)				\
-	$(mutter_built_sources)			\
+	$(deepin_mutter_built_sources)			\
 	$(typelib_DATA)				\
 	$(gir_DATA)
 
 pkgconfigdir = $(libdir)/pkgconfig
 
-pkgconfig_DATA = libdeepin-mutter.pc deepin-mutter-plugins.pc
+pkgconfig_DATA = libmutter.pc mutter-plugins.pc
 
 EXTRA_DIST=$(desktopfiles_files) 	\
 	$(wmproperties_files)		\
@@ -308,16 +308,16 @@ EXTRA_DIST=$(desktopfiles_files) 	\
 	$(desktopfiles_in_files)	\
 	$(wmproperties_in_files)	\
 	$(xml_in_files)			\
-	com.deepin.dde.wm.mutter.gschema.xml.in \
+	org.gnome.mutter.gschema.xml.in \
 	idle-monitor.xml \
 	xrandr.xml \
-	deepin-mutter-schemas.convert \
-	libdeepin-mutter.pc.in \
-	deepin-mutter-plugins.pc.in  \
+	mutter-schemas.convert \
+	libmutter.pc.in \
+	mutter-plugins.pc.in  \
 	mutter-enum-types.h.in \
 	mutter-enum-types.c.in
 
-BUILT_SOURCES = $(mutter_built_sources)
+BUILT_SOURCES = $(deepin_mutter_built_sources)
 MUTTER_STAMP_FILES = stamp-mutter-enum-types.h
 CLEANFILES += $(MUTTER_STAMP_FILES)
 
@@ -358,3 +358,16 @@ $(dbus_idle_built_sources) : Makefile.am idle-monitor.xml
 		--generate-c-code meta-dbus-idle-monitor				\
 		--c-generate-object-manager						\
 		$(srcdir)/idle-monitor.xml
+
+
+# rename files with prefix 'deepin-'
+install-data-hook:
+	mv $(DESTDIR)$(desktopfilesdir)/mutter.desktop $(DESTDIR)$(desktopfilesdir)/deepin-mutter.desktop
+	mv $(DESTDIR)$(wmpropertiesdir)/mutter-wm.desktop $(DESTDIR)$(wmpropertiesdir)/deepin-mutter-wm.desktop
+	mv $(DESTDIR)$(xmldir)/50-mutter-navigation.xml $(DESTDIR)$(xmldir)/50-deepin-mutter-navigation.xml
+	mv $(DESTDIR)$(xmldir)/50-mutter-system.xml $(DESTDIR)$(xmldir)/50-deepin-mutter-system.xml
+	mv $(DESTDIR)$(xmldir)/50-mutter-windows.xml $(DESTDIR)$(xmldir)/50-deepin-mutter-windows.xml
+	mv $(DESTDIR)$(gsettingsschemadir)/org.gnome.mutter.gschema.xml $(DESTDIR)$(gsettingsschemadir)/com.deepin.dde.wm.mutter.gschema.xml
+	mv $(DESTDIR)$(convertdir)/mutter-schemas.convert $(DESTDIR)$(convertdir)/deepin-mutter-schemas.convert
+	mv $(DESTDIR)$(pkgconfigdir)/libmutter.pc $(DESTDIR)$(pkgconfigdir)/libdeepin-mutter.pc
+	mv $(DESTDIR)$(pkgconfigdir)/mutter-plugins.pc $(DESTDIR)$(pkgconfigdir)/deepin-mutter-plugins.pc

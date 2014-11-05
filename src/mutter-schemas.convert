@@ -1,4 +1,4 @@
-[com.deepin.dde.mutter]
+[com.deepin.dde.wm.mutter]
 overlay-key = /apps/mutter/general/overlay_key
 attach-modal-dialogs = /apps/mutter/general/attach_modal_dialogs
 workspaces-only-on-primary = /apps/mutter/general/workspaces_only_on_primary
