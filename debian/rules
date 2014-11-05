@@ -9,5 +9,3 @@ override_dh_auto_configure:
 		--enable-gtk-doc\
 		--disable-schemas-compile \
 		--enable-compile-warnings=minimum \
-		# --localstatedir=/var \
-		# --libexecdir=/usr/lib/deepin-mutter \
