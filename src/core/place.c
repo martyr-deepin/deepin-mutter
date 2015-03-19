@@ -318,19 +318,6 @@ window_overlaps_focus_window (MetaWindow *window)
                                    &overlap);
 }
 
-static gboolean
-window_place_centered (MetaWindow *window)
-{
-  MetaWindowType type;
-
-  type = window->type;
-
-  return (type == META_WINDOW_DIALOG ||
-    type == META_WINDOW_MODAL_DIALOG ||
-    type == META_WINDOW_SPLASHSCREEN ||
-    (type == META_WINDOW_NORMAL && meta_prefs_get_center_new_windows ()));
-}
-
 static void
 avoid_being_obscured_as_second_modal_dialog (MetaWindow *window,
                                              int        *x,
@@ -757,7 +744,9 @@ meta_window_place (MetaWindow        *window,
    * on the sides of the parent window or something.
    */
   
-  if (window_place_centered (window))
+  if (window->type == META_WINDOW_DIALOG ||
+      window->type == META_WINDOW_MODAL_DIALOG ||
+      window->type == META_WINDOW_SPLASHSCREEN)
     {
       /* Center on current monitor */
       int w, h;

@@ -182,8 +182,7 @@ enum {
   PROP_GTK_APPLICATION_OBJECT_PATH,
   PROP_GTK_WINDOW_OBJECT_PATH,
   PROP_GTK_APP_MENU_OBJECT_PATH,
-  PROP_GTK_MENUBAR_OBJECT_PATH,
-  PROP_ON_ALL_WORKSPACES
+  PROP_GTK_MENUBAR_OBJECT_PATH
 };
 
 enum
@@ -343,9 +342,6 @@ meta_window_get_property(GObject         *object,
       break;
     case PROP_GTK_MENUBAR_OBJECT_PATH:
       g_value_set_string (value, win->gtk_menubar_object_path);
-      break;
-    case PROP_ON_ALL_WORKSPACES:
-      g_value_set_boolean (value, win->on_all_workspaces);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -568,14 +564,6 @@ meta_window_class_init (MetaWindowClass *klass)
                                                         "Contents of the _GTK_MENUBAR_OBJECT_PATH property of this window",
                                                         NULL,
                                                         G_PARAM_READABLE));
-
-  g_object_class_install_property (object_class,
-                                   PROP_ON_ALL_WORKSPACES,
-                                   g_param_spec_boolean ("on-all-workspaces",
-                                                         "On all workspaces",
-                                                         "Whether the window is set to appear on all workspaces",
-                                                         FALSE,
-                                                         G_PARAM_READABLE));
 
   window_signals[WORKSPACE_CHANGED] =
     g_signal_new ("workspace-changed",
@@ -2016,8 +2004,6 @@ meta_window_update_on_all_workspaces (MetaWindow *window)
             }
         }
       meta_window_set_current_workspace_hint (window);
-
-      g_object_notify (G_OBJECT (window), "on-all-workspaces");
     }
 }
 
@@ -9713,11 +9699,7 @@ find_last_time_predicate (Display  *display,
    * GDK will handle later these events, and eventually
    * free the cookie data itself.
    */
-   /* We do NOT call XGetEventData (display, &ev->xcookie); here
-     because we're not supposed to call X functions from within a predicate.
-     XGetEventData has a lock, which fails as XCheckIfEvent has
-     already locked.  */
-  _XFetchEventCookie(display, &ev->xcookie);
+  XGetEventData (display, &ev->xcookie);
   xev = (XIEvent *) ev->xcookie.data;
 
   if (xev->evtype != XI_Motion)

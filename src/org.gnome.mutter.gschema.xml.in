@@ -41,7 +41,7 @@
       <_description>
         Determines whether workspaces are managed dynamically or
         whether there's a static number of workspaces (determined
-        by the num-workspaces key in org.gnome.desktop.wm.preferences).
+        by the num-workspaces key in com.deepin.dde.wm.desktop.wm.preferences).
       </_description>
     </key>
 
@@ -90,15 +90,6 @@
       <_description>
         If enabled, new windows that are initially the size of the monitor
         automatically get maximized.
-      </_description>
-    </key>
-
-    <key name="center-new-windows" type="b">
-      <default>false</default>
-      <_summary>Place new windows in the center</_summary>
-      <_description>
-        When true, the new windows will always be put in the center of the
-        active screen of the monitor.
       </_description>
     </key>
 

@@ -64,7 +64,6 @@
  * @META_PREF_WORKSPACES_ONLY_ON_PRIMARY: workspaces only on primary
  * @META_PREF_DRAGGABLE_BORDER_WIDTH: draggable border width
  * @META_PREF_AUTO_MAXIMIZE: auto-maximize
- * @META_PREF_CENTER_NEW_WINDOWS: center new windows
  */
 
 /* Keep in sync with GSettings schemas! */
@@ -101,8 +100,7 @@ typedef enum
   META_PREF_FORCE_FULLSCREEN,
   META_PREF_WORKSPACES_ONLY_ON_PRIMARY,
   META_PREF_DRAGGABLE_BORDER_WIDTH,
-  META_PREF_AUTO_MAXIMIZE,
-  META_PREF_CENTER_NEW_WINDOWS
+  META_PREF_AUTO_MAXIMIZE
 } MetaPreference;
 
 typedef void (* MetaPrefsChangedFunc) (MetaPreference pref,
@@ -140,7 +138,6 @@ gboolean                    meta_prefs_get_gnome_accessibility (void);
 gboolean                    meta_prefs_get_gnome_animations   (void);
 gboolean                    meta_prefs_get_edge_tiling        (void);
 gboolean                    meta_prefs_get_auto_maximize      (void);
-gboolean                    meta_prefs_get_center_new_windows (void);
 
 void                        meta_prefs_get_button_layout (MetaButtonLayout *button_layout);
 

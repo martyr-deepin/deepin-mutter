@@ -3,14 +3,14 @@
 'http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd'>
 <node>
   <!--
-      com.deepin.Mutter.IdleMonitor:
+      org.gnome.Mutter.IdleMonitor:
       @short_description: idle monitor interface
 
       This interface is used by gnome-desktop to implement
       user activity monitoring.
   -->
 
-  <interface name="com.deepin.Mutter.IdleMonitor">
+  <interface name="org.gnome.Mutter.IdleMonitor">
     <method name="GetIdletime">
       <arg name="idletime" direction="out" type="t"/>
     </method>

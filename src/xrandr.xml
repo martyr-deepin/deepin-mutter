@@ -3,14 +3,14 @@
 'http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd'>
 <node>
   <!--
-      com.deepin.Mutter.DisplayConfig:
+      org.gnome.Mutter.DisplayConfig:
       @short_description: display configuration interface
 
       This interface is used by mutter and gnome-settings-daemon
       to apply multiple monitor configuration.
   -->
 
-  <interface name="com.deepin.Mutter.DisplayConfig">
+  <interface name="org.gnome.Mutter.DisplayConfig">
 
     <!--
         GetResources:
