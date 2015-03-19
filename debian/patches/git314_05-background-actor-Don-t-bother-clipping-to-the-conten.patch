@@ -1,0 +1,70 @@
+From 6858cb261fa9840879876f98ab46d6e8c130019d Mon Sep 17 00:00:00 2001
+From: "Jasper St. Pierre" <jstpierre@mecheye.net>
+Date: Thu, 7 Aug 2014 14:58:18 -0400
+Subject: [PATCH 5/7] background-actor: Don't bother clipping to the content
+ box
+
+We already clip to the content box when we go to paint the content.
+---
+ src/compositor/meta-background-actor.c | 23 ++---------------------
+ src/compositor/meta-background.c       |  5 +----
+ 2 files changed, 3 insertions(+), 25 deletions(-)
+
+diff --git a/src/compositor/meta-background-actor.c b/src/compositor/meta-background-actor.c
+index ff0dc21..b728287 100644
+--- a/src/compositor/meta-background-actor.c
++++ b/src/compositor/meta-background-actor.c
+@@ -185,7 +185,7 @@ cullable_iface_init (MetaCullableInterface *iface)
+  * meta_background_actor_get_clip_region:
+  * @self: a #MetaBackgroundActor
+  *
+- * Return value (transfer full): a #cairo_region_t that represents the part of
++ * Return value (transfer none): a #cairo_region_t that represents the part of
+  * the background not obscured by other #MetaBackgroundActor or
+  * #MetaWindowActor objects.
+  */
+@@ -193,24 +193,5 @@ cairo_region_t *
+ meta_background_actor_get_clip_region (MetaBackgroundActor *self)
+ {
+   MetaBackgroundActorPrivate *priv = self->priv;
+-  ClutterActorBox content_box;
+-  cairo_rectangle_int_t content_area = { 0 };
+-  cairo_region_t *clip_region;
+-
+-  g_return_val_if_fail (META_IS_BACKGROUND_ACTOR (self), NULL);
+-
+-  if (!priv->clip_region)
+-      return NULL;
+-
+-  clutter_actor_get_content_box (CLUTTER_ACTOR (self), &content_box);
+-
+-  content_area.x = content_box.x1;
+-  content_area.y = content_box.y1;
+-  content_area.width = content_box.x2 - content_box.x1;
+-  content_area.height = content_box.y2 - content_box.y1;
+-
+-  clip_region = cairo_region_create_rectangle (&content_area);
+-  cairo_region_intersect (clip_region, priv->clip_region);
+-
+-  return clip_region;
++  return priv->clip_region;
+ }
+diff --git a/src/compositor/meta-background.c b/src/compositor/meta-background.c
+index 22b3b89..3bb87b8 100644
+--- a/src/compositor/meta-background.c
++++ b/src/compositor/meta-background.c
+@@ -441,10 +441,7 @@ meta_background_paint_content (ClutterContent   *content,
+       clip_region = meta_background_actor_get_clip_region (META_BACKGROUND_ACTOR (actor));
+ 
+       if (clip_region != NULL)
+-        {
+-          cairo_region_intersect (paintable_region, clip_region);
+-          cairo_region_destroy (clip_region);
+-        }
++        cairo_region_intersect (paintable_region, clip_region);
+     }
+ 
+   /* Finally, split the paintable region up into distinct areas
+-- 
+2.1.0.rc1
+
