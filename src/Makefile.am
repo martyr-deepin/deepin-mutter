@@ -367,7 +367,7 @@ install-data-hook:
 	mv $(DESTDIR)$(xmldir)/50-mutter-navigation.xml $(DESTDIR)$(xmldir)/50-deepin-mutter-navigation.xml
 	mv $(DESTDIR)$(xmldir)/50-mutter-system.xml $(DESTDIR)$(xmldir)/50-deepin-mutter-system.xml
 	mv $(DESTDIR)$(xmldir)/50-mutter-windows.xml $(DESTDIR)$(xmldir)/50-deepin-mutter-windows.xml
-	mv $(DESTDIR)$(gsettingsschemadir)/org.gnome.mutter.gschema.xml $(DESTDIR)$(gsettingsschemadir)/com.deepin.dde.wm.mutter.gschema.xml
+	mv $(DESTDIR)$(gsettingsschemadir)/org.gnome.mutter.gschema.xml $(DESTDIR)$(gsettingsschemadir)/com.deepin.wrap.gnome.mutter.gschema.xml
 	mv $(DESTDIR)$(convertdir)/mutter-schemas.convert $(DESTDIR)$(convertdir)/deepin-mutter-schemas.convert
 	mv $(DESTDIR)$(pkgconfigdir)/libmutter.pc $(DESTDIR)$(pkgconfigdir)/libdeepin-mutter.pc
 	mv $(DESTDIR)$(pkgconfigdir)/mutter-plugins.pc $(DESTDIR)$(pkgconfigdir)/deepin-mutter-plugins.pc
