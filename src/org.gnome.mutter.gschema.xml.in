@@ -41,7 +41,7 @@
       <_description>
         Determines whether workspaces are managed dynamically or
         whether there's a static number of workspaces (determined
-        by the num-workspaces key in org.gnome.desktop.wm.preferences).
+        by the num-workspaces key in com.deepin.wrap.gnom.desktop.wm.preferences).
       </_description>
     </key>
 
