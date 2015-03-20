@@ -49,7 +49,7 @@ Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends},
          deepin-mutter-common (= ${source:Version}),
-         gsettings-desktop-schemas (>= 3.7.3),
+         dde-daemon,
          gnome-themes-standard,
          zenity
 Provides: x-window-manager
