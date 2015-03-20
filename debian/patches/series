@@ -1,12 +1,3 @@
-git312_01-boxes-Ignore-struts-that-don-t-attach-to-the-side-th.patch
-git312_02-background-Do-not-assume-GLSL-is-available.patch
-git312_03-MetaTextureTower-actually-mark-revalidated-levels-as.patch
-git314_02-window-Add-a-property-for-on_all_workspaces.patch
-git314_03-background-Don-t-bother-supporting-alpha-channels-fo.patch
-git314_04-background-Merge-the-code-for-creating-the-color-tex.patch
-git314_05-background-actor-Don-t-bother-clipping-to-the-conten.patch
-git314_06-background-Don-t-bother-attaching-a-paint-node-if-th.patch
-git314_07-texture-tower-Fix-error-case-in-meta-texture-tower.patch
 git_revert_cogl_changes-001.patch
 git_revert_cogl_changes-002.patch
 01_Wcast-align.patch
