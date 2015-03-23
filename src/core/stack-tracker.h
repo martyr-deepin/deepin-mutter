@@ -35,6 +35,7 @@
 #define META_STACK_TRACKER_H
 
 #include <meta/screen.h>
+#include <meta/window.h>
 
 typedef struct _MetaStackTracker MetaStackTracker;
 
@@ -45,26 +46,23 @@ void              meta_stack_tracker_free (MetaStackTracker *tracker);
  * stacking order; this allows MetaStackTracker to predict stacking
  * order before it receives events back from the X server */
 void meta_stack_tracker_record_add             (MetaStackTracker *tracker,
-						Window            window,
+                                                guint64           window,
                                                 gulong            serial);
 void meta_stack_tracker_record_remove          (MetaStackTracker *tracker,
-						Window            window,
+                                                guint64           window,
                                                 gulong            serial);
-void meta_stack_tracker_record_restack_windows (MetaStackTracker *tracker,
-						Window           *windows,
-						int               n_windows,
-                                                gulong            serial);
-void meta_stack_tracker_record_raise_above     (MetaStackTracker *tracker,
-						Window            window,
-						Window            sibling,
-                                                gulong            serial);
-void meta_stack_tracker_record_lower_below    (MetaStackTracker *tracker,
-						Window            window,
-						Window            sibling,
-                                                gulong            serial);
-void meta_stack_tracker_record_lower           (MetaStackTracker *tracker,
-						Window            window,
-                                                gulong            serial);
+
+/* We also have functions that also go ahead and do the work
+ */
+void meta_stack_tracker_lower           (MetaStackTracker *tracker,
+                                         guint64           window);
+
+void meta_stack_tracker_restack_managed (MetaStackTracker *tracker,
+                                         const guint64    *windows,
+                                         int               n_windows);
+void meta_stack_tracker_restack_at_bottom (MetaStackTracker *tracker,
+                                           const guint64    *new_order,
+                                           int               n_new_order);
 
 /* These functions are used to update the stack when we get events
  * reflecting changes to the stacking order */
@@ -77,9 +75,9 @@ void meta_stack_tracker_reparent_event  (MetaStackTracker    *tracker,
 void meta_stack_tracker_configure_event (MetaStackTracker    *tracker,
 					 XConfigureEvent     *event);
 
-void meta_stack_tracker_get_stack  (MetaStackTracker  *tracker,
-                                    Window           **windows,
-                                    int               *n_windows);
+void meta_stack_tracker_get_stack  (MetaStackTracker *tracker,
+                                    guint64         **windows,
+                                    int              *n_entries);
 
 void meta_stack_tracker_sync_stack       (MetaStackTracker *tracker);
 void meta_stack_tracker_queue_sync_stack (MetaStackTracker *tracker);

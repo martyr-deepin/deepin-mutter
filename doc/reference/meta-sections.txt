@@ -300,6 +300,7 @@ MetaPluginVersion
 META_PLUGIN_DECLARE
 meta_plugin_switch_workspace_completed
 meta_plugin_minimize_completed
+meta_plugin_unminimize_completed
 meta_plugin_maximize_completed
 meta_plugin_unmaximize_completed
 meta_plugin_map_completed
@@ -555,7 +556,7 @@ meta_window_is_monitor_sized
 meta_window_is_override_redirect
 meta_window_is_skip_taskbar
 meta_window_get_rect
-meta_window_get_input_rect
+meta_window_get_buffer_rect
 meta_window_get_frame_rect
 meta_window_get_outer_rect
 meta_window_client_rect_to_frame_rect

@@ -37,6 +37,7 @@ Build-Depends: cdbs (>= 0.4.90),
                libx11-dev,
                libxinerama-dev,
                libxext-dev,
+               libxkbcommon-x11-dev,
                libxrandr-dev,
                libsm-dev,
                libice-dev,
@@ -51,6 +52,7 @@ Depends: ${shlibs:Depends},
          deepin-mutter-common (= ${source:Version}),
          dde-daemon,
          gnome-themes-standard,
+         libxkbcommon-x11-0,
          zenity
 Provides: x-window-manager
 Recommends: gnome-session | x-session-manager

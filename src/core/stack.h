@@ -1,9 +1,9 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*- */
 
-/* 
+/*
  * Copyright (C) 2001 Havoc Pennington
  * Copyright (C) 2005 Elijah Newren
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
  * published by the Free Software Foundation; either version 2 of the
@@ -13,7 +13,7 @@
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
@@ -26,7 +26,7 @@
  * @short_description: Which windows cover which other windows
  *
  * There are two factors that determine window position.
- * 
+ *
  * One is window->stack_position, which is a unique integer
  * indicating how windows are ordered with respect to one
  * another. The ordering here transcends layers; it isn't changed
@@ -34,7 +34,7 @@
  * windows from one layer to another, while preserving the relative
  * order of the moved windows. Also, it allows us to restore
  * the stacking order from a saved session.
- * 
+ *
  * However when actually stacking windows on the screen, the
  * layer overrides the stack_position; windows are first sorted
  * by layer, then by stack_position within each layer.
@@ -58,7 +58,7 @@ struct _MetaStack
    * A sequence of all the Windows (X handles, not MetaWindows) of the windows
    * we manage, sorted in order.  Suitable to be passed into _NET_CLIENT_LIST.
    */
-  GArray *windows;
+  GArray *xwindows;
 
   /** The MetaWindows of the windows we manage, sorted in order. */
   GList *sorted;
@@ -82,7 +82,7 @@ struct _MetaStack
    * The order of the elements in this list is not important.
    */
   GList *removed;
-  
+
   /**
    * If this is zero, the local stack oughtn't to be brought up to date with
    * the X server's stack, because it is in the middle of being updated.
@@ -97,7 +97,7 @@ struct _MetaStack
    * The last-known stack of all windows, bottom to top.  We cache it here
    * so that subsequent times we'll be able to do incremental moves.
    */
-  GArray *last_root_children_stacked;
+  GArray *last_all_root_children_stacked;
 
   /**
    * Number of stack positions; same as the length of added, but

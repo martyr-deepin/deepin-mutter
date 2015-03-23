@@ -2,9 +2,9 @@
 
 /* Mutter main */
 
-/* 
+/*
  * Copyright (C) 2001 Havoc Pennington
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
  * published by the Free Software Foundation; either version 2 of the
@@ -14,7 +14,7 @@
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
@@ -28,10 +28,14 @@ GOptionContext *meta_get_option_context     (void);
 void            meta_init                   (void);
 int             meta_run                    (void);
 void            meta_register_with_session  (void);
+gboolean        meta_activate_session       (void);  /* Actually defined in meta-backend.c */
 gboolean        meta_get_replace_current_wm (void);  /* Actually defined in util.c */
 
 void            meta_set_wm_name              (const char *wm_name);
 void            meta_set_gnome_wm_keybindings (const char *wm_keybindings);
+
+void            meta_restart                (const char *message);
+gboolean        meta_is_restart             (void);
 
 /**
  * MetaExitCode:

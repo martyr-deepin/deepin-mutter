@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<KeyListEntries schema="com.deepin.wrap.gnome.desktop.wm.keybindings"
+                group="system"
+                _name="System"
+                wm_name="Deepin Mutter"
+                package="deepin-mutter">
+
+	<KeyListEntry name="panel-run-dialog" _description="Show the run command prompt"/>
+
+	<KeyListEntry name="panel-main-menu" _description="Show the activities overview"/>
+
+</KeyListEntries>

@@ -79,8 +79,6 @@ IGNORE_HFILES= \
 	iconcache.h \
 	inlinepixbufs.h \
 	keybindings-private.h \
-	menu.h \
-	metaaccellabel.h \
 	meta-background-actor-private.h \
 	meta-background-group-private.h \
 	meta-module.h \
@@ -112,6 +110,13 @@ IGNORE_HFILES= \
 	workspace-private.h \
 	xprops.h \
 	$(NULL)
+
+if !HAVE_WAYLAND
+IGNORE_HFILES += \
+	meta-surface-actor-wayland.h	\
+	wayland				\
+	$(NULL)
+endif
 
 MKDB_OPTIONS+=--ignore-files="$(IGNORE_HFILES)"
 

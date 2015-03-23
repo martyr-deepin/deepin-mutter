@@ -2,10 +2,10 @@
 
 /* Mutter utilities */
 
-/* 
+/*
  * Copyright (C) 2001 Havoc Pennington
  * Copyright (C) 2005 Elijah Newren
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
  * published by the Free Software Foundation; either version 2 of the
@@ -15,7 +15,7 @@
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
@@ -31,6 +31,7 @@
 gboolean meta_is_verbose  (void);
 gboolean meta_is_debugging (void);
 gboolean meta_is_syncing (void);
+gboolean meta_is_wayland_compositor (void);
 
 void meta_debug_spew_real (const char *format,
                            ...) G_GNUC_PRINTF (1, 2);
@@ -179,6 +180,14 @@ guint meta_later_add    (MetaLaterType  when,
                          gpointer       data,
                          GDestroyNotify notify);
 void  meta_later_remove (guint          later_id);
+
+typedef enum
+{
+  META_LOCALE_DIRECTION_LTR,
+  META_LOCALE_DIRECTION_RTL,
+} MetaLocaleDirection;
+
+MetaLocaleDirection meta_get_locale_direction (void);
 
 #endif /* META_UTIL_H */
 
