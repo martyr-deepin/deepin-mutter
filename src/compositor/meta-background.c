@@ -384,8 +384,6 @@ meta_background_paint_content (ClutterContent   *content,
   if (priv->texture == NULL)
     return;
 
-  node = meta_background_paint_node_new (self, actor);
-
   clutter_actor_get_content_box (actor, &actor_box);
 
   /* First figure out where on the monitor the texture is supposed to be painted.
@@ -415,11 +413,13 @@ meta_background_paint_content (ClutterContent   *content,
       clip_region = meta_background_actor_get_clip_region (META_BACKGROUND_ACTOR (actor));
 
       if (clip_region != NULL)
-        {
-          cairo_region_intersect (paintable_region, clip_region);
-          cairo_region_destroy (clip_region);
-        }
+        cairo_region_intersect (paintable_region, clip_region);
     }
+
+  if (cairo_region_is_empty (paintable_region))
+    goto out;
+
+  node = meta_background_paint_node_new (self, actor);
 
   /* Finally, split the paintable region up into distinct areas
    * and paint each area one by one
@@ -443,10 +443,11 @@ meta_background_paint_content (ClutterContent   *content,
 
       clutter_paint_node_add_texture_rectangle (node, &texture_rectangle, tx1, ty1, tx2, ty2);
     }
-  cairo_region_destroy (paintable_region);
-
   clutter_paint_node_add_child (root, node);
   clutter_paint_node_unref (node);
+
+ out:
+  cairo_region_destroy (paintable_region);
 }
 
 static void
@@ -500,13 +501,22 @@ set_brightness (MetaBackground *self,
 
   priv->brightness = brightness;
 
-  if (priv->effects & META_BACKGROUND_EFFECTS_VIGNETTE)
+  if (clutter_feature_available (CLUTTER_FEATURE_SHADERS_GLSL) &&
+      priv->effects & META_BACKGROUND_EFFECTS_VIGNETTE)
     {
       ensure_pipeline (self);
       cogl_pipeline_set_uniform_1f (priv->pipeline,
                                     cogl_pipeline_get_uniform_location (priv->pipeline,
                                                                         "brightness"),
                                     priv->brightness);
+    }
+  else
+    {
+      ensure_pipeline (self);
+      CoglColor blend_color;
+      cogl_color_init_from_4f (&blend_color, brightness, brightness, brightness, 1.0);
+      cogl_pipeline_set_layer_combine (priv->pipeline, 1, "RGB=MODULATE(PREVIOUS, CONSTANT) A=REPLACE(PREVIOUS)", NULL);
+      cogl_pipeline_set_layer_combine_constant (priv->pipeline, 1, &blend_color);
     }
 
   clutter_content_invalidate (CLUTTER_CONTENT (self));
@@ -524,6 +534,9 @@ set_vignette_sharpness (MetaBackground *self,
     return;
 
   priv->vignette_sharpness = sharpness;
+
+  if (!clutter_feature_available (CLUTTER_FEATURE_SHADERS_GLSL))
+    return;
 
   if (priv->effects & META_BACKGROUND_EFFECTS_VIGNETTE)
     {
@@ -544,6 +557,9 @@ add_vignette (MetaBackground *self)
 {
   MetaBackgroundPrivate *priv = self->priv;
   static CoglSnippet *snippet = NULL;
+
+  if (!clutter_feature_available (CLUTTER_FEATURE_SHADERS_GLSL))
+    return;
 
   ensure_pipeline (self);
 
@@ -883,15 +899,15 @@ meta_background_load_gradient (MetaBackground             *self,
   pixels[0] = color->red;
   pixels[1] = color->green;
   pixels[2] = color->blue;
-  pixels[3] = color->alpha;
+  pixels[3] = 0xFF;
   pixels[4] = second_color->red;
   pixels[5] = second_color->green;
   pixels[6] = second_color->blue;
-  pixels[7] = second_color->alpha;
+  pixels[7] = 0xFF;
 
   texture = cogl_texture_new_from_data (width, height,
                                         COGL_TEXTURE_NO_SLICING,
-                                        COGL_PIXEL_FORMAT_RGBA_8888,
+                                        COGL_PIXEL_FORMAT_RGB_888,
                                         COGL_PIXEL_FORMAT_ANY,
                                         4,
                                         pixels);
@@ -916,6 +932,7 @@ meta_background_load_color (MetaBackground *self,
   CoglTexture  *texture;
   ClutterActor *stage = meta_get_stage_for_screen (priv->screen);
   ClutterColor  stage_color;
+  uint8_t pixels[4];
 
   ensure_pipeline (self);
 
@@ -928,11 +945,17 @@ meta_background_load_color (MetaBackground *self,
       color = &stage_color;
     }
 
-  texture = meta_create_color_texture_4ub (color->red,
-                                           color->green,
-                                           color->blue,
-                                           0xff,
-                                           COGL_TEXTURE_NO_SLICING);
+  pixels[0] = color->red;
+  pixels[1] = color->green;
+  pixels[2] = color->blue;
+  pixels[3] = 0xFF;
+
+  texture = cogl_texture_new_from_data (1, 1,
+                                        COGL_TEXTURE_NO_SLICING,
+                                        COGL_PIXEL_FORMAT_RGB_888,
+                                        COGL_PIXEL_FORMAT_ANY,
+                                        4,
+                                        pixels);
   set_texture (self, COGL_TEXTURE (texture));
 }
 

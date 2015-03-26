@@ -359,10 +359,18 @@ texture_tower_create_texture (MetaTextureTower *tower,
   if ((!is_power_of_two (width) || !is_power_of_two (height)) &&
       meta_texture_rectangle_check (tower->textures[level - 1]))
     {
-      ClutterBackend *backend = clutter_get_default_backend ();
-      CoglContext *context = clutter_backend_get_cogl_context (backend);
-
-      tower->textures[level] = cogl_texture_rectangle_new_with_size (context, width, height);
+      tower->textures[level] =
+        meta_texture_rectangle_new (width, height,
+                                    /* data format */
+                                    TEXTURE_FORMAT,
+                                    /* internal cogl format */
+                                    TEXTURE_FORMAT,
+                                    /* rowstride */
+                                    width * 4,
+                                    /* data */
+                                    NULL,
+                                    /* error */
+                                    NULL);
     }
   else
     {
@@ -378,8 +386,8 @@ texture_tower_create_texture (MetaTextureTower *tower,
 }
 
 static void
-texture_tower_revalidate_fbo (MetaTextureTower *tower,
-                              int               level)
+texture_tower_revalidate (MetaTextureTower *tower,
+                          int               level)
 {
   CoglTexture *source_texture = tower->textures[level - 1];
   int source_texture_width = cogl_texture_get_width (source_texture);
@@ -425,13 +433,9 @@ texture_tower_revalidate_fbo (MetaTextureTower *tower,
                                             (2. * invalid->y2) / source_texture_height);
 
   cogl_object_unref (pipeline);
-}
 
-static void
-texture_tower_revalidate (MetaTextureTower *tower,
-                          int               level)
-{
-  texture_tower_revalidate_fbo (tower, level);
+  tower->invalid[level].x1 = tower->invalid[level].x2 = 0;
+  tower->invalid[level].y1 = tower->invalid[level].y2 = 0;
 }
 
 /**
