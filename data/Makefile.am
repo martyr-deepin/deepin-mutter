@@ -43,4 +43,5 @@ install-data-hook:
 	mv $(DESTDIR)$(xmldir)/50-mutter-system.xml $(DESTDIR)$(xmldir)/50-deepin-mutter-system.xml
 	mv $(DESTDIR)$(xmldir)/50-mutter-windows.xml $(DESTDIR)$(xmldir)/50-deepin-mutter-windows.xml
 	mv $(DESTDIR)$(gsettingsschemadir)/org.gnome.mutter.gschema.xml $(DESTDIR)$(gsettingsschemadir)/com.deepin.wrap.gnome.mutter.gschema.xml
+	mv $(DESTDIR)$(gsettingsschemadir)/org.gnome.mutter.wayland.gschema.xml $(DESTDIR)$(gsettingsschemadir)/com.deepin.wrap.gnome.mutter.wayland.gschema.xml
 	mv $(DESTDIR)$(convertdir)/mutter-schemas.convert $(DESTDIR)$(convertdir)/deepin-mutter-schemas.convert
