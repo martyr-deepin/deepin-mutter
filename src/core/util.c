@@ -1,9 +1,9 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*- */
 
-/* 
+/*
  * Copyright (C) 2001 Havoc Pennington
  * Copyright (C) 2005 Elijah Newren
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
  * published by the Free Software Foundation; either version 2 of the
@@ -13,7 +13,7 @@
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
@@ -53,6 +53,7 @@ static gint verbose_topics = 0;
 static gboolean is_debugging = FALSE;
 static gboolean replace_current = FALSE;
 static int no_prefix = 0;
+static gboolean is_wayland_compositor = FALSE;
 
 #ifdef WITH_VERBOSE_MODE
 static FILE* logfile = NULL;
@@ -66,7 +67,7 @@ ensure_logfile (void)
       char *tmpl;
       int fd;
       GError *err;
-      
+
       tmpl = g_strdup_printf ("mutter-%d-debug-log-XXXXXX",
                               (int) getpid ());
 
@@ -76,28 +77,28 @@ ensure_logfile (void)
                             &err);
 
       g_free (tmpl);
-      
+
       if (err != NULL)
         {
-          meta_warning (_("Failed to open debug log: %s\n"),
+          meta_warning ("Failed to open debug log: %s\n",
                         err->message);
           g_error_free (err);
           return;
         }
-      
+
       logfile = fdopen (fd, "w");
-      
+
       if (logfile == NULL)
         {
-          meta_warning (_("Failed to fdopen() log file %s: %s\n"),
+          meta_warning ("Failed to fdopen() log file %s: %s\n",
                         filename, strerror (errno));
           close (fd);
         }
       else
         {
-          g_printerr (_("Opened log file %s\n"), filename);
+          g_printerr ("Opened log file %s\n", filename);
         }
-      
+
       g_free (filename);
     }
 }
@@ -115,7 +116,7 @@ meta_set_verbose (gboolean setting)
 #ifndef WITH_VERBOSE_MODE
   if (setting)
     meta_fatal (_("Mutter was compiled without support for verbose mode\n"));
-#else 
+#else
   if (setting)
     ensure_logfile ();
 #endif
@@ -192,6 +193,18 @@ meta_set_replace_current_wm (gboolean setting)
   replace_current = setting;
 }
 
+gboolean
+meta_is_wayland_compositor (void)
+{
+  return is_wayland_compositor;
+}
+
+void
+meta_set_is_wayland_compositor (gboolean value)
+{
+  is_wayland_compositor = value;
+}
+
 char *
 meta_g_utf8_strndup (const gchar *src,
                      gsize        n)
@@ -212,7 +225,7 @@ utf8_fputs (const char *str,
 {
   char *l;
   int retval;
-  
+
   l = g_locale_from_utf8 (str, -1, NULL, NULL, NULL);
 
   if (l == NULL)
@@ -246,24 +259,24 @@ meta_debug_spew_real (const char *format, ...)
   va_list args;
   gchar *str;
   FILE *out;
-  
+
   g_return_if_fail (format != NULL);
 
   if (!is_debugging)
     return;
-  
+
   va_start (args, format);
   str = g_strdup_vprintf (format, args);
   va_end (args);
 
   out = logfile ? logfile : stderr;
-  
+
   if (no_prefix == 0)
-    utf8_fputs (_("Window manager: "), out);
+    utf8_fputs ("Window manager: ", out);
   utf8_fputs (str, out);
 
   fflush (out);
-  
+
   g_free (str);
 }
 #endif /* WITH_VERBOSE_MODE */
@@ -368,11 +381,11 @@ meta_topic_real_valist (MetaDebugTopic topic,
       ++sync_count;
       fprintf (out, "%d: ", sync_count);
     }
-  
+
   utf8_fputs (str, out);
-  
+
   fflush (out);
-  
+
   g_free (str);
 }
 
@@ -397,7 +410,7 @@ meta_bug (const char *format, ...)
   FILE *out;
 
   g_return_if_fail (format != NULL);
-  
+
   va_start (args, format);
   str = g_strdup_vprintf (format, args);
   va_end (args);
@@ -409,13 +422,13 @@ meta_bug (const char *format, ...)
 #endif
 
   if (no_prefix == 0)
-    utf8_fputs (_("Bug in window manager: "), out);
+    utf8_fputs ("Bug in window manager: ", out);
   utf8_fputs (str, out);
 
   fflush (out);
-  
+
   g_free (str);
-  
+
   /* stop us in a debugger */
   abort ();
 }
@@ -426,9 +439,9 @@ meta_warning (const char *format, ...)
   va_list args;
   gchar *str;
   FILE *out;
-  
+
   g_return_if_fail (format != NULL);
-  
+
   va_start (args, format);
   str = g_strdup_vprintf (format, args);
   va_end (args);
@@ -440,11 +453,11 @@ meta_warning (const char *format, ...)
 #endif
 
   if (no_prefix == 0)
-    utf8_fputs (_("Window manager warning: "), out);
+    utf8_fputs ("Window manager warning: ", out);
   utf8_fputs (str, out);
 
   fflush (out);
-  
+
   g_free (str);
 }
 
@@ -454,9 +467,9 @@ meta_fatal (const char *format, ...)
   va_list args;
   gchar *str;
   FILE *out;
-  
+
   g_return_if_fail (format != NULL);
-  
+
   va_start (args, format);
   str = g_strdup_vprintf (format, args);
   va_end (args);
@@ -468,11 +481,11 @@ meta_fatal (const char *format, ...)
 #endif
 
   if (no_prefix == 0)
-    utf8_fputs (_("Window manager error: "), out);
+    utf8_fputs ("Window manager error: ", out);
   utf8_fputs (str, out);
 
   fflush (out);
-  
+
   g_free (str);
 
   meta_exit (META_EXIT_ERROR);
@@ -495,7 +508,7 @@ meta_pop_no_msg_prefix (void)
 void
 meta_exit (MetaExitCode code)
 {
-  
+
   exit (code);
 }
 
@@ -564,23 +577,6 @@ char*
 meta_external_binding_name_for_action (guint keybinding_action)
 {
   return g_strdup_printf ("external-grab-%u", keybinding_action);
-}
-
-static gboolean
-zenity_supports_option (const char *section, const char *option)
-{
-  char *command, *out;
-  gboolean rv;
-
-  command = g_strdup_printf ("zenity %s", section);
-  g_spawn_command_line_sync (command, &out, NULL, NULL, NULL);
-
-  rv = (out && strstr (out, option));
-
-  g_free (command);
-  g_free (out);
-
-  return rv;
 }
 
 /* Command line arguments are passed in the locale encoding; in almost
@@ -671,13 +667,8 @@ meta_show_dialog (const char *type,
 
   if (icon_name)
     {
-      char *option = g_strdup_printf ("--help%s", type + 1);
-      if (zenity_supports_option (option, "--icon-name"))
-        {
-          append_argument (args, "--icon-name");
-          append_argument (args, icon_name);
-        }
-      g_free (option);
+      append_argument (args, "--icon-name");
+      append_argument (args, icon_name);
     }
 
   tmp = columns;
@@ -701,8 +692,7 @@ meta_show_dialog (const char *type,
       setenv ("WINDOWID", env, 1);
       g_free (env);
 
-      if (zenity_supports_option ("--help-general", "--modal"))
-        append_argument (args, "--modal");
+      append_argument (args, "--modal");
     }
 
   g_ptr_array_add (args, NULL); /* NULL-terminate */
@@ -912,6 +902,7 @@ meta_later_add (MetaLaterType  when,
        * there so it will happen before GTK+ repaints.
        */
       later->source = g_idle_add_full (META_PRIORITY_RESIZE, call_idle_later, later, NULL);
+      g_source_set_name_by_id (later->source, "[mutter] call_idle_later");
       ensure_later_repaint_func ();
       break;
     case META_LATER_CALC_SHOWING:
@@ -922,6 +913,7 @@ meta_later_add (MetaLaterType  when,
       break;
     case META_LATER_IDLE:
       later->source = g_idle_add_full (G_PRIORITY_DEFAULT_IDLE, call_idle_later, later, NULL);
+      g_source_set_name_by_id (later->source, "[mutter] call_idle_later");
       break;
     }
 
@@ -951,6 +943,20 @@ meta_later_remove (guint later_id)
           destroy_later (later);
           return;
         }
+    }
+}
+
+MetaLocaleDirection
+meta_get_locale_direction (void)
+{
+  switch (gtk_get_locale_direction ())
+    {
+    case GTK_TEXT_DIR_LTR:
+      return META_LOCALE_DIRECTION_LTR;
+    case GTK_TEXT_DIR_RTL:
+      return META_LOCALE_DIRECTION_RTL;
+    default:
+      g_assert_not_reached ();
     }
 }
 

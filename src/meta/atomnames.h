@@ -62,6 +62,7 @@ item(_GTK_WINDOW_OBJECT_PATH)
 item(_GTK_APP_MENU_OBJECT_PATH)
 item(_GTK_MENUBAR_OBJECT_PATH)
 item(_GTK_FRAME_EXTENTS)
+item(_GTK_SHOW_WINDOW_MENU)
 item(_GNOME_WM_KEYBINDINGS)
 item(_GNOME_PANEL_ACTION)
 item(_GNOME_PANEL_ACTION_MAIN_MENU)
@@ -70,7 +71,6 @@ item(_MUTTER_TIMESTAMP_PING)
 item(_MUTTER_FOCUS_SET)
 item(_MUTTER_SENTINEL)
 item(_MUTTER_VERSION)
-item(_MUTTER_PRESENTATION_OUTPUT)
 item(WM_CLIENT_MACHINE)
 item(MANAGER)
 item(TARGETS)
@@ -78,8 +78,8 @@ item(MULTIPLE)
 item(TIMESTAMP)
 item(VERSION)
 item(ATOM_PAIR)
-item(Backlight)
-item(hotplug_mode_update)
+item(_XKB_RULES_NAMES)
+item(WL_SURFACE_ID)
 
 /* Oddities: These are used, and we need atoms for them,
  * but when we need all _NET_WM hints (i.e. when we're making
@@ -90,7 +90,6 @@ item(hotplug_mode_update)
 item(_NET_WM_SYNC_REQUEST)
 item(_NET_WM_SYNC_REQUEST_COUNTER)
 item(_NET_WM_VISIBLE_NAME)
-item(_NET_WM_VISIBLE_ICON_NAME)
 item(_NET_SUPPORTING_WM_CHECK)
 
 /* But I suppose it's quite reasonable not to advertise using
@@ -131,7 +130,6 @@ item(_NET_CLIENT_LIST)
 item(_NET_CLIENT_LIST_STACKING)
 item(_NET_WM_STATE_SKIP_TASKBAR)
 item(_NET_WM_STATE_SKIP_PAGER)
-item(_NET_WM_ICON_NAME)
 item(_NET_WM_ICON)
 item(_NET_WM_ICON_GEOMETRY)
 item(_NET_WM_MOVERESIZE)
@@ -178,11 +176,6 @@ item(_NET_WM_OPAQUE_REGION)
 item(_NET_WM_FRAME_DRAWN)
 item(_NET_WM_FRAME_TIMINGS)
 item(_NET_WM_WINDOW_OPACITY)
-
-#if 0
-/* We apparently never use: */
-/* item(_NET_RESTACK_WINDOW) */
-#endif
 
 /* eof atomnames.h */
 

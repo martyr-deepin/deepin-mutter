@@ -2,10 +2,10 @@
 
 /* Mutter main() */
 
-/* 
+/*
  * Copyright (C) 2001 Havoc Pennington
  * Copyright (C) 2006 Elijah Newren
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
  * published by the Free Software Foundation; either version 2 of the
@@ -15,7 +15,7 @@
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
@@ -50,12 +50,12 @@
 #include "display-private.h"
 #include <meta/errors.h>
 #include "ui.h"
-#include "session.h"
 #include <meta/prefs.h>
 #include <meta/compositor.h>
+#include <meta/meta-backend.h>
 
 #include <glib-object.h>
-#include <gdk/gdkx.h>
+#include <glib-unix.h>
 
 #include <stdlib.h>
 #include <sys/types.h>
@@ -71,10 +71,15 @@
 #include <unistd.h>
 
 #include <clutter/clutter.h>
-#include <clutter/x11/clutter-x11.h>
 
 #ifdef HAVE_INTROSPECTION
 #include <girepository.h>
+#endif
+
+#include "x11/session.h"
+
+#ifdef HAVE_WAYLAND
+#include "wayland/meta-wayland.h"
 #endif
 
 /*
@@ -92,26 +97,6 @@ static void prefs_changed_callback (MetaPreference pref,
                                     gpointer       data);
 
 /**
- * log_handler:
- * @log_domain: the domain the error occurred in (we ignore this)
- * @log_level: the log level so that we can filter out less
- *             important messages
- * @message: the message to log
- * @user_data: arbitrary data (we ignore this)
- *
- * Prints log messages. If Mutter was compiled with backtrace support,
- * also prints a backtrace (see meta_print_backtrace()).
- */
-static void
-log_handler (const gchar   *log_domain,
-             GLogLevelFlags log_level,
-             const gchar   *message,
-             gpointer       user_data)
-{
-  meta_warning ("Log level %d: %s\n", log_level, message);
-}
-
-/**
  * meta_print_compilation_info:
  *
  * Prints a list of which configure script options were used to
@@ -122,16 +107,6 @@ log_handler (const gchar   *log_domain,
 static void
 meta_print_compilation_info (void)
 {
-#ifdef HAVE_SHAPE
-  meta_verbose ("Compiled with shape extension\n");
-#else
-  meta_verbose ("Compiled without shape extension\n");
-#endif
-#ifdef HAVE_XSYNC
-  meta_verbose ("Compiled with sync extension\n");
-#else
-  meta_verbose ("Compiled without sync extension\n");
-#endif
 #ifdef HAVE_RANDR
   meta_verbose ("Compiled with randr extension\n");
 #else
@@ -167,7 +142,7 @@ meta_print_self_identity (void)
   g_date_strftime (buf, sizeof (buf), "%x", &d);
   meta_verbose ("Mutter version %s running on %s\n",
     VERSION, buf);
-  
+
   /* Locale and encoding. */
   g_get_charset (&charset);
   meta_verbose ("Running in locale \"%s\" with encoding \"%s\"\n",
@@ -187,6 +162,12 @@ static gchar    *opt_client_id;
 static gboolean  opt_replace_wm;
 static gboolean  opt_disable_sm;
 static gboolean  opt_sync;
+#ifdef HAVE_WAYLAND
+static gboolean  opt_wayland;
+#endif
+#ifdef HAVE_NATIVE_BACKEND
+static gboolean  opt_display_server;
+#endif
 
 static GOptionEntry meta_options[] = {
   {
@@ -224,6 +205,21 @@ static GOptionEntry meta_options[] = {
     N_("Make X calls synchronous"),
     NULL
   },
+#ifdef HAVE_WAYLAND
+  {
+    "wayland", 0, 0, G_OPTION_ARG_NONE,
+    &opt_wayland,
+    N_("Run as a wayland compositor"),
+    NULL
+  },
+#endif
+#ifdef HAVE_NATIVE_BACKEND
+  {
+    "display-server", 0, 0, G_OPTION_ARG_NONE,
+    &opt_display_server,
+    N_("Run as a full display server, rather than nested")
+  },
+#endif
   {NULL}
 };
 
@@ -247,76 +243,7 @@ meta_get_option_context (void)
 
   ctx = g_option_context_new (NULL);
   g_option_context_add_main_entries (ctx, meta_options, GETTEXT_PACKAGE);
-  g_option_context_add_group (ctx, clutter_get_option_group_without_init ());
-  g_option_context_add_group (ctx, cogl_get_option_group ());
-
   return ctx;
-}
-
-/* Mutter is responsible for pulling events off the X queue, so Clutter
- * doesn't need (and shouldn't) run its normal event source which polls
- * the X fd, but we do have to deal with dispatching events that accumulate
- * in the clutter queue. This happens, for example, when clutter generate
- * enter/leave events on mouse motion - several events are queued in the
- * clutter queue but only one dispatched. It could also happen because of
- * explicit calls to clutter_event_put(). We add a very simple custom
- * event loop source which is simply responsible for pulling events off
- * of the queue and dispatching them before we block for new events.
- */
-
-static gboolean 
-event_prepare (GSource    *source,
-               gint       *timeout_)
-{
-  *timeout_ = -1;
-
-  return clutter_events_pending ();
-}
-
-static gboolean 
-event_check (GSource *source)
-{
-  return clutter_events_pending ();
-}
-
-static gboolean
-event_dispatch (GSource    *source,
-                GSourceFunc callback,
-                gpointer    user_data)
-{
-  ClutterEvent *event = clutter_event_get ();
-
-  if (event)
-    {
-      clutter_do_event (event);
-      clutter_event_free (event);
-    }
-
-  return TRUE;
-}
-
-static GSourceFuncs event_funcs = {
-  event_prepare,
-  event_check,
-  event_dispatch
-};
-
-static void
-meta_clutter_init (void)
-{
-  clutter_x11_set_display (GDK_DISPLAY_XDISPLAY (gdk_display_get_default ()));
-  clutter_x11_disable_event_retrieval ();
-
-  if (CLUTTER_INIT_SUCCESS == clutter_init (NULL, NULL))
-    {
-      GSource *source = g_source_new (&event_funcs, sizeof (GSource));
-      g_source_attach (source, NULL);
-      g_source_unref (source);
-    }
-  else
-    {
-	  meta_fatal ("Unable to initialize Clutter.\n");
-    }
 }
 
 /**
@@ -328,16 +255,17 @@ meta_clutter_init (void)
  * also is %NULL, use the default - :0.0
  */
 static void
-meta_select_display (gchar *display_name)
+meta_select_display (char *display_arg)
 {
-  gchar *envVar = "";
+  const char *display_name;
+
+  if (display_arg)
+    display_name = (const char *) display_arg;
+  else
+    display_name = g_getenv ("MUTTER_DISPLAY");
+
   if (display_name)
-    envVar = g_strconcat ("DISPLAY=", display_name, NULL);
-  else if (g_getenv ("MUTTER_DISPLAY"))
-    envVar = g_strconcat ("DISPLAY=",
-      g_getenv ("MUTTER_DISPLAY"), NULL);
-  /* DO NOT FREE envVar, putenv() sucks */
-  putenv (envVar);
+    g_setenv ("DISPLAY", display_name, TRUE);
 }
 
 static void
@@ -348,28 +276,19 @@ meta_finalize (void)
   if (display)
     meta_display_close (display,
                         CurrentTime); /* I doubt correct timestamps matter here */
-}
 
-static int sigterm_pipe_fds[2] = { -1, -1 };
-
-static void
-sigterm_handler (int signum)
-{
-  if (sigterm_pipe_fds[1] >= 0)
-    {
-      int G_GNUC_UNUSED dummy;
-
-      dummy = write (sigterm_pipe_fds[1], "", 1);
-      close (sigterm_pipe_fds[1]);
-      sigterm_pipe_fds[1] = -1;
-    }
+#ifdef HAVE_WAYLAND
+  if (meta_is_wayland_compositor ())
+    meta_wayland_finalize ();
+#endif
 }
 
 static gboolean
-on_sigterm (void)
+on_sigterm (gpointer user_data)
 {
-  meta_quit (META_EXIT_SUCCESS);
-  return FALSE;
+  meta_quit (EXIT_SUCCESS);
+
+  return G_SOURCE_REMOVE;
 }
 
 /**
@@ -383,9 +302,7 @@ meta_init (void)
 {
   struct sigaction act;
   sigset_t empty_mask;
-  GIOChannel *channel;
-  ClutterSettings *clutter_settings;
-  
+
   sigemptyset (&empty_mask);
   act.sa_handler = SIG_IGN;
   act.sa_mask    = empty_mask;
@@ -399,25 +316,23 @@ meta_init (void)
                 g_strerror (errno));
 #endif
 
-  if (pipe (sigterm_pipe_fds) != 0)
-    g_printerr ("Failed to create SIGTERM pipe: %s\n",
-                g_strerror (errno));
-
-  channel = g_io_channel_unix_new (sigterm_pipe_fds[0]);
-  g_io_channel_set_flags (channel, G_IO_FLAG_NONBLOCK, NULL);
-  g_io_add_watch (channel, G_IO_IN, (GIOFunc) on_sigterm, NULL);
-  g_io_channel_set_close_on_unref (channel, TRUE);
-  g_io_channel_unref (channel);
-
-  act.sa_handler = &sigterm_handler;
-  if (sigaction (SIGTERM, &act, NULL) < 0)
-    g_printerr ("Failed to register SIGTERM handler: %s\n",
-		g_strerror (errno));
+  g_unix_signal_add (SIGTERM, on_sigterm, NULL);
 
   if (g_getenv ("MUTTER_VERBOSE"))
     meta_set_verbose (TRUE);
   if (g_getenv ("MUTTER_DEBUG"))
     meta_set_debugging (TRUE);
+
+#if defined(CLUTTER_WINDOWING_EGL) && defined(HAVE_NATIVE_BACKEND)
+  if (opt_display_server)
+    clutter_set_windowing_backend (CLUTTER_WINDOWING_EGL);
+  else
+#endif
+    clutter_set_windowing_backend (CLUTTER_WINDOWING_X11);
+
+#ifdef HAVE_WAYLAND
+  meta_set_is_wayland_compositor (opt_wayland);
+#endif
 
   if (g_get_home_dir ())
     if (chdir (g_get_home_dir ()) < 0)
@@ -425,36 +340,42 @@ meta_init (void)
                     g_get_home_dir ());
 
   meta_print_self_identity ();
-  
+
 #ifdef HAVE_INTROSPECTION
   g_irepository_prepend_search_path (MUTTER_PKGLIBDIR);
 #endif
 
+#ifdef HAVE_WAYLAND
+  if (meta_is_wayland_compositor ())
+    meta_wayland_pre_clutter_init ();
+#endif
+
+  /* NB: When running as a hybrid wayland compositor we run our own headless X
+   * server so the user can't control the X display to connect too. */
+  if (!meta_is_wayland_compositor ())
+    meta_select_display (opt_display_name);
+
+  meta_clutter_init ();
+
+#ifdef HAVE_WAYLAND
+  /* Bring up Wayland. This also launches Xwayland and sets DISPLAY as well... */
+  if (meta_is_wayland_compositor ())
+    meta_wayland_init ();
+#endif
+
   meta_set_syncing (opt_sync || (g_getenv ("MUTTER_SYNC") != NULL));
 
-  meta_select_display (opt_display_name);
-  
   if (opt_replace_wm)
     meta_set_replace_current_wm (TRUE);
 
   if (opt_save_file && opt_client_id)
     meta_fatal ("Can't specify both SM save file and SM client id\n");
-  
+
   meta_main_loop = g_main_loop_new (NULL, FALSE);
-  
+
   meta_ui_init ();
 
-  /*
-   * Clutter can only be initialized after the UI.
-   */
-  meta_clutter_init ();
-
-  /*
-   * XXX: We cannot handle high dpi scaling yet, so fix the scale to 1
-   * for now.
-   */
-  clutter_settings = clutter_settings_get_default ();
-  g_object_set (clutter_settings, "window-scaling-factor", 1, NULL);
+  meta_restart_init ();
 }
 
 /**
@@ -506,24 +427,10 @@ meta_register_with_session (void)
 int
 meta_run (void)
 {
-  const gchar *log_domains[] = {
-    NULL, G_LOG_DOMAIN, "Gtk", "Gdk", "GLib",
-    "Pango", "GLib-GObject", "GThread"
-  };
-  guint i;
-
   /* Load prefs */
   meta_prefs_init ();
   meta_prefs_add_listener (prefs_changed_callback, NULL);
 
-  for (i=0; i<G_N_ELEMENTS(log_domains); i++)
-    g_log_set_handler (log_domains[i],
-                       G_LOG_LEVEL_MASK | G_LOG_FLAG_FATAL | G_LOG_FLAG_RECURSION,
-                       log_handler, NULL);
-
-  if (g_getenv ("MUTTER_G_FATAL_WARNINGS") != NULL)
-    g_log_set_always_fatal (G_LOG_LEVEL_MASK);
-  
   meta_ui_set_current_theme (meta_prefs_get_theme ());
 
   /* Try to find some theme that'll work if the theme preference
@@ -532,37 +439,37 @@ meta_run (void)
    */
   if (!meta_ui_have_a_theme ())
     meta_ui_set_current_theme ("Simple");
-  
+
   if (!meta_ui_have_a_theme ())
     {
       const char *dir_entry = NULL;
       GError *err = NULL;
       GDir   *themes_dir = NULL;
-      
+
       if (!(themes_dir = g_dir_open (MUTTER_DATADIR"/themes", 0, &err)))
         {
           meta_fatal (_("Failed to scan themes directory: %s\n"), err->message);
           g_error_free (err);
-        } 
-      else 
+        }
+      else
         {
-          while (((dir_entry = g_dir_read_name (themes_dir)) != NULL) && 
+          while (((dir_entry = g_dir_read_name (themes_dir)) != NULL) &&
                  (!meta_ui_have_a_theme ()))
             {
               meta_ui_set_current_theme (dir_entry);
             }
-          
+
           g_dir_close (themes_dir);
         }
     }
-  
+
   if (!meta_ui_have_a_theme ())
     meta_fatal (_("Could not find a theme! Be sure %s exists and contains the usual themes.\n"),
                 MUTTER_DATADIR"/themes");
 
   if (!meta_display_open ())
     meta_exit (META_EXIT_ERROR);
-  
+
   g_main_loop_run (meta_main_loop);
 
   meta_finalize ();
@@ -612,11 +519,6 @@ prefs_changed_callback (MetaPreference pref,
       meta_display_retheme_all ();
       break;
 
-    case META_PREF_CURSOR_THEME:
-    case META_PREF_CURSOR_SIZE:
-      meta_display_set_cursor_theme (meta_prefs_get_cursor_theme (),
-				     meta_prefs_get_cursor_size ());
-      break;
     default:
       /* handled elsewhere or otherwise */
       break;

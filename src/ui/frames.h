@@ -2,9 +2,9 @@
 
 /* Metacity window frame manager widget */
 
-/* 
+/*
  * Copyright (C) 2001 Havoc Pennington
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
  * published by the Free Software Foundation; either version 2 of the
@@ -14,7 +14,7 @@
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
@@ -33,6 +33,7 @@ typedef enum
   META_FRAME_CONTROL_TITLE,
   META_FRAME_CONTROL_DELETE,
   META_FRAME_CONTROL_MENU,
+  META_FRAME_CONTROL_APPMENU,
   META_FRAME_CONTROL_MINIMIZE,
   META_FRAME_CONTROL_MAXIMIZE,
   META_FRAME_CONTROL_UNMAXIMIZE,
@@ -79,15 +80,18 @@ struct _MetaUIFrame
   int text_height;
   char *title; /* NULL once we have a layout */
   guint shape_applied : 1;
-  
+  guint maybe_ignore_leave_notify : 1;
+
   /* FIXME get rid of this, it can just be in the MetaFrames struct */
   MetaFrameControl prelit_control;
+  MetaButtonState button_state;
+  int grab_button;
 };
 
 struct _MetaFrames
 {
   GtkWindow parent_instance;
-  
+
   GHashTable *text_heights;
 
   GHashTable *frames;
@@ -95,6 +99,14 @@ struct _MetaFrames
 
   GtkStyleContext *normal_style;
   GHashTable *style_variants;
+
+  MetaGrabOp current_grab_op;
+  MetaUIFrame *grab_frame;
+  guint grab_button;
+  gdouble grab_x;
+  gdouble grab_y;
+
+  Window grab_xwindow;
 };
 
 struct _MetaFramesClass
@@ -126,13 +138,6 @@ void meta_frames_get_borders (MetaFrames *frames,
                               Window xwindow,
                               MetaFrameBorders *borders);
 
-void meta_frames_reset_bg     (MetaFrames *frames,
-                               Window      xwindow);
-void meta_frames_unflicker_bg (MetaFrames *frames,
-                               Window      xwindow,
-                               int         target_width,
-                               int         target_height);
-
 cairo_region_t *meta_frames_get_frame_bounds (MetaFrames *frames,
                                               Window      xwindow,
                                               int         window_width,
@@ -152,8 +157,6 @@ void meta_frames_move_resize_frame (MetaFrames *frames,
 				    int         height);
 void meta_frames_queue_draw (MetaFrames *frames,
                              Window      xwindow);
-
-void meta_frames_notify_menu_hide (MetaFrames *frames);
 
 Window meta_frames_get_moving_frame (MetaFrames *frames);
 

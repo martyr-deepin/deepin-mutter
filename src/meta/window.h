@@ -81,6 +81,16 @@ typedef enum
   META_MAXIMIZE_BOTH       = (1 << 0 | 1 << 1),
 } MetaMaximizeFlags;
 
+/**
+ * MetaWindowClientType:
+ * @META_WINDOW_CLIENT_TYPE_WAYLAND: A Wayland based window
+ * @META_WINDOW_CLIENT_TYPE_X11: An X11 based window
+ */
+typedef enum {
+  META_WINDOW_CLIENT_TYPE_WAYLAND,
+  META_WINDOW_CLIENT_TYPE_X11
+} MetaWindowClientType;
+
 #define META_TYPE_WINDOW            (meta_window_get_type ())
 #define META_WINDOW(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), META_TYPE_WINDOW, MetaWindow))
 #define META_WINDOW_CLASS(klass)    (G_TYPE_CHECK_CLASS_CAST ((klass),  META_TYPE_WINDOW, MetaWindowClass))
@@ -98,8 +108,7 @@ gboolean meta_window_appears_focused (MetaWindow *window);
 gboolean meta_window_is_shaded (MetaWindow *window);
 gboolean meta_window_is_override_redirect (MetaWindow *window);
 gboolean meta_window_is_skip_taskbar (MetaWindow *window);
-MetaRectangle *meta_window_get_rect (MetaWindow *window);
-void meta_window_get_input_rect (const MetaWindow *window, MetaRectangle *rect);
+void meta_window_get_buffer_rect (const MetaWindow *window, MetaRectangle *rect);
 
 void meta_window_get_frame_rect (const MetaWindow *window, MetaRectangle *rect);
 void meta_window_get_outer_rect (const MetaWindow *window, MetaRectangle *rect) G_GNUC_DEPRECATED;
@@ -115,7 +124,6 @@ MetaScreen *meta_window_get_screen (MetaWindow *window);
 MetaDisplay *meta_window_get_display (MetaWindow *window);
 Window meta_window_get_xwindow (MetaWindow *window);
 MetaWindowType meta_window_get_window_type (MetaWindow *window);
-Atom meta_window_get_window_type_atom (MetaWindow *window);
 MetaWorkspace *meta_window_get_workspace (MetaWindow *window);
 int      meta_window_get_monitor (MetaWindow *window);
 gboolean meta_window_is_on_all_workspaces (MetaWindow *window);
@@ -131,6 +139,7 @@ const char * meta_window_get_wm_class (MetaWindow *window);
 const char * meta_window_get_wm_class_instance (MetaWindow *window);
 gboolean    meta_window_showing_on_its_workspace (MetaWindow *window);
 
+const char * meta_window_get_gtk_theme_variant (MetaWindow *window);
 const char * meta_window_get_gtk_application_id (MetaWindow *window);
 const char * meta_window_get_gtk_unique_bus_name (MetaWindow *window);
 const char * meta_window_get_gtk_application_object_path (MetaWindow *window);
@@ -138,11 +147,9 @@ const char * meta_window_get_gtk_window_object_path (MetaWindow *window);
 const char * meta_window_get_gtk_app_menu_object_path (MetaWindow *window);
 const char * meta_window_get_gtk_menubar_object_path (MetaWindow *window);
 
-void meta_window_move(MetaWindow *window, gboolean user_op, int root_x_nw, int root_y_nw);
 void meta_window_move_frame(MetaWindow *window, gboolean user_op, int root_x_nw, int root_y_nw);
 void meta_window_move_resize_frame (MetaWindow *window, gboolean user_op, int root_x_nw, int root_y_nw, int w, int h);
 void meta_window_move_to_monitor (MetaWindow *window, int monitor);
-void meta_window_resize(MetaWindow *window, gboolean user_op, int w, int h);
 
 void meta_window_set_demands_attention (MetaWindow *window);
 void meta_window_unset_demands_attention (MetaWindow *window);
@@ -155,7 +162,6 @@ void meta_window_change_workspace          (MetaWindow  *window,
                                             MetaWorkspace *workspace);
 GObject *meta_window_get_compositor_private (MetaWindow *window);
 void meta_window_set_compositor_private (MetaWindow *window, GObject *priv);
-void meta_window_configure_notify (MetaWindow *window, XConfigureEvent *event);
 const char *meta_window_get_role (MetaWindow *window);
 MetaStackLayer meta_window_get_layer (MetaWindow *window);
 MetaWindow* meta_window_find_root_ancestor    (MetaWindow *window);
@@ -195,7 +201,6 @@ void        meta_window_raise              (MetaWindow  *window);
 void        meta_window_lower              (MetaWindow  *window);
 const char *meta_window_get_title (MetaWindow *window);
 MetaWindow *meta_window_get_transient_for (MetaWindow *window);
-Window      meta_window_get_transient_for_as_xid (MetaWindow *window);
 void        meta_window_delete             (MetaWindow  *window,
                                             guint32      timestamp);
 guint       meta_window_get_stable_sequence (MetaWindow *window);
@@ -203,7 +208,6 @@ guint32     meta_window_get_user_time (MetaWindow *window);
 int         meta_window_get_pid (MetaWindow *window);
 const char *meta_window_get_client_machine (MetaWindow *window);
 gboolean    meta_window_is_remote (MetaWindow *window);
-gboolean    meta_window_is_modal (MetaWindow *window);
 gboolean    meta_window_is_attached_dialog (MetaWindow *window);
 const char *meta_window_get_mutter_hints (MetaWindow *window);
 
@@ -252,6 +256,7 @@ gboolean meta_window_is_always_on_all_workspaces (MetaWindow *window);
 gboolean meta_window_is_above (MetaWindow *window);
 gboolean meta_window_allows_move (MetaWindow *window);
 gboolean meta_window_allows_resize (MetaWindow *window);
+gboolean meta_window_is_client_decorated (MetaWindow *window);
 
 gboolean meta_window_titlebar_is_onscreen    (MetaWindow *window);
 void     meta_window_shove_titlebar_onscreen (MetaWindow *window);

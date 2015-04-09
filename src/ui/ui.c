@@ -2,9 +2,9 @@
 
 /* Mutter interface for talking to GTK+ UI module */
 
-/* 
+/*
  * Copyright (C) 2002 Havoc Pennington
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
  * published by the Free Software Foundation; either version 2 of the
@@ -14,7 +14,7 @@
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
@@ -24,18 +24,12 @@
 #include "ui.h"
 #include "frames.h"
 #include <meta/util.h>
-#include "menu.h"
 #include "core.h"
 #include "theme-private.h"
 
 #include <string.h>
 #include <stdlib.h>
 #include <cairo-xlib.h>
-
-static void meta_ui_accelerator_parse (const char      *accel,
-                                       guint           *keysym,
-                                       guint           *keycode,
-                                       GdkModifierType *keymask);
 
 struct _MetaUI
 {
@@ -54,6 +48,8 @@ struct _MetaUI
 void
 meta_ui_init (void)
 {
+  gdk_set_allowed_backends ("x11");
+
   if (!gtk_init_check (NULL, NULL))
     meta_fatal ("Unable to open X display %s\n", XDisplayName (NULL));
 
@@ -87,6 +83,31 @@ is_input_event (XEvent *event)
           event->xcookie.extension == display->xinput_opcode);
 }
 
+static gboolean
+is_interesting_input_event (XEvent *event)
+{
+  XIEvent *input_event;
+
+  if (!is_input_event (event))
+    return FALSE;
+
+  input_event = (XIEvent *) event->xcookie.data;
+  switch (input_event->evtype)
+    {
+    case XI_ButtonPress:
+    case XI_ButtonRelease:
+    case XI_Motion:
+    case XI_Enter:
+    case XI_Leave:
+    case XI_TouchBegin:
+    case XI_TouchUpdate:
+    case XI_TouchEnd:
+      return TRUE;
+    default:
+      return FALSE;
+    }
+}
+
 /* We do some of our event handling in frames.c, which expects
  * GDK events delivered by GTK+.  However, since the transition to
  * client side windows, we can't let GDK see button events, since the
@@ -102,7 +123,7 @@ is_input_event (XEvent *event)
  * use more fields, more fields need to be filled out below.
  */
 
-static gboolean
+static void
 maybe_redirect_mouse_event (XEvent *xevent)
 {
   GdkDisplay *gdisplay;
@@ -116,14 +137,10 @@ maybe_redirect_mouse_event (XEvent *xevent)
   XIDeviceEvent *xev_d = NULL;
   XIEnterEvent *xev_e = NULL;
 
-  if (!is_input_event (xevent))
-    return FALSE;
-
   xev = (XIEvent *) xevent->xcookie.data;
 
   switch (xev->evtype)
     {
-    case XI_TouchBegin:
     case XI_ButtonPress:
     case XI_ButtonRelease:
     case XI_Motion:
@@ -136,34 +153,27 @@ maybe_redirect_mouse_event (XEvent *xevent)
       window = xev_e->event;
       break;
     default:
-      return FALSE;
+      /* Not interested in this event. */
+      return;
     }
 
   gdisplay = gdk_x11_lookup_xdisplay (xev->display);
   ui = g_object_get_data (G_OBJECT (gdisplay), "meta-ui");
   if (!ui)
-    return FALSE;
+    return;
 
   gdk_window = gdk_x11_window_lookup_for_display (gdisplay, window);
   if (gdk_window == NULL)
-    return FALSE;
+    return;
 
   gmanager = gdk_display_get_device_manager (gdisplay);
   gdevice = gdk_x11_device_manager_lookup (gmanager, META_VIRTUAL_CORE_POINTER_ID);
 
-  /* If GDK already thinks it has a grab, we better let it see events; this
-   * is the menu-navigation case and events need to get sent to the appropriate
-   * (client-side) subwindow for individual menu items.
-   */
-  if (gdk_display_device_is_grabbed (gdisplay, gdevice))
-    return FALSE;
-
   switch (xev->evtype)
     {
-    case XI_TouchBegin:
     case XI_ButtonPress:
     case XI_ButtonRelease:
-      if (xev_d->evtype == XI_ButtonPress || xev_d->evtype == XI_TouchBegin)
+      if (xev_d->evtype == XI_ButtonPress)
         {
           GtkSettings *settings = gtk_settings_get_default ();
           int double_click_time;
@@ -175,10 +185,7 @@ maybe_redirect_mouse_event (XEvent *xevent)
                         "gtk-double-click-distance", &double_click_distance,
                         NULL);
 
-          if (xev->evtype == XI_TouchBegin)
-            button = 1;
-          else
-            button = xev_d->detail;
+          button = xev_d->detail;
 
           if (button == ui->button_click_number &&
               xev_d->event == ui->button_click_window &&
@@ -214,17 +221,24 @@ maybe_redirect_mouse_event (XEvent *xevent)
       gevent->button.y = xev_d->event_y;
       gevent->button.x_root = xev_d->root_x;
       gevent->button.y_root = xev_d->root_y;
-
       break;
     case XI_Motion:
       gevent = gdk_event_new (GDK_MOTION_NOTIFY);
-      gevent->motion.type = GDK_MOTION_NOTIFY;
       gevent->motion.window = g_object_ref (gdk_window);
+      gevent->motion.time = xev_d->time;
+      gevent->motion.x = xev_d->event_x;
+      gevent->motion.y = xev_d->event_y;
+      gevent->motion.x_root = xev_d->root_x;
+      gevent->motion.y_root = xev_d->root_y;
+
+      if (XIMaskIsSet (xev_d->buttons.mask, 1))
+        gevent->motion.state |= GDK_BUTTON1_MASK;
       break;
     case XI_Enter:
     case XI_Leave:
       gevent = gdk_event_new (xev_e->evtype == XI_Enter ? GDK_ENTER_NOTIFY : GDK_LEAVE_NOTIFY);
       gevent->crossing.window = g_object_ref (gdk_window);
+      gevent->crossing.time = xev_e->time;
       gevent->crossing.x = xev_e->event_x;
       gevent->crossing.y = xev_e->event_y;
       break;
@@ -237,60 +251,20 @@ maybe_redirect_mouse_event (XEvent *xevent)
   gdk_event_set_device (gevent, gdevice);
   gtk_main_do_event (gevent);
   gdk_event_free (gevent);
-
-  return TRUE;
 }
-
-typedef struct _EventFunc EventFunc;
-
-struct _EventFunc
-{
-  MetaEventFunc func;
-  gpointer data;
-};
-
-static EventFunc *ef = NULL;
 
 static GdkFilterReturn
-filter_func (GdkXEvent *xevent,
-             GdkEvent *event,
-             gpointer data)
+ui_filter_func (GdkXEvent *xevent,
+                GdkEvent *event,
+                gpointer data)
 {
-  g_return_val_if_fail (ef != NULL, GDK_FILTER_CONTINUE);
-
-  if ((* ef->func) (xevent, ef->data) ||
-      maybe_redirect_mouse_event (xevent))
-    return GDK_FILTER_REMOVE;
+  if (is_interesting_input_event (xevent))
+    {
+      maybe_redirect_mouse_event (xevent);
+      return GDK_FILTER_REMOVE;
+    }
   else
     return GDK_FILTER_CONTINUE;
-}
-
-void
-meta_ui_add_event_func (Display       *xdisplay,
-                        MetaEventFunc  func,
-                        gpointer       data)
-{
-  g_return_if_fail (ef == NULL);
-
-  ef = g_new (EventFunc, 1);
-  ef->func = func;
-  ef->data = data;
-
-  gdk_window_add_filter (NULL, filter_func, ef);
-}
-
-/* removal is by data due to proxy function */
-void
-meta_ui_remove_event_func (Display       *xdisplay,
-                           MetaEventFunc  func,
-                           gpointer       data)
-{
-  g_return_if_fail (ef != NULL);
-  
-  gdk_window_remove_filter (NULL, filter_func, ef);
-
-  g_free (ef);
-  ef = NULL;
 }
 
 MetaUI*
@@ -316,6 +290,8 @@ meta_ui_new (Display *xdisplay,
    */
   gtk_widget_show (GTK_WIDGET (ui->frames));
 
+  gdk_window_add_filter (NULL, ui_filter_func, NULL);
+
   g_object_set_data (G_OBJECT (gdisplay), "meta-ui", ui);
 
   return ui;
@@ -330,6 +306,8 @@ meta_ui_free (MetaUI *ui)
 
   gdisplay = gdk_x11_lookup_xdisplay (ui->xdisplay);
   g_object_set_data (G_OBJECT (gdisplay), "meta-ui", NULL);
+
+  gdk_window_remove_filter (NULL, ui_filter_func, NULL);
 
   g_free (ui);
 }
@@ -353,6 +331,17 @@ meta_ui_get_frame_borders (MetaUI *ui,
                            borders);
 }
 
+static void
+set_background_none (Display *xdisplay,
+                     Window   xwindow)
+{
+  XSetWindowAttributes attrs;
+
+  attrs.background_pixmap = None;
+  XChangeWindowAttributes (xdisplay, xwindow,
+                           CWBackPixmap, &attrs);
+}
+
 Window
 meta_ui_create_frame_window (MetaUI *ui,
                              Display *xdisplay,
@@ -370,7 +359,7 @@ meta_ui_create_frame_window (MetaUI *ui,
   gint attributes_mask;
   GdkWindow *window;
   GdkVisual *visual;
-  
+
   /* Default depth/visual handles clients with weird visuals; they can
    * always be children of the root depth/visual obviously, but
    * e.g. DRI games can't be children of a parent that has the same
@@ -419,7 +408,8 @@ meta_ui_create_frame_window (MetaUI *ui,
 		    &attrs, attributes_mask);
 
   gdk_window_resize (window, width, height);
-  
+  set_background_none (xdisplay, GDK_WINDOW_XID (window));
+
   meta_frames_manage_window (ui->frames, GDK_WINDOW_XID (window), window);
 
   return GDK_WINDOW_XID (window);
@@ -472,16 +462,6 @@ meta_ui_unmap_frame (MetaUI *ui,
 }
 
 void
-meta_ui_unflicker_frame_bg (MetaUI *ui,
-                            Window  xwindow,
-                            int     target_width,
-                            int     target_height)
-{
-  meta_frames_unflicker_bg (ui->frames, xwindow,
-                            target_width, target_height);
-}
-
-void
 meta_ui_update_frame_style (MetaUI  *ui,
                             Window   xwindow)
 {
@@ -493,13 +473,6 @@ meta_ui_repaint_frame (MetaUI *ui,
                        Window xwindow)
 {
   meta_frames_repaint_frame (ui->frames, xwindow);
-}
-
-void
-meta_ui_reset_frame_bg (MetaUI *ui,
-                        Window xwindow)
-{
-  meta_frames_reset_bg (ui->frames, xwindow);
 }
 
 cairo_region_t *
@@ -525,40 +498,6 @@ meta_ui_set_frame_title (MetaUI     *ui,
                          const char *title)
 {
   meta_frames_set_title (ui->frames, xwindow, title);
-}
-
-MetaWindowMenu*
-meta_ui_window_menu_new  (MetaUI             *ui,
-                          Window              client_xwindow,
-                          MetaMenuOp          ops,
-                          MetaMenuOp          insensitive,
-                          unsigned long       active_workspace,
-                          int                 n_workspaces,
-                          MetaWindowMenuFunc  func,
-                          gpointer            data)
-{
-  return meta_window_menu_new (ui->frames,
-                               ops, insensitive,
-                               client_xwindow,
-                               active_workspace,
-                               n_workspaces,
-                               func, data);
-}
-
-void
-meta_ui_window_menu_popup (MetaWindowMenu     *menu,
-                           int                 root_x,
-                           int                 root_y,
-                           int                 button,
-                           guint32             timestamp)
-{
-  meta_window_menu_popup (menu, root_x, root_y, button, timestamp);
-}
-
-void
-meta_ui_window_menu_free (MetaWindowMenu *menu)
-{
-  meta_window_menu_free (menu);
 }
 
 GdkPixbuf*
@@ -611,76 +550,6 @@ meta_gdk_pixbuf_get_from_pixmap (Pixmap       xpixmap,
   return retval;
 }
 
-GdkPixbuf*
-meta_ui_get_default_window_icon (MetaUI *ui)
-{
-  static GdkPixbuf *default_icon = NULL;
-
-  if (default_icon == NULL)
-    {
-      GtkIconTheme *theme;
-      gboolean icon_exists;
-
-      theme = gtk_icon_theme_get_default ();
-
-      icon_exists = gtk_icon_theme_has_icon (theme, META_DEFAULT_ICON_NAME);
-
-      if (icon_exists)
-          default_icon = gtk_icon_theme_load_icon (theme,
-                                                   META_DEFAULT_ICON_NAME,
-                                                   META_ICON_WIDTH,
-                                                   0,
-                                                   NULL);
-      else
-          default_icon = gtk_icon_theme_load_icon (theme,
-                                                   "image-missing",
-                                                   META_ICON_WIDTH,
-                                                   0,
-                                                   NULL);
-
-      g_assert (default_icon);
-    }
-
-  g_object_ref (G_OBJECT (default_icon));
-  
-  return default_icon;
-}
-
-GdkPixbuf*
-meta_ui_get_default_mini_icon (MetaUI *ui)
-{
-  static GdkPixbuf *default_icon = NULL;
-
-  if (default_icon == NULL)
-    {
-      GtkIconTheme *theme;
-      gboolean icon_exists;
-
-      theme = gtk_icon_theme_get_default ();
-
-      icon_exists = gtk_icon_theme_has_icon (theme, META_DEFAULT_ICON_NAME);
-
-      if (icon_exists)
-          default_icon = gtk_icon_theme_load_icon (theme,
-                                                   META_DEFAULT_ICON_NAME,
-                                                   META_MINI_ICON_WIDTH,
-                                                   0,
-                                                   NULL);
-      else
-          default_icon = gtk_icon_theme_load_icon (theme,
-                                                   "image-missing",
-                                                   META_MINI_ICON_WIDTH,
-                                                   0,
-                                                   NULL);
-
-      g_assert (default_icon);
-    }
-
-  g_object_ref (G_OBJECT (default_icon));
-  
-  return default_icon;
-}
-
 gboolean
 meta_ui_window_should_not_cause_focus (Display *xdisplay,
                                        Window   xwindow)
@@ -698,38 +567,6 @@ meta_ui_window_should_not_cause_focus (Display *xdisplay,
     return TRUE;
   else
     return FALSE;
-}
-
-char*
-meta_text_property_to_utf8 (Display             *xdisplay,
-                            const XTextProperty *prop)
-{
-  GdkDisplay *display;
-  char **list;
-  int count;
-  char *retval;
-  
-  list = NULL;
-
-  display = gdk_x11_lookup_xdisplay (xdisplay);
-  count = gdk_text_property_to_utf8_list_for_display (display,
-                                                      gdk_x11_xatom_to_atom_for_display (display, prop->encoding),
-                                                      prop->format,
-                                                      prop->value,
-                                                      prop->nitems,
-                                                      &list);
-
-  if (count == 0)
-    retval = NULL;
-  else
-    {
-  retval = list[0];
-  list[0] = g_strdup (""); /* something to free */
-    }
-  
-  g_strfreev (list);
-
-  return retval;
 }
 
 void
@@ -797,196 +634,6 @@ meta_ui_have_a_theme (void)
   return meta_theme_get_current () != NULL;
 }
 
-static void
-meta_ui_accelerator_parse (const char      *accel,
-                           guint           *keysym,
-                           guint           *keycode,
-                           GdkModifierType *keymask)
-{
-  const char *above_tab;
-
-  if (accel[0] == '0' && accel[1] == 'x')
-    {
-      *keysym = 0;
-      *keycode = (guint) strtoul (accel, NULL, 16);
-      *keymask = 0;
-
-      return;
-    }
-
-  /* The key name 'Above_Tab' is special - it's not an actual keysym name,
-   * but rather refers to the key above the tab key. In order to use
-   * the GDK parsing for modifiers in combination with it, we substitute
-   * it with 'Tab' temporarily before calling gtk_accelerator_parse().
-   */
-#define is_word_character(c) (g_ascii_isalnum(c) || ((c) == '_'))
-#define ABOVE_TAB "Above_Tab"
-#define ABOVE_TAB_LEN 9
-
-  above_tab = strstr (accel, ABOVE_TAB);
-  if (above_tab &&
-      (above_tab == accel || !is_word_character (above_tab[-1])) &&
-      !is_word_character (above_tab[ABOVE_TAB_LEN]))
-    {
-      char *before = g_strndup (accel, above_tab - accel);
-      char *after = g_strdup (above_tab + ABOVE_TAB_LEN);
-      char *replaced = g_strconcat (before, "Tab", after, NULL);
-
-      gtk_accelerator_parse (replaced, NULL, keymask);
-
-      g_free (before);
-      g_free (after);
-      g_free (replaced);
-
-      *keysym = META_KEY_ABOVE_TAB;
-      return;
-    }
-
-#undef is_word_character
-#undef ABOVE_TAB
-#undef ABOVE_TAB_LEN
-
-  gtk_accelerator_parse (accel, keysym, keymask);
-}
-
-gboolean
-meta_ui_parse_accelerator (const char          *accel,
-                           unsigned int        *keysym,
-                           unsigned int        *keycode,
-                           MetaVirtualModifier *mask)
-{
-  GdkModifierType gdk_mask = 0;
-  guint gdk_sym = 0;
-  guint gdk_code = 0;
-  
-  *keysym = 0;
-  *keycode = 0;
-  *mask = 0;
-
-  if (!accel[0] || strcmp (accel, "disabled") == 0)
-    return TRUE;
-  
-  meta_ui_accelerator_parse (accel, &gdk_sym, &gdk_code, &gdk_mask);
-  if (gdk_mask == 0 && gdk_sym == 0 && gdk_code == 0)
-    return FALSE;
-
-  if (gdk_sym == None && gdk_code == 0)
-    return FALSE;
-  
-  if (gdk_mask & GDK_RELEASE_MASK) /* we don't allow this */
-    return FALSE;
-  
-  *keysym = gdk_sym;
-  *keycode = gdk_code;
-
-  if (gdk_mask & GDK_SHIFT_MASK)
-    *mask |= META_VIRTUAL_SHIFT_MASK;
-  if (gdk_mask & GDK_CONTROL_MASK)
-    *mask |= META_VIRTUAL_CONTROL_MASK;
-  if (gdk_mask & GDK_MOD1_MASK)
-    *mask |= META_VIRTUAL_ALT_MASK;
-  if (gdk_mask & GDK_MOD2_MASK)
-    *mask |= META_VIRTUAL_MOD2_MASK;
-  if (gdk_mask & GDK_MOD3_MASK)
-    *mask |= META_VIRTUAL_MOD3_MASK;
-  if (gdk_mask & GDK_MOD4_MASK)
-    *mask |= META_VIRTUAL_MOD4_MASK;
-  if (gdk_mask & GDK_MOD5_MASK)
-    *mask |= META_VIRTUAL_MOD5_MASK;
-  if (gdk_mask & GDK_SUPER_MASK)
-    *mask |= META_VIRTUAL_SUPER_MASK;
-  if (gdk_mask & GDK_HYPER_MASK)
-    *mask |= META_VIRTUAL_HYPER_MASK;
-  if (gdk_mask & GDK_META_MASK)
-    *mask |= META_VIRTUAL_META_MASK;
-  
-  return TRUE;
-}
-
-/* Caller responsible for freeing return string of meta_ui_accelerator_name! */
-gchar*
-meta_ui_accelerator_name  (unsigned int        keysym,
-                           MetaVirtualModifier mask)
-{
-  GdkModifierType mods = 0;
-        
-  if (keysym == 0 && mask == 0)
-    {
-      return g_strdup ("disabled");
-    }
-
-  if (mask & META_VIRTUAL_SHIFT_MASK)
-    mods |= GDK_SHIFT_MASK;
-  if (mask & META_VIRTUAL_CONTROL_MASK)
-    mods |= GDK_CONTROL_MASK;
-  if (mask & META_VIRTUAL_ALT_MASK)
-    mods |= GDK_MOD1_MASK;
-  if (mask & META_VIRTUAL_MOD2_MASK)
-    mods |= GDK_MOD2_MASK;
-  if (mask & META_VIRTUAL_MOD3_MASK)
-    mods |= GDK_MOD3_MASK;
-  if (mask & META_VIRTUAL_MOD4_MASK)
-    mods |= GDK_MOD4_MASK;
-  if (mask & META_VIRTUAL_MOD5_MASK)
-    mods |= GDK_MOD5_MASK;
-  if (mask & META_VIRTUAL_SUPER_MASK)
-    mods |= GDK_SUPER_MASK;
-  if (mask & META_VIRTUAL_HYPER_MASK)
-    mods |= GDK_HYPER_MASK;
-  if (mask & META_VIRTUAL_META_MASK)
-    mods |= GDK_META_MASK;
-
-  return gtk_accelerator_name (keysym, mods);
-
-}
-
-gboolean
-meta_ui_parse_modifier (const char          *accel,
-                        MetaVirtualModifier *mask)
-{
-  GdkModifierType gdk_mask = 0;
-  guint gdk_sym = 0;
-  guint gdk_code = 0;
-  
-  *mask = 0;
-
-  if (accel == NULL || !accel[0] || strcmp (accel, "disabled") == 0)
-    return TRUE;
-  
-  meta_ui_accelerator_parse (accel, &gdk_sym, &gdk_code, &gdk_mask);
-  if (gdk_mask == 0 && gdk_sym == 0 && gdk_code == 0)
-    return FALSE;
-
-  if (gdk_sym != None || gdk_code != 0)
-    return FALSE;
-  
-  if (gdk_mask & GDK_RELEASE_MASK) /* we don't allow this */
-    return FALSE;
-
-  if (gdk_mask & GDK_SHIFT_MASK)
-    *mask |= META_VIRTUAL_SHIFT_MASK;
-  if (gdk_mask & GDK_CONTROL_MASK)
-    *mask |= META_VIRTUAL_CONTROL_MASK;
-  if (gdk_mask & GDK_MOD1_MASK)
-    *mask |= META_VIRTUAL_ALT_MASK;
-  if (gdk_mask & GDK_MOD2_MASK)
-    *mask |= META_VIRTUAL_MOD2_MASK;
-  if (gdk_mask & GDK_MOD3_MASK)
-    *mask |= META_VIRTUAL_MOD3_MASK;
-  if (gdk_mask & GDK_MOD4_MASK)
-    *mask |= META_VIRTUAL_MOD4_MASK;
-  if (gdk_mask & GDK_MOD5_MASK)
-    *mask |= META_VIRTUAL_MOD5_MASK;
-  if (gdk_mask & GDK_SUPER_MASK)
-    *mask |= META_VIRTUAL_SUPER_MASK;
-  if (gdk_mask & GDK_HYPER_MASK)
-    *mask |= META_VIRTUAL_HYPER_MASK;
-  if (gdk_mask & GDK_META_MASK)
-    *mask |= META_VIRTUAL_META_MASK;
-  
-  return TRUE;
-}
-
 gboolean
 meta_ui_window_is_widget (MetaUI *ui,
                           Window  xwindow)
@@ -1007,26 +654,10 @@ meta_ui_window_is_widget (MetaUI *ui,
     return FALSE;
 }
 
-int
-meta_ui_get_drag_threshold (MetaUI *ui)
+gboolean
+meta_ui_window_is_dummy (MetaUI *ui,
+                         Window  xwindow)
 {
-  GtkSettings *settings;
-  int threshold;
-
-  settings = gtk_widget_get_settings (GTK_WIDGET (ui->frames));
-
-  threshold = 8;
-  g_object_get (G_OBJECT (settings), "gtk-dnd-drag-threshold", &threshold, NULL);
-
-  return threshold;
+  GdkWindow *frames_window = gtk_widget_get_window (GTK_WIDGET (ui->frames));
+  return xwindow == gdk_x11_window_get_xid (frames_window);
 }
-
-MetaUIDirection
-meta_ui_get_direction (void)
-{
-  if (gtk_widget_get_default_direction() == GTK_TEXT_DIR_RTL)
-    return META_UI_DIRECTION_RTL;
-
-  return META_UI_DIRECTION_LTR;
-}
-

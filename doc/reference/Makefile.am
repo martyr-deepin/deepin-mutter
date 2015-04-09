@@ -9,7 +9,7 @@ AUTOMAKE_OPTIONS = 1.6
 # of using the various options.
 
 # The name of the module, e.g. 'glib'.
-DOC_MODULE=deepin-mutter
+DOC_MODULE=meta
 
 # Uncomment for versioned docs and specify the version of the module, e.g. '2'.
 #DOC_MODULE_VERSION=2
@@ -79,8 +79,6 @@ IGNORE_HFILES= \
 	iconcache.h \
 	inlinepixbufs.h \
 	keybindings-private.h \
-	menu.h \
-	metaaccellabel.h \
 	meta-background-actor-private.h \
 	meta-background-group-private.h \
 	meta-module.h \
@@ -112,6 +110,13 @@ IGNORE_HFILES= \
 	workspace-private.h \
 	xprops.h \
 	$(NULL)
+
+if !HAVE_WAYLAND
+IGNORE_HFILES += \
+	meta-surface-actor-wayland.h	\
+	wayland				\
+	$(NULL)
+endif
 
 MKDB_OPTIONS+=--ignore-files="$(IGNORE_HFILES)"
 

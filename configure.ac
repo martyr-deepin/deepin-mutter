@@ -1,9 +1,8 @@
-AC_PREREQ(2.50)
-AC_CONFIG_MACRO_DIR([m4])
+AC_PREREQ(2.62)
 
 m4_define([mutter_major_version], [3])
-m4_define([mutter_minor_version], [12])
-m4_define([mutter_micro_version], [2])
+m4_define([mutter_minor_version], [14])
+m4_define([mutter_micro_version], [3])
 
 m4_define([mutter_version],
           [mutter_major_version.mutter_minor_version.mutter_micro_version])
@@ -14,10 +13,11 @@ AC_INIT([mutter], [mutter_version],
         [http://bugzilla.gnome.org/enter_bug.cgi?product=mutter])
 
 AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_SRCDIR(src/core/display.c)
 AC_CONFIG_HEADERS(config.h)
 
-AM_INIT_AUTOMAKE([1.11 no-dist-gzip dist-xz tar-ustar subdir-objects])
+AM_INIT_AUTOMAKE([1.11 foreign no-dist-gzip dist-xz tar-ustar subdir-objects])
 m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])],)
 AM_MAINTAINER_MODE([enable])
 
@@ -30,7 +30,7 @@ AC_SUBST(MUTTER_MINOR_VERSION)
 AC_SUBST(MUTTER_MICRO_VERSION)
 AC_SUBST(MUTTER_PLUGIN_API_VERSION)
 
-pkglibdir='${libdir}/'deepin-${PACKAGE}
+pkglibdir="${libdir}/deepin-${PACKAGE}"
 AC_SUBST([pkglibdir])
 
 MUTTER_PLUGIN_DIR="$pkglibdir/plugins"
@@ -43,12 +43,14 @@ GETTEXT_PACKAGE=deepin-mutter
 AC_SUBST(GETTEXT_PACKAGE)
 AC_DEFINE_UNQUOTED(GETTEXT_PACKAGE,"$GETTEXT_PACKAGE",[Name of default gettext domain])
 
-IT_PROG_INTLTOOL([0.34.90])
+LT_PREREQ([2.2.6])
+LT_INIT([disable-static])
+IT_PROG_INTLTOOL([0.41])
 AC_PROG_CC
-AC_ISC_POSIX
+AC_PROG_CC_C_O
+AC_PROG_INSTALL
 AC_HEADER_STDC
-AC_LIBTOOL_WIN32_DLL
-AM_PROG_LIBTOOL
+PKG_PROG_PKG_CONFIG([0.21])
 
 # Sets GLIB_GENMARSHAL and GLIB_MKENUMS
 AM_PATH_GLIB_2_0()
@@ -73,15 +75,26 @@ CLUTTER_PACKAGE=clutter-1.0
 
 MUTTER_PC_MODULES="
    gtk+-3.0 >= 3.9.11
-   gio-2.0 >= 2.25.10
+   gio-unix-2.0 >= 2.25.10
    pango >= 1.2.0
    cairo >= 1.10.0
    gsettings-desktop-schemas >= 3.7.3
-   xcomposite >= 0.2 xfixes xrender xdamage xi >= 1.6.0
-   $CLUTTER_PACKAGE >= 1.15.90
+   $CLUTTER_PACKAGE >= 1.19.5
    cogl-1.0 >= 1.17.1
    upower-glib >= 0.99.0
    gnome-desktop-3.0
+   xcomposite >= 0.2
+   xcursor
+   xdamage
+   xext
+   xfixes
+   xi >= 1.6.0
+   xkbfile
+   xkeyboard-config
+   xkbcommon >= 0.4.3
+   xkbcommon-x11
+   x11-xcb
+   xcb-randr
 "
 
 GLIB_GSETTINGS
@@ -110,21 +123,18 @@ AC_ARG_WITH(libcanberra,
                  [disable the use of libcanberra for playing sounds]),,
   with_libcanberra=auto)
 
-AC_ARG_ENABLE(xsync,
-  AC_HELP_STRING([--disable-xsync],
-                 [disable mutter's use of the XSync extension]),,
-  enable_xsync=auto)
+AC_ARG_WITH([xwayland-path],
+            [AS_HELP_STRING([--with-xwayland-path], [Absolute path for an X Wayland server])],
+            [XWAYLAND_PATH="$withval"],
+            [XWAYLAND_PATH="$bindir/Xwayland"])
 
-AC_ARG_ENABLE(shape,
-  AC_HELP_STRING([--disable-shape],
-                 [disable mutter's use of the shaped window extension]),,
-  enable_shape=auto)
-
-AM_GLIB_GNU_GETTEXT
+AC_ARG_ENABLE(installed_tests,
+              AS_HELP_STRING([--enable-installed-tests],
+                             [Install test programs (default: no)]),,
+              [enable_installed_tests=no])
+AM_CONDITIONAL(BUILDOPT_INSTALL_TESTS, test x$enable_installed_tests = xyes)
 
 ## here we get the flags we'll actually use
-# GRegex requires Glib-2.14.0
-PKG_CHECK_MODULES(ALL, glib-2.0 >= 2.14.0)
 
 # Unconditionally use this dir to avoid a circular dep with gnomecc
 GNOME_KEYBINDINGS_KEYSDIR="${datadir}/gnome-control-center/keybindings"
@@ -189,21 +199,26 @@ if test x$found_introspection != xno; then
   AC_SUBST(META_GIR)
 fi
 
-AC_MSG_CHECKING([Xcursor])
-if $PKG_CONFIG xcursor; then
-     have_xcursor=yes
-  else
-     have_xcursor=no
-  fi
-  AC_MSG_RESULT($have_xcursor)
-
-if test x$have_xcursor = xyes; then
-  echo "Building with Xcursor"
-  MUTTER_PC_MODULES="$MUTTER_PC_MODULES xcursor"
-  AC_DEFINE(HAVE_XCURSOR, , [Building with Xcursor support])
-fi
+AC_SUBST(XWAYLAND_PATH)
 
 PKG_CHECK_MODULES(MUTTER, $MUTTER_PC_MODULES)
+
+PKG_CHECK_MODULES(MUTTER_NATIVE_BACKEND, [clutter-egl-1.0 libdrm libsystemd libinput gbm >= 10.3], [have_native_backend=yes], [have_native_backend=no])
+if test $have_native_backend = yes; then
+   AC_DEFINE([HAVE_NATIVE_BACKEND],[1],[Define if you want to enable the native (KMS) backend based on systemd])
+fi
+AM_CONDITIONAL([HAVE_NATIVE_BACKEND],[test $have_native_backend = yes])
+
+PKG_CHECK_MODULES(MUTTER_WAYLAND, [clutter-wayland-1.0 clutter-wayland-compositor-1.0 wayland-server >= 1.5.90], [have_wayland=yes], [have_wayland=no])
+if test $have_wayland = yes; then
+   AC_PATH_PROG([WAYLAND_SCANNER],[wayland-scanner],[no])
+   AS_IF([test $WAYLAND_SCANNER = "no"],
+     AC_MSG_ERROR([Could not find wayland-scanner in your PATH, required for parsing wayland extension protocols]))
+   AC_SUBST([WAYLAND_SCANNER])
+
+   AC_DEFINE([HAVE_WAYLAND],[1],[Define if you want to enable Wayland support])
+fi
+AM_CONDITIONAL([HAVE_WAYLAND],[test $have_wayland = yes])
 
 PKG_CHECK_EXISTS([xi >= 1.6.99.1],
                  AC_DEFINE([HAVE_XI23],[1],[Define if you have support for XInput 2.3 or greater]))
@@ -241,38 +256,8 @@ if test x$have_xinerama = xno; then
    AC_MSG_ERROR([Xinerama extension was not found])
 fi
 
-SHAPE_LIBS=
-found_shape=no
-AC_CHECK_LIB(Xext, XShapeQueryExtension,
-               [AC_CHECK_HEADER(X11/extensions/shape.h,
-                                SHAPE_LIBS=-lXext found_shape=yes)],
-               , $ALL_X_LIBS)
-
-if test x$enable_shape = xno; then
-   found_shape=no
-fi
-
-if test x$enable_shape = xyes; then
-   if test "$found_shape" = "no"; then
-      AC_MSG_ERROR([--enable-shape forced and Shape not found])
-      exit 1
-   fi
-fi
-
-if test "x$found_shape" = "xyes"; then
-   AC_DEFINE(HAVE_SHAPE, , [Have the shape extension library])
-fi
-
-found_xkb=no
-AC_CHECK_LIB(X11, XkbQueryExtension,
-               [AC_CHECK_HEADER(X11/XKBlib.h,
-                                found_xkb=yes)],
-	, $ALL_X_LIBS)
-
-if test "x$found_xkb" = "xyes"; then
-   AC_DEFINE(HAVE_XKB, , [Have keyboard extension library])
-fi
-
+AC_DEFINE_UNQUOTED([XKB_BASE], ["`$PKG_CONFIG --variable xkb_base xkeyboard-config`"],
+                               [XKB base dir])
 
 RANDR_LIBS=
 found_randr=no
@@ -280,37 +265,13 @@ AC_CHECK_LIB(Xrandr, XRRUpdateConfiguration,
                [AC_CHECK_HEADER(X11/extensions/Xrandr.h,
                                 RANDR_LIBS=-lXrandr found_randr=yes,,
 				[#include <X11/Xlib.h>])],
-               , -lXrender -lXext $ALL_X_LIBS)
+               , -lXext $ALL_X_LIBS)
 
 if test "x$found_randr" = "xyes"; then
    AC_DEFINE(HAVE_RANDR, , [Have the Xrandr extension library])
 fi
 
-XSYNC_LIBS=
-found_xsync=no
-AC_CHECK_LIB(Xext, XSyncQueryExtension,
-               [AC_CHECK_HEADER(X11/extensions/sync.h,
-                                found_xsync=yes,,
-				[#include <X11/Xlib.h>])],
-               , $ALL_X_LIBS)
-
-if test x$enable_xsync = xno; then
-   found_xsync=no
-fi
-
-if test x$enable_xsync = xyes; then
-   if test "$found_xsync" = "no"; then
-      AC_MSG_ERROR([--enable-xsync forced and XSync not found])
-      exit 1
-   fi
-fi
-
-if test "x$found_xsync" = "xyes"; then
-   XSYNC_LIBS=-lXext
-   AC_DEFINE(HAVE_XSYNC, , [Have the Xsync extension library])
-fi
-
-MUTTER_LIBS="$MUTTER_LIBS $XSYNC_LIBS $RANDR_LIBS $SHAPE_LIBS $X_LIBS $X_PRE_LIBS -lX11 $X_EXTRA_LIBS -lm"
+MUTTER_LIBS="$MUTTER_LIBS $RANDR_LIBS $X_LIBS $X_PRE_LIBS -lX11 $X_EXTRA_LIBS -lm"
 
 found_sm=no
 case "$MUTTER_LIBS" in
@@ -341,17 +302,6 @@ if test "$found_sm" = "yes"; then
 fi
 
 AM_CONDITIONAL(HAVE_SM, test "$found_sm" = "yes")
-
-HOST_ALIAS=$host_alias
-AC_SUBST(HOST_ALIAS)
-
-AC_PATH_PROG(GDK_PIXBUF_CSOURCE, gdk-pixbuf-csource, no)
-
-if test x"$GDK_PIXBUF_CSOURCE" = xno; then
-  AC_MSG_ERROR([gdk-pixbuf-csource executable not found in your path - should be installed with GTK])
-fi
-
-AC_SUBST(GDK_PIXBUF_CSOURCE)
 
 AC_PATH_PROG(ZENITY, zenity, no)
 if test x"$ZENITY" = xno; then
@@ -435,14 +385,15 @@ changequote([,])dnl
 
 AC_CONFIG_FILES([
 Makefile
+data/Makefile
 doc/Makefile
 doc/man/Makefile
 doc/reference/Makefile
 doc/reference/meta-docs.sgml
 src/Makefile
 src/libmutter.pc
-src/mutter-plugins.pc
 src/compositor/plugins/Makefile
+src/meta/meta-version.h
 po/Makefile.in
 ])
 
@@ -468,9 +419,6 @@ mutter-$VERSION
 	libcanberra:              ${have_libcanberra}
 	Introspection:            ${found_introspection}
 	Session management:       ${found_sm}
-	Shape extension:          ${found_shape}
-	Xsync:                    ${found_xsync}
-	Xcursor:                  ${have_xcursor}
 "
 
 

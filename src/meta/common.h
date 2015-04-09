@@ -4,10 +4,10 @@
  * PLEASE KEEP IN SYNC WITH GSETTINGS SCHEMAS!
  */
 
-/* 
+/*
  * Copyright (C) 2001 Havoc Pennington
  * Copyright (C) 2005 Elijah Newren
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
  * published by the Free Software Foundation; either version 2 of the
@@ -17,7 +17,7 @@
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
@@ -29,6 +29,7 @@
 #include <X11/Xlib.h>
 #include <X11/extensions/XInput.h>
 #include <X11/extensions/XInput2.h>
+#include <clutter/clutter.h>
 #include <glib.h>
 #include <gtk/gtk.h>
 
@@ -42,12 +43,11 @@
 #define META_VIRTUAL_CORE_POINTER_ID 2
 #define META_VIRTUAL_CORE_KEYBOARD_ID 3
 
-typedef struct _MetaResizePopup MetaResizePopup;
-
 /**
  * MetaFrameFlags:
  * @META_FRAME_ALLOWS_DELETE: frame allows delete
  * @META_FRAME_ALLOWS_MENU: frame allows menu
+ * @META_FRAME_ALLOWS_APPMENU: frame allows (fallback) app menu
  * @META_FRAME_ALLOWS_MINIMIZE: frame allows minimize
  * @META_FRAME_ALLOWS_MAXIMIZE: frame allows maximize
  * @META_FRAME_ALLOWS_VERTICAL_RESIZE: frame allows vertical resize
@@ -68,77 +68,23 @@ typedef enum
 {
   META_FRAME_ALLOWS_DELETE            = 1 << 0,
   META_FRAME_ALLOWS_MENU              = 1 << 1,
-  META_FRAME_ALLOWS_MINIMIZE          = 1 << 2,
-  META_FRAME_ALLOWS_MAXIMIZE          = 1 << 3,
-  META_FRAME_ALLOWS_VERTICAL_RESIZE   = 1 << 4,
-  META_FRAME_ALLOWS_HORIZONTAL_RESIZE = 1 << 5,
-  META_FRAME_HAS_FOCUS                = 1 << 6,
-  META_FRAME_SHADED                   = 1 << 7,
-  META_FRAME_STUCK                    = 1 << 8,
-  META_FRAME_MAXIMIZED                = 1 << 9,
-  META_FRAME_ALLOWS_SHADE             = 1 << 10,
-  META_FRAME_ALLOWS_MOVE              = 1 << 11,
-  META_FRAME_FULLSCREEN               = 1 << 12,
-  META_FRAME_IS_FLASHING              = 1 << 13,
-  META_FRAME_ABOVE                    = 1 << 14,
-  META_FRAME_TILED_LEFT               = 1 << 15,
-  META_FRAME_TILED_RIGHT              = 1 << 16
+  META_FRAME_ALLOWS_APPMENU           = 1 << 2,
+  META_FRAME_ALLOWS_MINIMIZE          = 1 << 3,
+  META_FRAME_ALLOWS_MAXIMIZE          = 1 << 4,
+  META_FRAME_ALLOWS_VERTICAL_RESIZE   = 1 << 5,
+  META_FRAME_ALLOWS_HORIZONTAL_RESIZE = 1 << 6,
+  META_FRAME_HAS_FOCUS                = 1 << 7,
+  META_FRAME_SHADED                   = 1 << 8,
+  META_FRAME_STUCK                    = 1 << 9,
+  META_FRAME_MAXIMIZED                = 1 << 10,
+  META_FRAME_ALLOWS_SHADE             = 1 << 11,
+  META_FRAME_ALLOWS_MOVE              = 1 << 12,
+  META_FRAME_FULLSCREEN               = 1 << 13,
+  META_FRAME_IS_FLASHING              = 1 << 14,
+  META_FRAME_ABOVE                    = 1 << 15,
+  META_FRAME_TILED_LEFT               = 1 << 16,
+  META_FRAME_TILED_RIGHT              = 1 << 17
 } MetaFrameFlags;
-
-/**
- * MetaMenuOp:
- * @META_MENU_OP_NONE: No menu operation
- * @META_MENU_OP_DELETE: Menu operation delete
- * @META_MENU_OP_MINIMIZE: Menu operation minimize
- * @META_MENU_OP_UNMAXIMIZE: Menu operation unmaximize
- * @META_MENU_OP_MAXIMIZE: Menu operation maximize
- * @META_MENU_OP_UNSHADE: Menu operation unshade
- * @META_MENU_OP_SHADE: Menu operation shade
- * @META_MENU_OP_UNSTICK: Menu operation unstick
- * @META_MENU_OP_STICK: Menu operation stick
- * @META_MENU_OP_WORKSPACES: Menu operation workspaces
- * @META_MENU_OP_MOVE: Menu operation move
- * @META_MENU_OP_RESIZE: Menu operation resize
- * @META_MENU_OP_ABOVE: Menu operation above
- * @META_MENU_OP_UNABOVE: Menu operation unabove
- * @META_MENU_OP_MOVE_LEFT: Menu operation left
- * @META_MENU_OP_MOVE_RIGHT: Menu operation right
- * @META_MENU_OP_MOVE_UP: Menu operation up
- * @META_MENU_OP_MOVE_DOWN: Menu operation down
- * @META_MENU_OP_RECOVER: Menu operation recover
- */
-typedef enum
-{
-  META_MENU_OP_NONE        = 0,
-  META_MENU_OP_DELETE      = 1 << 0,
-  META_MENU_OP_MINIMIZE    = 1 << 1,
-  META_MENU_OP_UNMAXIMIZE  = 1 << 2,
-  META_MENU_OP_MAXIMIZE    = 1 << 3,
-  META_MENU_OP_UNSHADE     = 1 << 4,
-  META_MENU_OP_SHADE       = 1 << 5,
-  META_MENU_OP_UNSTICK     = 1 << 6,
-  META_MENU_OP_STICK       = 1 << 7,
-  META_MENU_OP_WORKSPACES  = 1 << 8,
-  META_MENU_OP_MOVE        = 1 << 9,
-  META_MENU_OP_RESIZE      = 1 << 10,
-  META_MENU_OP_ABOVE       = 1 << 11,
-  META_MENU_OP_UNABOVE     = 1 << 12,
-  META_MENU_OP_MOVE_LEFT   = 1 << 13,
-  META_MENU_OP_MOVE_RIGHT  = 1 << 14,
-  META_MENU_OP_MOVE_UP     = 1 << 15,
-  META_MENU_OP_MOVE_DOWN   = 1 << 16,
-  META_MENU_OP_RECOVER     = 1 << 17
-} MetaMenuOp;
-
-typedef struct _MetaWindowMenu MetaWindowMenu;
-
-typedef void (* MetaWindowMenuFunc) (MetaWindowMenu *menu,
-                                     Display        *xdisplay,
-                                     Window          client_xwindow,
-                                     guint32         timestamp,
-                                     MetaMenuOp      op,
-                                     int             workspace,
-                                     gpointer        user_data);
 
 /**
  * MetaGrabOp:
@@ -162,72 +108,78 @@ typedef void (* MetaWindowMenuFunc) (MetaWindowMenu *menu,
  * @META_GRAB_OP_KEYBOARD_RESIZING_NE: Resizing NE with keyboard
  * @META_GRAB_OP_KEYBOARD_RESIZING_SW: Resizing SW with keyboard
  * @META_GRAB_OP_KEYBOARD_RESIZING_NW: Resizing NS with keyboard
- * @META_GRAB_OP_KEYBOARD_TABBING_NORMAL: Tabbing
- * @META_GRAB_OP_KEYBOARD_TABBING_DOCK: Tabbing through docks
- * @META_GRAB_OP_KEYBOARD_ESCAPING_NORMAL: Escaping
- * @META_GRAB_OP_KEYBOARD_ESCAPING_DOCK: Escaping through docks
- * @META_GRAB_OP_KEYBOARD_ESCAPING_GROUP: Escaping through groups
- * @META_GRAB_OP_KEYBOARD_TABBING_GROUP: Tabbing through groups
- * @META_GRAB_OP_KEYBOARD_WORKSPACE_SWITCHING: Switch to another workspace
- * @META_GRAB_OP_CLICKING_MINIMIZE: Clicked minimize button
- * @META_GRAB_OP_CLICKING_MAXIMIZE: Clicked maximize button
- * @META_GRAB_OP_CLICKING_UNMAXIMIZE: Clicked unmaximize button
- * @META_GRAB_OP_CLICKING_DELETE: Clicked delete button
- * @META_GRAB_OP_CLICKING_MENU: Clicked on menu
- * @META_GRAB_OP_CLICKING_SHADE: Clicked shade button
- * @META_GRAB_OP_CLICKING_UNSHADE: Clicked unshade button
- * @META_GRAB_OP_CLICKING_ABOVE: Clicked above button
- * @META_GRAB_OP_CLICKING_UNABOVE: Clicked unabove button
- * @META_GRAB_OP_CLICKING_STICK: Clicked stick button
- * @META_GRAB_OP_CLICKING_UNSTICK: Clicked unstick button
  * @META_GRAB_OP_COMPOSITOR: Compositor asked for grab
  */
 
-/* when changing this enum, there are various switch statements
- * you have to update
+/* The lower 16 bits of the grab operation is its type.
+ *
+ * Window grab operations have the following layout:
+ *
+ * 0000  0000  | 0000 0011
+ * NSEW  flags | type
+ *
+ * Flags contains whether the operation is a keyboard operation,
+ * and whether the keyboard operation is "unknown".
+ *
+ * The rest of the flags tell you which direction the resize is
+ * going in.
+ *
+ * If the directions field is 0000, then the operation is a move,
+ * not a resize.
  */
+enum
+{
+  META_GRAB_OP_WINDOW_FLAG_KEYBOARD = 0x0100,
+  META_GRAB_OP_WINDOW_FLAG_UNKNOWN  = 0x0200,
+  META_GRAB_OP_WINDOW_DIR_WEST      = 0x1000,
+  META_GRAB_OP_WINDOW_DIR_EAST      = 0x2000,
+  META_GRAB_OP_WINDOW_DIR_SOUTH     = 0x4000,
+  META_GRAB_OP_WINDOW_DIR_NORTH     = 0x8000,
+  META_GRAB_OP_WINDOW_DIR_MASK      = 0xF000,
+
+  /* WGO = "window grab op". shorthand for below */
+  _WGO_K = META_GRAB_OP_WINDOW_FLAG_KEYBOARD,
+  _WGO_U = META_GRAB_OP_WINDOW_FLAG_UNKNOWN,
+  _WGO_W = META_GRAB_OP_WINDOW_DIR_WEST,
+  _WGO_E = META_GRAB_OP_WINDOW_DIR_EAST,
+  _WGO_S = META_GRAB_OP_WINDOW_DIR_SOUTH,
+  _WGO_N = META_GRAB_OP_WINDOW_DIR_NORTH,
+};
+
+#define GRAB_OP_GET_BASE_TYPE(op) (op & 0x00FF)
+
 typedef enum
 {
   META_GRAB_OP_NONE,
 
-  /* Mouse ops */
-  META_GRAB_OP_MOVING,
-  META_GRAB_OP_RESIZING_SE,
-  META_GRAB_OP_RESIZING_S,
-  META_GRAB_OP_RESIZING_SW,
-  META_GRAB_OP_RESIZING_N,
-  META_GRAB_OP_RESIZING_NE,
-  META_GRAB_OP_RESIZING_NW,
-  META_GRAB_OP_RESIZING_W,
-  META_GRAB_OP_RESIZING_E,
-
-  /* Keyboard ops */
-  META_GRAB_OP_KEYBOARD_MOVING,
-  META_GRAB_OP_KEYBOARD_RESIZING_UNKNOWN,
-  META_GRAB_OP_KEYBOARD_RESIZING_S,
-  META_GRAB_OP_KEYBOARD_RESIZING_N,
-  META_GRAB_OP_KEYBOARD_RESIZING_W,
-  META_GRAB_OP_KEYBOARD_RESIZING_E,
-  META_GRAB_OP_KEYBOARD_RESIZING_SE,
-  META_GRAB_OP_KEYBOARD_RESIZING_NE,
-  META_GRAB_OP_KEYBOARD_RESIZING_SW,
-  META_GRAB_OP_KEYBOARD_RESIZING_NW,
-
-  /* Frame button ops */
-  META_GRAB_OP_CLICKING_MINIMIZE,
-  META_GRAB_OP_CLICKING_MAXIMIZE,
-  META_GRAB_OP_CLICKING_UNMAXIMIZE,
-  META_GRAB_OP_CLICKING_DELETE,
-  META_GRAB_OP_CLICKING_MENU,
-  META_GRAB_OP_CLICKING_SHADE,
-  META_GRAB_OP_CLICKING_UNSHADE,
-  META_GRAB_OP_CLICKING_ABOVE,
-  META_GRAB_OP_CLICKING_UNABOVE,
-  META_GRAB_OP_CLICKING_STICK,
-  META_GRAB_OP_CLICKING_UNSTICK,
-
   /* Special grab op when the compositor asked for a grab */
-  META_GRAB_OP_COMPOSITOR
+  META_GRAB_OP_COMPOSITOR,
+
+  /* For when a Wayland client takes a popup grab */
+  META_GRAB_OP_WAYLAND_POPUP,
+
+  /* Window grab ops. */
+  META_GRAB_OP_WINDOW_BASE,
+
+  META_GRAB_OP_MOVING                     = META_GRAB_OP_WINDOW_BASE,
+  META_GRAB_OP_RESIZING_NW                = META_GRAB_OP_WINDOW_BASE | _WGO_N | _WGO_W,
+  META_GRAB_OP_RESIZING_N                 = META_GRAB_OP_WINDOW_BASE | _WGO_N,
+  META_GRAB_OP_RESIZING_NE                = META_GRAB_OP_WINDOW_BASE | _WGO_N | _WGO_E,
+  META_GRAB_OP_RESIZING_E                 = META_GRAB_OP_WINDOW_BASE |          _WGO_E,
+  META_GRAB_OP_RESIZING_SW                = META_GRAB_OP_WINDOW_BASE | _WGO_S | _WGO_W,
+  META_GRAB_OP_RESIZING_S                 = META_GRAB_OP_WINDOW_BASE | _WGO_S,
+  META_GRAB_OP_RESIZING_SE                = META_GRAB_OP_WINDOW_BASE | _WGO_S | _WGO_E,
+  META_GRAB_OP_RESIZING_W                 = META_GRAB_OP_WINDOW_BASE |          _WGO_W,
+  META_GRAB_OP_KEYBOARD_MOVING            = META_GRAB_OP_WINDOW_BASE |                   _WGO_K,
+  META_GRAB_OP_KEYBOARD_RESIZING_UNKNOWN  = META_GRAB_OP_WINDOW_BASE |                   _WGO_K | _WGO_U,
+  META_GRAB_OP_KEYBOARD_RESIZING_NW       = META_GRAB_OP_WINDOW_BASE | _WGO_N | _WGO_W | _WGO_K,
+  META_GRAB_OP_KEYBOARD_RESIZING_N        = META_GRAB_OP_WINDOW_BASE | _WGO_N |          _WGO_K,
+  META_GRAB_OP_KEYBOARD_RESIZING_NE       = META_GRAB_OP_WINDOW_BASE | _WGO_N | _WGO_E | _WGO_K,
+  META_GRAB_OP_KEYBOARD_RESIZING_E        = META_GRAB_OP_WINDOW_BASE |          _WGO_E | _WGO_K,
+  META_GRAB_OP_KEYBOARD_RESIZING_SW       = META_GRAB_OP_WINDOW_BASE | _WGO_S | _WGO_W | _WGO_K,
+  META_GRAB_OP_KEYBOARD_RESIZING_S        = META_GRAB_OP_WINDOW_BASE | _WGO_S |          _WGO_K,
+  META_GRAB_OP_KEYBOARD_RESIZING_SE       = META_GRAB_OP_WINDOW_BASE | _WGO_S | _WGO_E | _WGO_K,
+  META_GRAB_OP_KEYBOARD_RESIZING_W        = META_GRAB_OP_WINDOW_BASE |          _WGO_W | _WGO_K,
 } MetaGrabOp;
 
 /**
@@ -253,6 +205,7 @@ typedef enum
  */
 typedef enum
 {
+  META_CURSOR_NONE = 0,
   META_CURSOR_DEFAULT,
   META_CURSOR_NORTH_RESIZE,
   META_CURSOR_SOUTH_RESIZE,
@@ -317,7 +270,7 @@ typedef enum
    */
   META_VIRTUAL_SHIFT_MASK    = 1 << 5,
   META_VIRTUAL_CONTROL_MASK  = 1 << 6,
-  META_VIRTUAL_ALT_MASK      = 1 << 7,  
+  META_VIRTUAL_ALT_MASK      = 1 << 7,
   META_VIRTUAL_META_MASK     = 1 << 8,
   META_VIRTUAL_SUPER_MASK    = 1 << 9,
   META_VIRTUAL_HYPER_MASK    = 1 << 10,
@@ -440,6 +393,7 @@ typedef enum
   META_BUTTON_FUNCTION_UNSHADE,
   META_BUTTON_FUNCTION_UNABOVE,
   META_BUTTON_FUNCTION_UNSTICK,
+  META_BUTTON_FUNCTION_APPMENU,
   META_BUTTON_FUNCTION_LAST
 } MetaButtonFunction;
 
@@ -448,10 +402,10 @@ typedef enum
 /* Keep array size in sync with MAX_BUTTONS_PER_CORNER */
 /**
  * MetaButtonLayout:
- * @left_buttons: (array fixed-size=10):
- * @right_buttons: (array fixed-size=10):
- * @left_buttons_has_spacer: (array fixed-size=10):
- * @right_buttons_has_spacer: (array fixed-size=10):
+ * @left_buttons: (array fixed-size=11):
+ * @right_buttons: (array fixed-size=11):
+ * @left_buttons_has_spacer: (array fixed-size=11):
+ * @right_buttons_has_spacer: (array fixed-size=11):
  */
 typedef struct _MetaButtonLayout MetaButtonLayout;
 struct _MetaButtonLayout
@@ -464,6 +418,19 @@ struct _MetaButtonLayout
   MetaButtonFunction right_buttons[MAX_BUTTONS_PER_CORNER];
   gboolean right_buttons_has_spacer[MAX_BUTTONS_PER_CORNER];
 };
+
+/**
+ * MetaWindowMenuType:
+ * @META_WINDOW_MENU_WM: the window manager menu
+ * @META_WINDOW_MENU_APP: the (fallback) app menu
+ *
+ * Menu the compositor should display for a given window
+ */
+typedef enum
+{
+  META_WINDOW_MENU_WM,
+  META_WINDOW_MENU_APP
+} MetaWindowMenuType;
 
 /**
  * MetaFrameBorders:

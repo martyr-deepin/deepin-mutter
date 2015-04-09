@@ -7,9 +7,9 @@
  * the one to close a window.  It also deals with incoming key events.
  */
 
-/* 
+/*
  * Copyright (C) 2001 Havoc Pennington
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
  * published by the Free Software Foundation; either version 2 of the
@@ -19,7 +19,7 @@
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
@@ -29,6 +29,7 @@
 
 #include <gio/gio.h>
 #include <meta/keybindings.h>
+#include <xkbcommon/xkbcommon.h>
 
 typedef struct _MetaKeyHandler MetaKeyHandler;
 struct _MetaKeyHandler
@@ -80,9 +81,6 @@ typedef struct
    */
   GSList *combos;
 
-  /* for keybindings that can have shift or not like Alt+Tab */
-  gboolean      add_shift:1;
-
   /* for keybindings that apply only to a window */
   gboolean      per_window:1;
 
@@ -90,25 +88,40 @@ typedef struct
   gboolean      builtin:1;
 } MetaKeyPref;
 
+typedef struct
+{
+  GHashTable     *key_bindings;
+  GHashTable     *key_bindings_index;
+  xkb_mod_mask_t ignored_modifier_mask;
+  xkb_mod_mask_t hyper_mask;
+  xkb_mod_mask_t super_mask;
+  xkb_mod_mask_t meta_mask;
+  MetaKeyCombo overlay_key_combo;
+  gboolean overlay_key_only_pressed;
+  MetaKeyCombo *iso_next_group_combos;
+  int n_iso_next_group_combos;
+
+  xkb_level_index_t keymap_num_levels;
+
+  /* Alt+click button grabs */
+  ClutterModifierType window_grab_modifiers;
+} MetaKeyBindingManager;
+
 void     meta_display_init_keys             (MetaDisplay *display);
 void     meta_display_shutdown_keys         (MetaDisplay *display);
 void     meta_screen_grab_keys              (MetaScreen  *screen);
 void     meta_screen_ungrab_keys            (MetaScreen  *screen);
-gboolean meta_screen_grab_all_keys          (MetaScreen  *screen,
-                                             guint32      timestamp);
-void     meta_screen_ungrab_all_keys        (MetaScreen  *screen, 
-                                             guint32      timestamp);
 void     meta_window_grab_keys              (MetaWindow  *window);
 void     meta_window_ungrab_keys            (MetaWindow  *window);
 gboolean meta_window_grab_all_keys          (MetaWindow  *window,
                                              guint32      timestamp);
 void     meta_window_ungrab_all_keys        (MetaWindow  *window,
                                              guint32      timestamp);
-gboolean meta_display_process_key_event     (MetaDisplay   *display,
-                                             MetaWindow    *window,
-                                             XIDeviceEvent *event);
-void     meta_display_process_mapping_event (MetaDisplay *display,
-                                             XEvent      *event);
+gboolean meta_keybindings_process_event     (MetaDisplay        *display,
+                                             MetaWindow         *window,
+                                             const ClutterEvent *event);
+
+ClutterModifierType meta_display_get_window_grab_modifiers (MetaDisplay *display);
 
 gboolean meta_prefs_add_keybinding          (const char           *name,
                                              GSettings            *settings,
@@ -122,7 +135,3 @@ void meta_prefs_get_overlay_binding (MetaKeyCombo *combo);
 const char *meta_prefs_get_iso_next_group_option (void);
 
 #endif
-
-
-
-

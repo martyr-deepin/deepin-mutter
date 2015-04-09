@@ -25,6 +25,7 @@
 #include <meta/types.h>
 #include <meta/compositor.h>
 #include <meta/compositor-mutter.h>
+#include <meta/meta-version.h>
 
 #include <clutter/clutter.h>
 #include <X11/extensions/Xfixes.h>
@@ -91,6 +92,15 @@ struct _MetaPluginClass
    * Virtual function called when the window represented by @actor is minimized.
    */
   void (*minimize)         (MetaPlugin         *plugin,
+                            MetaWindowActor    *actor);
+
+  /**
+   * MetaPluginClass::unminimize:
+   * @actor: a #MetaWindowActor
+   *
+   * Virtual function called when the window represented by @actor is unminimized.
+   */
+  void (*unminimize)       (MetaPlugin         *plugin,
                             MetaWindowActor    *actor);
 
   /**
@@ -163,6 +173,17 @@ struct _MetaPluginClass
                              MetaRectangle   *tile_rect,
                              int              tile_monitor_number);
   void (*hide_tile_preview) (MetaPlugin      *plugin);
+
+  void (*show_window_menu)  (MetaPlugin         *plugin,
+                             MetaWindow         *window,
+                             MetaWindowMenuType  menu,
+                             int                 x,
+                             int                 y);
+
+  void (*show_window_menu_for_rect)  (MetaPlugin         *plugin,
+		                      MetaWindow         *window,
+				      MetaWindowMenuType  menu,
+				      MetaRectangle      *rect);
 
   /**
    * MetaPluginClass::kill_window_effects:
@@ -254,9 +275,6 @@ struct _MetaPluginInfo
 
 GType meta_plugin_get_type (void);
 
-gboolean      meta_plugin_running             (MetaPlugin *plugin);
-gboolean      meta_plugin_debug_mode          (MetaPlugin *plugin);
-
 const MetaPluginInfo * meta_plugin_get_info (MetaPlugin *plugin);
 
 /**
@@ -291,10 +309,10 @@ struct _MetaPluginVersion
 #define META_PLUGIN_DECLARE(ObjectName, object_name)                    \
   G_MODULE_EXPORT MetaPluginVersion meta_plugin_version =               \
     {                                                                   \
-      MUTTER_MAJOR_VERSION,                                             \
-      MUTTER_MINOR_VERSION,                                             \
-      MUTTER_MICRO_VERSION,                                             \
-      MUTTER_PLUGIN_API_VERSION                                         \
+      META_MAJOR_VERSION,                                               \
+      META_MINOR_VERSION,                                               \
+      META_MICRO_VERSION,                                               \
+      META_PLUGIN_API_VERSION                                           \
     };                                                                  \
                                                                         \
   static GType g_define_type_id = 0;                                    \
@@ -364,6 +382,10 @@ meta_plugin_minimize_completed (MetaPlugin      *plugin,
                                 MetaWindowActor *actor);
 
 void
+meta_plugin_unminimize_completed (MetaPlugin      *plugin,
+                                  MetaWindowActor *actor);
+
+void
 meta_plugin_maximize_completed (MetaPlugin      *plugin,
                                 MetaWindowActor *actor);
 
@@ -408,8 +430,7 @@ meta_plugin_end_modal (MetaPlugin *plugin,
 
 MetaScreen *meta_plugin_get_screen        (MetaPlugin *plugin);
 
-void
-_meta_plugin_effect_started (MetaPlugin *plugin);
+void _meta_plugin_set_compositor (MetaPlugin *plugin, MetaCompositor *compositor);
 
 /* XXX: Putting this in here so it's in the public header. */
 void     meta_plugin_manager_set_plugin_type (GType gtype);
