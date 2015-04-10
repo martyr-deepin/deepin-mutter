@@ -169,3 +169,7 @@ TESTS_ENVIRONMENT = cd $(srcdir) && \
 endif
 
 -include $(top_srcdir)/git.mk
+
+# rename files with prefix 'deepin-'
+install-data-hook:
+	mv $(DESTDIR)$(HTML_DIR)/$(DOC_MODULE) $(DESTDIR)$(HTML_DIR)/deepin-mutter
