@@ -33,7 +33,7 @@
 #include <meta/meta-backend.h>
 #include <meta/meta-idle-monitor.h>
 #include "meta-cursor-renderer.h"
-#include "meta-monitor-manager.h"
+#include "meta-monitor-manager-private.h"
 
 #define DEFAULT_XKB_RULES_FILE "evdev"
 #define DEFAULT_XKB_MODEL "pc105+inet"
@@ -49,8 +49,8 @@ struct _MetaBackend
 {
   GObject parent;
 
-  MetaIdleMonitor *device_monitors[256];
-  int device_id_max;
+  GHashTable *device_monitors;
+  gint current_device_id;
 };
 
 struct _MetaBackendClass
@@ -106,5 +106,8 @@ void meta_backend_warp_pointer (MetaBackend *backend,
                                 int          y);
 
 struct xkb_keymap * meta_backend_get_keymap (MetaBackend *backend);
+
+void meta_backend_update_last_device (MetaBackend *backend,
+                                      int          device_id);
 
 #endif /* META_BACKEND_PRIVATE_H */

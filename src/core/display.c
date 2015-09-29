@@ -50,7 +50,9 @@
 #include "meta-idle-monitor-dbus.h"
 #include "meta-cursor-tracker-private.h"
 #include <meta/meta-backend.h>
+#include "backends/native/meta-backend-native.h"
 #include "backends/x11/meta-backend-x11.h"
+#include "backends/meta-stage.h"
 #include <clutter/x11/clutter-x11.h>
 
 #ifdef HAVE_RANDR
@@ -122,6 +124,7 @@ enum
   GRAB_OP_END,
   SHOW_RESTART_MESSAGE,
   RESTART,
+  SHOW_RESIZE_POPUP,
   LAST_SIGNAL
 };
 
@@ -328,6 +331,16 @@ meta_display_class_init (MetaDisplayClass *klass)
                   g_signal_accumulator_true_handled,
                   NULL, NULL,
                   G_TYPE_BOOLEAN, 0);
+
+  display_signals[SHOW_RESIZE_POPUP] =
+    g_signal_new ("show-resize-popup",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  g_signal_accumulator_true_handled,
+                  NULL, NULL,
+                  G_TYPE_BOOLEAN, 4,
+                  G_TYPE_BOOLEAN, META_TYPE_RECTANGLE, G_TYPE_INT, G_TYPE_INT);
 
   g_object_class_install_property (object_class,
                                    PROP_FOCUS_WINDOW,
@@ -640,7 +653,6 @@ meta_display_open (void)
       display->ignored_crossing_serials[i] = 0;
       ++i;
     }
-  display->ungrab_should_not_cause_focus_window = None;
 
   display->current_time = CurrentTime;
   display->sentinel_counter = 0;
@@ -1205,7 +1217,7 @@ meta_grab_op_is_resizing (MetaGrabOp op)
   if (!grab_op_is_window (op))
     return FALSE;
 
-  return (op & META_GRAB_OP_WINDOW_DIR_MASK) != 0;
+  return (op & META_GRAB_OP_WINDOW_DIR_MASK) != 0 || op == META_GRAB_OP_KEYBOARD_RESIZING_UNKNOWN;
 }
 
 gboolean
@@ -1214,7 +1226,7 @@ meta_grab_op_is_moving (MetaGrabOp op)
   if (!grab_op_is_window (op))
     return FALSE;
 
-  return (op & META_GRAB_OP_WINDOW_DIR_MASK) == 0;
+  return !meta_grab_op_is_resizing (op);
 }
 
 /**
@@ -1400,6 +1412,8 @@ meta_display_sync_wayland_input_focus (MetaDisplay *display)
 #ifdef HAVE_WAYLAND
   MetaWaylandCompositor *compositor = meta_wayland_compositor_get_default ();
   MetaWindow *focus_window = NULL;
+  MetaBackend *backend = meta_get_backend ();
+  MetaStage *stage = META_STAGE (meta_backend_get_stage (backend));
 
   if (!meta_display_windows_are_interactable (display))
     focus_window = NULL;
@@ -1410,6 +1424,7 @@ meta_display_sync_wayland_input_focus (MetaDisplay *display)
   else
     meta_topic (META_DEBUG_FOCUS, "Focus change has no effect, because there is no matching wayland surface");
 
+  meta_stage_set_active (stage, focus_window == NULL);
   meta_wayland_compositor_set_input_focus (compositor, focus_window);
 
   meta_wayland_seat_repick (compositor->seat);
@@ -1791,6 +1806,9 @@ get_event_route_from_grab_op (MetaGrabOp op)
     case META_GRAB_OP_WAYLAND_POPUP:
       return META_EVENT_ROUTE_WAYLAND_POPUP;
 
+    case META_GRAB_OP_FRAME_BUTTON:
+      return META_EVENT_ROUTE_FRAME_BUTTON;
+
     default:
       g_assert_not_reached ();
     }
@@ -1953,6 +1971,11 @@ meta_display_end_grab_op (MetaDisplay *display,
   g_signal_emit (display, display_signals[GRAB_OP_END], 0,
                  display->screen, grab_window, grab_op);
 
+  /* We need to reset this early, since the
+   * meta_window_grab_op_ended callback relies on this being
+   * up to date. */
+  display->grab_op = META_GRAB_OP_NONE;
+
   if (display->event_route == META_EVENT_ROUTE_WINDOW_OP)
     {
       /* Clear out the edge cache */
@@ -1965,7 +1988,7 @@ meta_display_end_grab_op (MetaDisplay *display,
        * beginning of the grab_op.
        */
       if (!meta_prefs_get_raise_on_click () &&
-          display->grab_threshold_movement_reached)
+          !display->grab_threshold_movement_reached)
         meta_window_raise (display->grab_window);
 
       meta_window_grab_op_ended (grab_window, grab_op);
@@ -1985,7 +2008,6 @@ meta_display_end_grab_op (MetaDisplay *display,
     }
 
   display->event_route = META_EVENT_ROUTE_NORMAL;
-  display->grab_op = META_GRAB_OP_NONE;
   display->grab_window = NULL;
   display->grab_tile_mode = META_TILE_NONE;
   display->grab_tile_monitor_number = -1;
@@ -2892,9 +2914,11 @@ meta_display_get_xinput_opcode (MetaDisplay *display)
  * meta_display_supports_extended_barriers:
  * @display: a #MetaDisplay
  *
- * Returns: whether the X server supports extended barrier
- * features as defined in version 2.3 of the XInput 2
- * specification.
+ * Returns: whether pointer barriers can be supported.
+ *
+ * When running as an X compositor the X server needs XInput 2
+ * version 2.3. When running as a display server it is supported
+ * when running on the native backend.
  *
  * Clients should use this method to determine whether their
  * interfaces should depend on new barrier features.
@@ -2902,7 +2926,18 @@ meta_display_get_xinput_opcode (MetaDisplay *display)
 gboolean
 meta_display_supports_extended_barriers (MetaDisplay *display)
 {
-  return META_DISPLAY_HAS_XINPUT_23 (display) && !meta_is_wayland_compositor ();
+#ifdef HAVE_NATIVE_BACKEND
+  if (META_IS_BACKEND_NATIVE (meta_get_backend ()))
+    return TRUE;
+#endif
+
+  if (META_IS_BACKEND_X11 (meta_get_backend ()))
+    {
+      return (META_DISPLAY_HAS_XINPUT_23 (display) &&
+              !meta_is_wayland_compositor());
+    }
+
+  g_assert_not_reached ();
 }
 
 /**
@@ -3010,6 +3045,22 @@ meta_display_request_restart (MetaDisplay *display)
   g_signal_emit (display,
                  display_signals[RESTART], 0,
                  &result);
+
+  return result;
+}
+
+gboolean
+meta_display_show_resize_popup (MetaDisplay *display,
+                                gboolean show,
+                                MetaRectangle *rect,
+                                int display_w,
+                                int display_h)
+{
+  gboolean result = FALSE;
+
+  g_signal_emit (display,
+                 display_signals[SHOW_RESIZE_POPUP], 0,
+                 show, rect, display_w, display_h, &result);
 
   return result;
 }

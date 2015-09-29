@@ -81,6 +81,7 @@ IGNORE_HFILES= \
 	keybindings-private.h \
 	meta-background-actor-private.h \
 	meta-background-group-private.h \
+	meta-dbus-login1.h \
 	meta-module.h \
 	meta-plugin-manager.h \
 	meta-shadow-factory-private.h \
@@ -110,6 +111,17 @@ IGNORE_HFILES= \
 	workspace-private.h \
 	xprops.h \
 	$(NULL)
+
+if !HAVE_NATIVE_BACKEND
+IGNORE_HFILES+= \
+	meta-backend-native.h \
+	meta-barrier-native.h \
+	meta-cursor-renderer-native.h \
+	meta-idle-monitor-native.h \
+	meta-input-settings-native.h \
+	meta-monitor-manager-kms.h \
+	$(NULL)
+endif
 
 if !HAVE_WAYLAND
 IGNORE_HFILES += \

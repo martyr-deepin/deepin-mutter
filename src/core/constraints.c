@@ -328,17 +328,17 @@ setup_constraint_info (ConstraintInfo      *info,
   info->orig    = *orig;
   info->current = *new;
 
-  if (flags & META_IS_MOVE_ACTION && flags & META_IS_RESIZE_ACTION)
+  if (flags & META_MOVE_RESIZE_MOVE_ACTION && flags & META_MOVE_RESIZE_RESIZE_ACTION)
     info->action_type = ACTION_MOVE_AND_RESIZE;
-  else if (flags & META_IS_RESIZE_ACTION)
+  else if (flags & META_MOVE_RESIZE_RESIZE_ACTION)
     info->action_type = ACTION_RESIZE;
-  else if (flags & META_IS_MOVE_ACTION)
+  else if (flags & META_MOVE_RESIZE_MOVE_ACTION)
     info->action_type = ACTION_MOVE;
   else
     g_error ("BAD, BAD developer!  No treat for you!  (Fix your calls to "
              "meta_window_move_resize_internal()).\n");
 
-  info->is_user_action = (flags & META_IS_USER_ACTION);
+  info->is_user_action = (flags & META_MOVE_RESIZE_USER_ACTION);
 
   info->resize_gravity = resize_gravity;
 
@@ -1017,6 +1017,7 @@ constrain_aspect_ratio (MetaWindow         *window,
   double best_width, best_height;
   double alt_width, alt_height;
   MetaRectangle *start_rect;
+  MetaRectangle client_rect;
 
   if (priority > PRIORITY_ASPECT_RATIO)
     return TRUE;
@@ -1068,15 +1069,18 @@ constrain_aspect_ratio (MetaWindow         *window,
       fudge = 1;
       break;
     }
+
+  meta_window_frame_rect_to_client_rect (window, &info->current, &client_rect);
+
   constraint_already_satisfied =
-    info->current.width - (info->current.height * minr ) > -minr*fudge &&
-    info->current.width - (info->current.height * maxr ) <  maxr*fudge;
+    client_rect.width - (client_rect.height * minr ) > -minr*fudge &&
+    client_rect.width - (client_rect.height * maxr ) <  maxr*fudge;
   if (check_only || constraint_already_satisfied)
     return constraint_already_satisfied;
 
   /*** Enforce constraint ***/
-  new_width = info->current.width;
-  new_height = info->current.height;
+  new_width = client_rect.width;
+  new_height = client_rect.height;
 
   switch (info->resize_gravity)
     {
@@ -1122,6 +1126,14 @@ constrain_aspect_ratio (MetaWindow         *window,
 
       break;
     }
+
+  {
+    client_rect.width = new_width;
+    client_rect.height = new_height;
+    meta_window_client_rect_to_frame_rect (window, &client_rect, &client_rect);
+    new_width = client_rect.width;
+    new_height = client_rect.height;
+  }
 
   /* Figure out what original rect to pass to meta_rectangle_resize_with_gravity
    * See bug 448183

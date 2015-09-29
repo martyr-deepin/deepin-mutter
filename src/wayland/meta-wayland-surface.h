@@ -36,6 +36,17 @@ struct _MetaWaylandSerial {
   uint32_t value;
 };
 
+typedef enum
+{
+  META_WAYLAND_SURFACE_ROLE_NONE,
+  META_WAYLAND_SURFACE_ROLE_SUBSURFACE,
+  META_WAYLAND_SURFACE_ROLE_XDG_SURFACE,
+  META_WAYLAND_SURFACE_ROLE_XDG_POPUP,
+  META_WAYLAND_SURFACE_ROLE_WL_SHELL_SURFACE,
+  META_WAYLAND_SURFACE_ROLE_CURSOR,
+  META_WAYLAND_SURFACE_ROLE_DND,
+} MetaWaylandSurfaceRole;
+
 typedef struct
 {
   /* wl_surface.attach */
@@ -66,9 +77,12 @@ struct _MetaWaylandSurface
   struct wl_resource *resource;
   MetaWaylandCompositor *compositor;
   MetaSurfaceActor *surface_actor;
+  MetaWaylandSurfaceRole role;
   MetaWindow *window;
   MetaWaylandBuffer *buffer;
   struct wl_listener buffer_destroy_listener;
+  cairo_region_t *input_region;
+  cairo_region_t *opaque_region;
   int scale;
   int32_t offset_x, offset_y;
   GList *subsurfaces;
@@ -87,6 +101,15 @@ struct _MetaWaylandSurface
   struct wl_resource *xdg_shell_resource;
   MetaWaylandSerial acked_configure_serial;
   gboolean has_set_geometry;
+
+  /* xdg_popup */
+  struct {
+    MetaWaylandSurface *parent;
+    struct wl_listener parent_destroy_listener;
+
+    MetaWaylandPopup *popup;
+    struct wl_listener destroy_listener;
+  } popup;
 
   /* wl_subsurface stuff. */
   struct {
@@ -117,6 +140,11 @@ MetaWaylandSurface *meta_wayland_surface_create (MetaWaylandCompositor *composit
                                                  struct wl_client      *client,
                                                  struct wl_resource    *compositor_resource,
                                                  guint32                id);
+
+int                meta_wayland_surface_set_role (MetaWaylandSurface    *surface,
+                                                  MetaWaylandSurfaceRole role,
+                                                  struct wl_resource    *error_resource,
+                                                  uint32_t               error_code);
 
 void                meta_wayland_surface_set_window (MetaWaylandSurface *surface,
                                                      MetaWindow         *window);

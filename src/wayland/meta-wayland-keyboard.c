@@ -385,7 +385,7 @@ meta_wayland_keyboard_init (MetaWaylandKeyboard *keyboard,
 
   keyboard->xkb_info.keymap_fd = -1;
 
-  keyboard->settings = g_settings_new ("com.deepin.wrap.gnome.settings-daemon.peripherals.keyboard");
+  keyboard->settings = g_settings_new ("org.gnome.desktop.peripherals.keyboard");
   g_signal_connect (keyboard->settings, "changed",
                     G_CALLBACK (settings_changed), keyboard);
 
@@ -411,6 +411,11 @@ meta_wayland_xkb_info_destroy (MetaWaylandXkbInfo *xkb_info)
 void
 meta_wayland_keyboard_release (MetaWaylandKeyboard *keyboard)
 {
+  MetaBackend *backend = meta_get_backend ();
+
+  g_signal_handlers_disconnect_by_func (backend, on_keymap_changed, keyboard);
+  g_signal_handlers_disconnect_by_func (backend, on_keymap_layout_group_changed, keyboard);
+
   meta_wayland_keyboard_set_focus (keyboard, NULL);
   meta_wayland_xkb_info_destroy (&keyboard->xkb_info);
 

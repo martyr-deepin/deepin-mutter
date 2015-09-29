@@ -72,11 +72,12 @@ typedef enum {
 
 typedef enum
 {
-  META_IS_CONFIGURE_REQUEST = 1 << 0,
-  META_IS_USER_ACTION       = 1 << 1,
-  META_IS_MOVE_ACTION       = 1 << 2,
-  META_IS_RESIZE_ACTION     = 1 << 3,
-  META_IS_WAYLAND_RESIZE    = 1 << 4,
+  META_MOVE_RESIZE_CONFIGURE_REQUEST = 1 << 0,
+  META_MOVE_RESIZE_USER_ACTION       = 1 << 1,
+  META_MOVE_RESIZE_MOVE_ACTION       = 1 << 2,
+  META_MOVE_RESIZE_RESIZE_ACTION     = 1 << 3,
+  META_MOVE_RESIZE_WAYLAND_RESIZE    = 1 << 4,
+  META_MOVE_RESIZE_STATE_CHANGED     = 1 << 5,
 } MetaMoveResizeFlags;
 
 typedef enum
@@ -105,8 +106,8 @@ struct _MetaWindow
   char *desc; /* used in debug spew */
   char *title;
 
-  GdkPixbuf *icon;
-  GdkPixbuf *mini_icon;
+  cairo_surface_t *icon;
+  cairo_surface_t *mini_icon;
 
   MetaWindowType type;
 
@@ -478,9 +479,11 @@ struct _MetaWindowClass
   void (*get_default_skip_hints) (MetaWindow *window,
                                   gboolean   *skip_taskbar_out,
                                   gboolean   *skip_pager_out);
-  gboolean (*update_icon)        (MetaWindow  *window,
-                                  GdkPixbuf  **icon,
-                                  GdkPixbuf  **mini_icon);
+  gboolean (*update_icon)        (MetaWindow       *window,
+                                  cairo_surface_t **icon,
+                                  cairo_surface_t **mini_icon);
+  void (*main_monitor_changed)   (MetaWindow *window,
+                                  const MetaMonitorInfo *old);
 };
 
 /* These differ from window->has_foo_func in that they consider
@@ -538,9 +541,6 @@ void        meta_window_resize_frame_with_gravity (MetaWindow  *window,
                                                    int          w,
                                                    int          h,
                                                    int          gravity);
-
-void        meta_window_change_workspace   (MetaWindow  *window,
-                                            MetaWorkspace *workspace);
 
 /* Return whether the window should be currently mapped */
 gboolean    meta_window_should_be_showing   (MetaWindow  *window);

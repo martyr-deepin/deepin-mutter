@@ -173,15 +173,6 @@ meta_error_trap_pop_with_return
 </SECTION>
 
 <SECTION>
-<FILE>gradient</FILE>
-MetaGradientType
-meta_gradient_create_simple
-meta_gradient_create_multi
-meta_gradient_create_interwoven
-meta_gradient_add_alpha
-</SECTION>
-
-<SECTION>
 <FILE>group</FILE>
 MetaGroup
 meta_window_get_group
@@ -558,7 +549,6 @@ meta_window_is_skip_taskbar
 meta_window_get_rect
 meta_window_get_buffer_rect
 meta_window_get_frame_rect
-meta_window_get_outer_rect
 meta_window_client_rect_to_frame_rect
 meta_window_frame_rect_to_client_rect
 meta_window_get_screen

@@ -338,16 +338,6 @@ reload_icon_geometry (MetaWindow    *window,
     }
 }
 
-static gboolean
-gtk_border_equal (GtkBorder *a,
-                  GtkBorder *b)
-{
-  return (a->left == b->left &&
-          a->right == b->right &&
-          a->top == b->top &&
-          a->bottom == b->bottom);
-}
-
 static void
 meta_window_set_custom_frame_extents (MetaWindow *window,
                                       GtkBorder  *extents,
@@ -355,7 +345,8 @@ meta_window_set_custom_frame_extents (MetaWindow *window,
 {
   if (extents)
     {
-      if (window->has_custom_frame_extents && gtk_border_equal (&window->custom_frame_extents, extents))
+      if (window->has_custom_frame_extents &&
+          memcmp (&window->custom_frame_extents, extents, sizeof (GtkBorder)) == 0)
         return;
 
       window->has_custom_frame_extents = TRUE;
@@ -1684,7 +1675,7 @@ reload_gtk_theme_variant (MetaWindow    *window,
       window->gtk_theme_variant = g_strdup (requested_variant);
 
       if (window->frame)
-        meta_ui_update_frame_style (window->screen->ui, window->frame->xwindow);
+        meta_frame_update_style (window->frame);
     }
 }
 
@@ -1712,7 +1703,7 @@ reload_gtk_hide_titlebar_when_maximized (MetaWindow    *window,
       meta_window_queue (window, META_QUEUE_MOVE_RESIZE);
 
       if (window->frame)
-        meta_ui_update_frame_style (window->screen->ui, window->frame->xwindow);
+        meta_frame_update_style (window->frame);
     }
 }
 

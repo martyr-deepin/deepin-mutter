@@ -92,7 +92,7 @@ meta_key_binding_get_name (MetaKeyBinding *binding)
 MetaVirtualModifier
 meta_key_binding_get_modifiers (MetaKeyBinding *binding)
 {
-  return binding->modifiers;
+  return binding->combo.modifiers;
 }
 
 gboolean
@@ -104,7 +104,7 @@ meta_key_binding_is_reversed (MetaKeyBinding *binding)
 guint
 meta_key_binding_get_mask (MetaKeyBinding *binding)
 {
-  return binding->mask;
+  return binding->resolved_combo.mask;
 }
 
 gboolean
@@ -154,20 +154,18 @@ typedef struct _MetaKeyGrab MetaKeyGrab;
 struct _MetaKeyGrab {
   char *name;
   guint action;
-  MetaKeyCombo *combo;
+  MetaKeyCombo combo;
 };
 
 static void
 meta_key_grab_free (MetaKeyGrab *grab)
 {
   g_free (grab->name);
-  g_free (grab->combo);
   g_free (grab);
 }
 
 static guint32
-key_binding_key (guint32 keycode,
-                 guint32 mask)
+key_combo_key (MetaResolvedKeyCombo *resolved_combo)
 {
   /* On X, keycodes are only 8 bits while libxkbcommon supports 32 bit
      keycodes, but since we're using the same XKB keymaps that X uses,
@@ -177,16 +175,8 @@ key_binding_key (guint32 keycode,
      can use a 32 bit integer to safely concatenate both keycode and
      mask and thus making it easy to use them as an index in a
      GHashTable. */
-  guint32 key = keycode & 0xffff;
-  return (key << 16) | (mask & 0xffff);
-}
-
-static const char *
-keysym_name (xkb_keysym_t keysym)
-{
-  static char name[32] = "";
-  xkb_keysym_get_name (keysym, name, sizeof (name));
-  return name;
+  guint32 key = resolved_combo->keycode & 0xffff;
+  return (key << 16) | (resolved_combo->mask & 0xffff);
 }
 
 static void
@@ -372,7 +362,7 @@ static void
 reload_iso_next_group_combos (MetaKeyBindingManager *keys)
 {
   const char *iso_next_group_option;
-  MetaKeyCombo *combos;
+  MetaResolvedKeyCombo *combos;
   int *keycodes;
   int n_keycodes;
   int n_combos;
@@ -400,39 +390,36 @@ reload_iso_next_group_combos (MetaKeyBindingManager *keys)
       g_str_equal (iso_next_group_option, "caps_toggle"))
     {
       n_combos = n_keycodes;
-      combos = g_new (MetaKeyCombo, n_combos);
+      combos = g_new (MetaResolvedKeyCombo, n_combos);
 
       for (i = 0; i < n_keycodes; ++i)
         {
-          combos[i].keysym = XKB_KEY_ISO_Next_Group;
           combos[i].keycode = keycodes[i];
-          combos[i].modifiers = 0;
+          combos[i].mask = 0;
         }
     }
   else if (g_str_equal (iso_next_group_option, "shift_caps_toggle") ||
            g_str_equal (iso_next_group_option, "shifts_toggle"))
     {
       n_combos = n_keycodes;
-      combos = g_new (MetaKeyCombo, n_combos);
+      combos = g_new (MetaResolvedKeyCombo, n_combos);
 
       for (i = 0; i < n_keycodes; ++i)
         {
-          combos[i].keysym = XKB_KEY_ISO_Next_Group;
           combos[i].keycode = keycodes[i];
-          combos[i].modifiers = ShiftMask;
+          combos[i].mask = ShiftMask;
         }
     }
   else if (g_str_equal (iso_next_group_option, "alt_caps_toggle") ||
            g_str_equal (iso_next_group_option, "alt_space_toggle"))
     {
       n_combos = n_keycodes;
-      combos = g_new (MetaKeyCombo, n_combos);
+      combos = g_new (MetaResolvedKeyCombo, n_combos);
 
       for (i = 0; i < n_keycodes; ++i)
         {
-          combos[i].keysym = XKB_KEY_ISO_Next_Group;
           combos[i].keycode = keycodes[i];
-          combos[i].modifiers = Mod1Mask;
+          combos[i].mask = Mod1Mask;
         }
     }
   else if (g_str_equal (iso_next_group_option, "ctrl_shift_toggle") ||
@@ -440,50 +427,44 @@ reload_iso_next_group_combos (MetaKeyBindingManager *keys)
            g_str_equal (iso_next_group_option, "rctrl_rshift_toggle"))
     {
       n_combos = n_keycodes * 2;
-      combos = g_new (MetaKeyCombo, n_combos);
+      combos = g_new (MetaResolvedKeyCombo, n_combos);
 
       for (i = 0; i < n_keycodes; ++i)
         {
-          combos[i].keysym = XKB_KEY_ISO_Next_Group;
           combos[i].keycode = keycodes[i];
-          combos[i].modifiers = ShiftMask;
+          combos[i].mask = ShiftMask;
 
-          combos[i + n_keycodes].keysym = XKB_KEY_ISO_Next_Group;
           combos[i + n_keycodes].keycode = keycodes[i];
-          combos[i + n_keycodes].modifiers = ControlMask;
+          combos[i + n_keycodes].mask = ControlMask;
         }
     }
   else if (g_str_equal (iso_next_group_option, "ctrl_alt_toggle"))
     {
       n_combos = n_keycodes * 2;
-      combos = g_new (MetaKeyCombo, n_combos);
+      combos = g_new (MetaResolvedKeyCombo, n_combos);
 
       for (i = 0; i < n_keycodes; ++i)
         {
-          combos[i].keysym = XKB_KEY_ISO_Next_Group;
           combos[i].keycode = keycodes[i];
-          combos[i].modifiers = Mod1Mask;
+          combos[i].mask = Mod1Mask;
 
-          combos[i + n_keycodes].keysym = XKB_KEY_ISO_Next_Group;
           combos[i + n_keycodes].keycode = keycodes[i];
-          combos[i + n_keycodes].modifiers = ControlMask;
+          combos[i + n_keycodes].mask = ControlMask;
         }
     }
   else if (g_str_equal (iso_next_group_option, "alt_shift_toggle") ||
            g_str_equal (iso_next_group_option, "lalt_lshift_toggle"))
     {
       n_combos = n_keycodes * 2;
-      combos = g_new (MetaKeyCombo, n_combos);
+      combos = g_new (MetaResolvedKeyCombo, n_combos);
 
       for (i = 0; i < n_keycodes; ++i)
         {
-          combos[i].keysym = XKB_KEY_ISO_Next_Group;
           combos[i].keycode = keycodes[i];
-          combos[i].modifiers = Mod1Mask;
+          combos[i].mask = Mod1Mask;
 
-          combos[i + n_keycodes].keysym = XKB_KEY_ISO_Next_Group;
           combos[i + n_keycodes].keycode = keycodes[i];
-          combos[i + n_keycodes].modifiers = ShiftMask;
+          combos[i + n_keycodes].mask = ShiftMask;
         }
     }
   else
@@ -496,41 +477,6 @@ reload_iso_next_group_combos (MetaKeyBindingManager *keys)
 
   keys->n_iso_next_group_combos = n_combos;
   keys->iso_next_group_combos = combos;
-}
-
-static void
-binding_reload_keycode_foreach (gpointer key,
-                                gpointer value,
-                                gpointer data)
-{
-  MetaKeyBindingManager *keys = data;
-  MetaKeyBinding *binding = value;
-
-  if (binding->keysym)
-    binding->keycode = get_first_keycode_for_keysym (keys, binding->keysym);
-}
-
-static void
-reload_keycodes (MetaKeyBindingManager *keys)
-{
-  meta_topic (META_DEBUG_KEYBINDINGS,
-              "Reloading keycodes for binding tables\n");
-
-  determine_keymap_num_levels (keys);
-
-  if (keys->overlay_key_combo.keysym != 0)
-    {
-      keys->overlay_key_combo.keycode =
-        get_first_keycode_for_keysym (keys, keys->overlay_key_combo.keysym);
-    }
-  else
-    {
-      keys->overlay_key_combo.keycode = 0;
-    }
-
-  reload_iso_next_group_combos (keys);
-
-  g_hash_table_foreach (keys->key_bindings, binding_reload_keycode_foreach, keys);
 }
 
 static void
@@ -563,57 +509,55 @@ devirtualize_modifiers (MetaKeyBindingManager *keys,
 }
 
 static void
-binding_reload_modifiers_foreach (gpointer key,
-                                  gpointer value,
-                                  gpointer data)
-{
-  MetaKeyBindingManager *keys = data;
-  MetaKeyBinding *binding = value;
-
-  devirtualize_modifiers (keys, binding->modifiers, &binding->mask);
-  meta_topic (META_DEBUG_KEYBINDINGS,
-              " Devirtualized mods 0x%x -> 0x%x (%s)\n",
-              binding->modifiers,
-              binding->mask,
-              binding->name);
-}
-
-static void
-reload_modifiers (MetaKeyBindingManager *keys)
-{
-  meta_topic (META_DEBUG_KEYBINDINGS,
-              "Reloading keycodes for binding tables\n");
-
-  g_hash_table_foreach (keys->key_bindings, binding_reload_modifiers_foreach, keys);
-}
-
-static void
 index_binding (MetaKeyBindingManager *keys,
                MetaKeyBinding         *binding)
 {
   guint32 index_key;
 
-  index_key = key_binding_key (binding->keycode, binding->mask);
+  index_key = key_combo_key (&binding->resolved_combo);
   g_hash_table_replace (keys->key_bindings_index,
                         GINT_TO_POINTER (index_key), binding);
 }
 
 static void
-binding_index_foreach (gpointer key,
-                       gpointer value,
-                       gpointer data)
+resolve_key_combo (MetaKeyBindingManager *keys,
+                   MetaKeyCombo          *combo,
+                   MetaResolvedKeyCombo  *resolved_combo)
+{
+  if (combo->keysym != 0)
+    resolved_combo->keycode = get_first_keycode_for_keysym (keys, combo->keysym);
+  else
+    resolved_combo->keycode = combo->keycode;
+
+  devirtualize_modifiers (keys, combo->modifiers, &resolved_combo->mask);
+}
+
+static void
+binding_reload_combos_foreach (gpointer key,
+                               gpointer value,
+                               gpointer data)
 {
   MetaKeyBindingManager *keys = data;
   MetaKeyBinding *binding = value;
 
+  resolve_key_combo (keys, &binding->combo, &binding->resolved_combo);
   index_binding (keys, binding);
 }
 
 static void
-rebuild_binding_index (MetaKeyBindingManager *keys)
+reload_combos (MetaKeyBindingManager *keys)
 {
   g_hash_table_remove_all (keys->key_bindings_index);
-  g_hash_table_foreach (keys->key_bindings, binding_index_foreach, keys);
+
+  determine_keymap_num_levels (keys);
+
+  resolve_key_combo (keys,
+                     &keys->overlay_key_combo,
+                     &keys->overlay_resolved_key_combo);
+
+  reload_iso_next_group_combos (keys);
+
+  g_hash_table_foreach (keys->key_bindings, binding_reload_combos_foreach, keys);
 }
 
 static void
@@ -640,15 +584,11 @@ rebuild_binding_table (MetaKeyBindingManager *keys,
             {
               MetaKeyHandler *handler = HANDLER (pref->name);
 
-              b = g_malloc0 (sizeof (MetaKeyBinding));
-
+              b = g_slice_new0 (MetaKeyBinding);
               b->name = pref->name;
               b->handler = handler;
               b->flags = handler->flags;
-              b->keysym = combo->keysym;
-              b->keycode = combo->keycode;
-              b->modifiers = combo->modifiers;
-              b->mask = 0;
+              b->combo = *combo;
 
               g_hash_table_add (keys->key_bindings, b);
             }
@@ -663,19 +603,15 @@ rebuild_binding_table (MetaKeyBindingManager *keys,
   while (g)
     {
       MetaKeyGrab *grab = (MetaKeyGrab*)g->data;
-      if (grab->combo && (grab->combo->keysym != None || grab->combo->keycode != 0))
+      if (grab->combo.keysym != None || grab->combo.keycode != 0)
         {
           MetaKeyHandler *handler = HANDLER ("external-grab");
 
-          b = g_malloc0 (sizeof (MetaKeyBinding));
-
+          b = g_slice_new0 (MetaKeyBinding);
           b->name = grab->name;
           b->handler = handler;
           b->flags = handler->flags;
-          b->keysym = grab->combo->keysym;
-          b->keycode = grab->combo->keycode;
-          b->modifiers = grab->combo->modifiers;
-          b->mask = 0;
+          b->combo = grab->combo;
 
           g_hash_table_add (keys->key_bindings, b);
         }
@@ -748,14 +684,10 @@ grab_key_bindings (MetaDisplay *display)
 
 static MetaKeyBinding *
 get_keybinding (MetaKeyBindingManager *keys,
-                guint32                 keycode,
-                guint32                 mask)
+                MetaResolvedKeyCombo  *resolved_combo)
 {
   guint32 key;
-
-  mask = mask & 0xff & ~keys->ignored_modifier_mask;
-  key = key_binding_key (keycode, mask);
-
+  key = key_combo_key (resolved_combo);
   return g_hash_table_lookup (keys->key_bindings_index, GINT_TO_POINTER (key));
 }
 
@@ -874,6 +806,46 @@ meta_display_remove_keybinding (MetaDisplay *display,
   return TRUE;
 }
 
+static guint
+get_keybinding_action (MetaKeyBindingManager *keys,
+                       MetaResolvedKeyCombo  *resolved_combo)
+{
+  MetaKeyBinding *binding;
+
+  /* This is much more vague than the MetaDisplay::overlay-key signal,
+   * which is only emitted if the overlay-key is the only key pressed;
+   * as this method is primarily intended for plugins to allow processing
+   * of mutter keybindings while holding a grab, the overlay-key-only-pressed
+   * tracking is left to the plugin here.
+   */
+  if (resolved_combo->keycode == (unsigned int)keys->overlay_resolved_key_combo.keycode)
+    return META_KEYBINDING_ACTION_OVERLAY_KEY;
+
+  binding = get_keybinding (keys, resolved_combo);
+  if (binding)
+    {
+      MetaKeyGrab *grab = g_hash_table_lookup (external_grabs, binding->name);
+      if (grab)
+        return grab->action;
+      else
+        return (guint) meta_prefs_get_keybinding_action (binding->name);
+    }
+  else
+    {
+      return META_KEYBINDING_ACTION_NONE;
+    }
+}
+
+static void
+resolved_combo_from_event_params (MetaResolvedKeyCombo *resolved_combo,
+                                  MetaKeyBindingManager *keys,
+                                  unsigned int keycode,
+                                  unsigned long mask)
+{
+  resolved_combo->keycode = keycode;
+  resolved_combo->mask = mask & 0xff & ~keys->ignored_modifier_mask;
+}
+
 /**
  * meta_display_get_keybinding_action:
  * @display: A #MetaDisplay
@@ -894,31 +866,9 @@ meta_display_get_keybinding_action (MetaDisplay  *display,
                                     unsigned long mask)
 {
   MetaKeyBindingManager *keys = &display->key_binding_manager;
-  MetaKeyBinding *binding;
-
-  /* This is much more vague than the MetaDisplay::overlay-key signal,
-   * which is only emitted if the overlay-key is the only key pressed;
-   * as this method is primarily intended for plugins to allow processing
-   * of mutter keybindings while holding a grab, the overlay-key-only-pressed
-   * tracking is left to the plugin here.
-   */
-  if (keycode == (unsigned int)keys->overlay_key_combo.keycode)
-    return META_KEYBINDING_ACTION_OVERLAY_KEY;
-
-  binding = get_keybinding (keys, keycode, mask);
-
-  if (binding)
-    {
-      MetaKeyGrab *grab = g_hash_table_lookup (external_grabs, binding->name);
-      if (grab)
-        return grab->action;
-      else
-        return (guint) meta_prefs_get_keybinding_action (binding->name);
-    }
-  else
-    {
-      return META_KEYBINDING_ACTION_NONE;
-    }
+  MetaResolvedKeyCombo resolved_combo;
+  resolved_combo_from_event_params (&resolved_combo, keys, keycode, mask);
+  return get_keybinding_action (keys, &resolved_combo);
 }
 
 static void
@@ -935,11 +885,7 @@ on_keymap_changed (MetaBackend *backend,
    * even when only the keymap changes */
   reload_modmap (keys);
 
-  reload_keycodes (keys);
-
-  reload_modifiers (keys);
-
-  rebuild_binding_index (keys);
+  reload_combos (keys);
 
   grab_key_bindings (display);
 }
@@ -1159,9 +1105,7 @@ prefs_changed_callback (MetaPreference pref,
       ungrab_key_bindings (display);
       rebuild_key_binding_table (keys);
       rebuild_special_bindings (keys);
-      reload_keycodes (keys);
-      reload_modifiers (keys);
-      rebuild_binding_index (keys);
+      reload_combos (keys);
       grab_key_bindings (display);
       break;
     case META_PREF_MOUSE_BUTTON_MODS:
@@ -1206,11 +1150,9 @@ meta_display_shutdown_keys (MetaDisplay *display)
 /* Grab/ungrab, ignoring all annoying modifiers like NumLock etc. */
 static void
 meta_change_keygrab (MetaKeyBindingManager *keys,
-                     Window                  xwindow,
-                     gboolean                grab,
-                     int                     keysym,
-                     unsigned int            keycode,
-                     int                     modmask)
+                     Window                 xwindow,
+                     gboolean               grab,
+                     MetaResolvedKeyCombo  *resolved_combo)
 {
   unsigned int ignored_mask;
 
@@ -1229,10 +1171,9 @@ meta_change_keygrab (MetaKeyBindingManager *keys,
    */
 
   meta_topic (META_DEBUG_KEYBINDINGS,
-              "%s keybinding %s keycode %d mask 0x%x on 0x%lx\n",
+              "%s keybinding keycode %d mask 0x%x on 0x%lx\n",
               grab ? "Grabbing" : "Ungrabbing",
-              keysym_name (keysym), keycode,
-              modmask, xwindow);
+              resolved_combo->keycode, resolved_combo->mask, xwindow);
 
   ignored_mask = 0;
   while (ignored_mask <= keys->ignored_modifier_mask)
@@ -1248,18 +1189,18 @@ meta_change_keygrab (MetaKeyBindingManager *keys,
           continue;
         }
 
-      mods = (XIGrabModifiers) { modmask | ignored_mask, 0 };
+      mods = (XIGrabModifiers) { resolved_combo->mask | ignored_mask, 0 };
 
       if (grab)
         XIGrabKeycode (xdisplay,
                        META_VIRTUAL_CORE_KEYBOARD_ID,
-                       keycode, xwindow,
+                       resolved_combo->keycode, xwindow,
                        XIGrabModeSync, XIGrabModeAsync,
                        False, &mask, 1, &mods);
       else
         XIUngrabKeycode (xdisplay,
                          META_VIRTUAL_CORE_KEYBOARD_ID,
-                         keycode, xwindow, 1, &mods);
+                         resolved_combo->keycode, xwindow, 1, &mods);
 
       ++ignored_mask;
     }
@@ -1285,13 +1226,10 @@ change_keygrab_foreach (gpointer key,
   if (data->only_per_window != binding_is_per_window)
     return;
 
-  if (binding->keycode == 0)
+  if (binding->resolved_combo.keycode == 0)
     return;
 
-  meta_change_keygrab (data->keys, data->xwindow, data->grab,
-                       binding->keysym,
-                       binding->keycode,
-                       binding->mask);
+  meta_change_keygrab (data->keys, data->xwindow, data->grab, &binding->resolved_combo);
 }
 
 static void
@@ -1317,11 +1255,8 @@ meta_screen_change_keygrabs (MetaScreen *screen,
   MetaDisplay *display = screen->display;
   MetaKeyBindingManager *keys = &display->key_binding_manager;
 
-  if (keys->overlay_key_combo.keycode != 0)
-    meta_change_keygrab (keys, screen->xroot, grab,
-                         keys->overlay_key_combo.keysym,
-                         keys->overlay_key_combo.keycode,
-                         keys->overlay_key_combo.modifiers);
+  if (keys->overlay_resolved_key_combo.keycode != 0)
+    meta_change_keygrab (keys, screen->xroot, grab, &keys->overlay_resolved_key_combo);
 
   if (keys->iso_next_group_combos)
     {
@@ -1329,12 +1264,8 @@ meta_screen_change_keygrabs (MetaScreen *screen,
       while (i < keys->n_iso_next_group_combos)
         {
           if (keys->iso_next_group_combos[i].keycode != 0)
-            {
-              meta_change_keygrab (keys, screen->xroot, grab,
-                                   keys->iso_next_group_combos[i].keysym,
-                                   keys->iso_next_group_combos[i].keycode,
-                                   keys->iso_next_group_combos[i].modifiers);
-            }
+            meta_change_keygrab (keys, screen->xroot, grab, &keys->iso_next_group_combos[i]);
+
           ++i;
         }
     }
@@ -1444,9 +1375,8 @@ handle_external_grab (MetaDisplay     *display,
                       MetaKeyBinding  *binding,
                       gpointer         user_data)
 {
-  guint action = meta_display_get_keybinding_action (display,
-                                                     binding->keycode,
-                                                     binding->mask);
+  MetaKeyBindingManager *keys = &display->key_binding_manager;
+  guint action = get_keybinding_action (keys, &binding->resolved_combo);
   meta_display_accelerator_activate (display, action, event);
 }
 
@@ -1459,12 +1389,10 @@ meta_display_grab_accelerator (MetaDisplay *display,
   MetaKeyBindingManager *keys = &display->key_binding_manager;
   MetaKeyBinding *binding;
   MetaKeyGrab *grab;
-  guint keysym = 0;
-  guint keycode = 0;
-  guint mask = 0;
-  MetaVirtualModifier modifiers = 0;
+  MetaKeyCombo combo;
+  MetaResolvedKeyCombo resolved_combo;
 
-  if (!meta_parse_accelerator (accelerator, &keysym, &keycode, &modifiers))
+  if (!meta_parse_accelerator (accelerator, &combo))
     {
       meta_topic (META_DEBUG_KEYBINDINGS,
                   "Failed to parse accelerator\n");
@@ -1473,35 +1401,29 @@ meta_display_grab_accelerator (MetaDisplay *display,
       return META_KEYBINDING_ACTION_NONE;
     }
 
-  devirtualize_modifiers (keys, modifiers, &mask);
-  keycode = get_first_keycode_for_keysym (keys, keysym);
+  resolve_key_combo (keys, &combo, &resolved_combo);
 
-  if (keycode == 0)
+  if (resolved_combo.keycode == 0)
     return META_KEYBINDING_ACTION_NONE;
 
-  if (get_keybinding (keys, keycode, mask))
+  if (get_keybinding (keys, &resolved_combo))
     return META_KEYBINDING_ACTION_NONE;
 
   if (META_IS_BACKEND_X11 (backend))
-    meta_change_keygrab (keys, display->screen->xroot, TRUE, keysym, keycode, mask);
+    meta_change_keygrab (keys, display->screen->xroot, TRUE, &resolved_combo);
 
   grab = g_new0 (MetaKeyGrab, 1);
   grab->action = next_dynamic_keybinding_action ();
   grab->name = meta_external_binding_name_for_action (grab->action);
-  grab->combo = g_malloc0 (sizeof (MetaKeyCombo));
-  grab->combo->keysym = keysym;
-  grab->combo->keycode = keycode;
-  grab->combo->modifiers = modifiers;
+  grab->combo = combo;
 
   g_hash_table_insert (external_grabs, grab->name, grab);
 
-  binding = g_malloc0 (sizeof (MetaKeyBinding));
+  binding = g_slice_new0 (MetaKeyBinding);
   binding->name = grab->name;
   binding->handler = HANDLER ("external-grab");
-  binding->keysym = grab->combo->keysym;
-  binding->keycode = grab->combo->keycode;
-  binding->modifiers = grab->combo->modifiers;
-  binding->mask = mask;
+  binding->combo = combo;
+  binding->resolved_combo = resolved_combo;
 
   g_hash_table_add (keys->key_bindings, binding);
   index_binding (keys, binding);
@@ -1518,8 +1440,7 @@ meta_display_ungrab_accelerator (MetaDisplay *display,
   MetaKeyBinding *binding;
   MetaKeyGrab *grab;
   char *key;
-  guint mask = 0;
-  guint keycode = 0;
+  MetaResolvedKeyCombo resolved_combo;
 
   g_return_val_if_fail (action != META_KEYBINDING_ACTION_NONE, FALSE);
 
@@ -1528,21 +1449,16 @@ meta_display_ungrab_accelerator (MetaDisplay *display,
   if (!grab)
     return FALSE;
 
-  devirtualize_modifiers (keys, grab->combo->modifiers, &mask);
-  keycode = get_first_keycode_for_keysym (keys, grab->combo->keysym);
-
-  binding = get_keybinding (keys, keycode, mask);
+  resolve_key_combo (keys, &grab->combo, &resolved_combo);
+  binding = get_keybinding (keys, &resolved_combo);
   if (binding)
     {
       guint32 index_key;
 
       if (META_IS_BACKEND_X11 (backend))
-        meta_change_keygrab (keys, display->screen->xroot, FALSE,
-                             binding->keysym,
-                             binding->keycode,
-                             binding->mask);
+        meta_change_keygrab (keys, display->screen->xroot, FALSE, &binding->resolved_combo);
 
-      index_key = key_binding_key (binding->keycode, binding->mask);
+      index_key = key_combo_key (&binding->resolved_combo);
       g_hash_table_remove (keys->key_bindings_index, GINT_TO_POINTER (index_key));
 
       g_hash_table_remove (keys->key_bindings, binding);
@@ -1661,13 +1577,14 @@ meta_window_ungrab_all_keys (MetaWindow *window, guint32 timestamp)
 }
 
 void
-meta_display_freeze_keyboard (MetaDisplay *display, Window window, guint32 timestamp)
+meta_display_freeze_keyboard (MetaDisplay *display, guint32 timestamp)
 {
   MetaBackend *backend = meta_get_backend ();
 
   if (!META_IS_BACKEND_X11 (backend))
     return;
 
+  Window window = meta_backend_x11_get_xwindow (META_BACKEND_X11 (backend));
   grab_keyboard (window, timestamp, XIGrabModeSync);
 }
 
@@ -1757,15 +1674,19 @@ process_event (MetaDisplay          *display,
                ClutterKeyEvent      *event)
 {
   MetaKeyBindingManager *keys = &display->key_binding_manager;
+  MetaResolvedKeyCombo resolved_combo;
   MetaKeyBinding *binding;
 
   /* we used to have release-based bindings but no longer. */
   if (event->type == CLUTTER_KEY_RELEASE)
     return FALSE;
 
-  binding = get_keybinding (keys,
-                            event->hardware_keycode,
-                            event->modifier_state);
+  resolved_combo_from_event_params (&resolved_combo, keys,
+                                    event->hardware_keycode,
+                                    event->modifier_state);
+
+  binding = get_keybinding (keys, &resolved_combo);
+
   if (!binding ||
       (!window && binding->flags & META_KEY_BINDING_PER_WINDOW))
     goto not_found;
@@ -1816,7 +1737,7 @@ process_overlay_key (MetaDisplay *display,
 
   if (keys->overlay_key_only_pressed)
     {
-      if (event->hardware_keycode != (int)keys->overlay_key_combo.keycode)
+      if (event->hardware_keycode != (int)keys->overlay_resolved_key_combo.keycode)
         {
           keys->overlay_key_only_pressed = FALSE;
 
@@ -1869,7 +1790,7 @@ process_overlay_key (MetaDisplay *display,
                            clutter_input_device_get_device_id (event->device),
                            XIAsyncDevice, event->time);
 
-          binding = get_keybinding (keys, keys->overlay_key_combo.keycode, 0);
+          binding = get_keybinding (keys, &keys->overlay_resolved_key_combo);
           if (binding &&
               meta_compositor_filter_keybinding (display->compositor, binding))
             return TRUE;
@@ -1898,7 +1819,7 @@ process_overlay_key (MetaDisplay *display,
       return TRUE;
     }
   else if (event->type == CLUTTER_KEY_PRESS &&
-           event->hardware_keycode == (int)keys->overlay_key_combo.keycode)
+           event->hardware_keycode == (int)keys->overlay_resolved_key_combo.keycode)
     {
       keys->overlay_key_only_pressed = TRUE;
       /* We keep the keyboard frozen - this allows us to use ReplayKeyboard
@@ -1921,8 +1842,7 @@ process_iso_next_group (MetaDisplay *display,
 {
   MetaKeyBindingManager *keys = &display->key_binding_manager;
   gboolean activate;
-  guint32 keycode;
-  guint32 modifiers;
+  MetaResolvedKeyCombo resolved_combo;
   int i;
 
   if (event->type == CLUTTER_KEY_RELEASE)
@@ -1930,13 +1850,14 @@ process_iso_next_group (MetaDisplay *display,
 
   activate = FALSE;
 
-  keycode = event->hardware_keycode;
-  modifiers = event->modifier_state & 0xff & ~keys->ignored_modifier_mask;
+  resolved_combo_from_event_params (&resolved_combo, keys,
+                                    event->hardware_keycode,
+                                    event->modifier_state);
 
   for (i = 0; i < keys->n_iso_next_group_combos; ++i)
     {
-      if (keycode == keys->iso_next_group_combos[i].keycode &&
-          modifiers == keys->iso_next_group_combos[i].modifiers)
+      if (resolved_combo.keycode == keys->iso_next_group_combos[i].keycode &&
+          resolved_combo.mask == keys->iso_next_group_combos[i].mask)
         {
           /* If the signal handler returns TRUE the keyboard will
              remain frozen. It's the signal handler's responsibility
@@ -3716,6 +3637,41 @@ init_builtin_key_bindings (MetaDisplay *display)
                               META_KEY_BINDING_NONE,
                               META_KEYBINDING_ACTION_NONE,
                               handle_switch_vt, 7);
+
+      add_builtin_keybinding (display,
+                              "switch-to-session-8",
+                              mutter_wayland_keybindings,
+                              META_KEY_BINDING_NONE,
+                              META_KEYBINDING_ACTION_NONE,
+                              handle_switch_vt, 8);
+
+      add_builtin_keybinding (display,
+                              "switch-to-session-9",
+                              mutter_wayland_keybindings,
+                              META_KEY_BINDING_NONE,
+                              META_KEYBINDING_ACTION_NONE,
+                              handle_switch_vt, 9);
+
+      add_builtin_keybinding (display,
+                              "switch-to-session-10",
+                              mutter_wayland_keybindings,
+                              META_KEY_BINDING_NONE,
+                              META_KEYBINDING_ACTION_NONE,
+                              handle_switch_vt, 10);
+
+      add_builtin_keybinding (display,
+                              "switch-to-session-11",
+                              mutter_wayland_keybindings,
+                              META_KEY_BINDING_NONE,
+                              META_KEYBINDING_ACTION_NONE,
+                              handle_switch_vt, 11);
+
+      add_builtin_keybinding (display,
+                              "switch-to-session-12",
+                              mutter_wayland_keybindings,
+                              META_KEY_BINDING_NONE,
+                              META_KEYBINDING_ACTION_NONE,
+                              handle_switch_vt, 12);
     }
 #endif /* HAVE_NATIVE_BACKEND */
 
@@ -4092,7 +4048,7 @@ meta_display_init_keys (MetaDisplay *display)
   keys->super_mask = 0;
   keys->meta_mask = 0;
 
-  keys->key_bindings = g_hash_table_new_full (NULL, NULL, NULL, g_free);
+  keys->key_bindings = g_hash_table_new_full (NULL, NULL, NULL, (GDestroyNotify) meta_key_binding_free);
   keys->key_bindings_index = g_hash_table_new (NULL, NULL);
 
   reload_modmap (keys);
@@ -4128,9 +4084,7 @@ meta_display_init_keys (MetaDisplay *display)
   rebuild_key_binding_table (keys);
   rebuild_special_bindings (keys);
 
-  reload_keycodes (keys);
-  reload_modifiers (keys);
-  rebuild_binding_index (keys);
+  reload_combos (keys);
 
   update_window_grab_modifiers (keys);
 

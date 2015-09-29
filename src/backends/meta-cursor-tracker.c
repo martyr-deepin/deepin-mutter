@@ -27,7 +27,9 @@
  *                     pointer abstraction"
  */
 
-#include <config.h>
+#include "config.h"
+#include "meta-cursor-tracker-private.h"
+
 #include <string.h>
 #include <meta/main.h>
 #include <meta/util.h>
@@ -38,11 +40,10 @@
 
 #include <gdk/gdk.h>
 #include <gdk/gdkx.h>
+#include <X11/extensions/Xfixes.h>
 
 #include "meta-backend-private.h"
-
 #include "meta-cursor-private.h"
-#include "meta-cursor-tracker-private.h"
 
 G_DEFINE_TYPE (MetaCursorTracker, meta_cursor_tracker, G_TYPE_OBJECT);
 
@@ -184,6 +185,7 @@ meta_cursor_tracker_handle_xevent (MetaCursorTracker *tracker,
     return FALSE;
 
   g_clear_pointer (&tracker->xfixes_cursor, meta_cursor_reference_unref);
+  g_signal_emit (tracker, signals[CURSOR_CHANGED], 0);
 
   return TRUE;
 }

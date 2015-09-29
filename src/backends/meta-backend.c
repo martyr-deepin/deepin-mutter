@@ -26,13 +26,19 @@
 
 #include <meta/meta-backend.h>
 #include "meta-backend-private.h"
+#include "meta-input-settings-private.h"
 
 #include "backends/x11/meta-backend-x11.h"
+#include "meta-cursor-tracker-private.h"
 #include "meta-stage.h"
 
 #ifdef HAVE_NATIVE_BACKEND
 #include "backends/native/meta-backend-native.h"
 #endif
+
+#include "backends/meta-idle-monitor-private.h"
+
+#include "backends/meta-monitor-manager-dummy.h"
 
 static MetaBackend *_backend;
 
@@ -53,6 +59,7 @@ struct _MetaBackendPrivate
 {
   MetaMonitorManager *monitor_manager;
   MetaCursorRenderer *cursor_renderer;
+  MetaInputSettings *input_settings;
 
   ClutterActor *stage;
 };
@@ -65,15 +72,11 @@ meta_backend_finalize (GObject *object)
 {
   MetaBackend *backend = META_BACKEND (object);
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
-  int i;
 
   g_clear_object (&priv->monitor_manager);
+  g_clear_object (&priv->input_settings);
 
-  for (i = 0; i <= backend->device_id_max; i++)
-    {
-      if (backend->device_monitors[i])
-        g_object_unref (backend->device_monitors[i]);
-    }
+  g_hash_table_destroy (backend->device_monitors);
 
   G_OBJECT_CLASS (meta_backend_parent_class)->finalize (object);
 }
@@ -90,11 +93,36 @@ meta_backend_sync_screen_size (MetaBackend *backend)
 }
 
 static void
+center_pointer (MetaBackend *backend)
+{
+  MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
+  MetaMonitorInfo *monitors, *primary;
+  guint n_monitors;
+
+  monitors = meta_monitor_manager_get_monitor_infos (priv->monitor_manager, &n_monitors);
+  primary = &monitors[meta_monitor_manager_get_primary_index (priv->monitor_manager)];
+  meta_backend_warp_pointer (backend,
+                             primary->rect.x + primary->rect.width / 2,
+                             primary->rect.y + primary->rect.height / 2);
+}
+
+static void
 on_monitors_changed (MetaMonitorManager *monitors,
                      gpointer user_data)
 {
   MetaBackend *backend = META_BACKEND (user_data);
+  ClutterDeviceManager *manager = clutter_device_manager_get_default ();
+  ClutterInputDevice *device = clutter_device_manager_get_core_device (manager, CLUTTER_POINTER_DEVICE);
+  ClutterPoint point;
+
   meta_backend_sync_screen_size (backend);
+
+  if (clutter_input_device_get_coords (device, NULL, &point))
+    {
+      /* If we're outside all monitors, warp the pointer back inside */
+      if (meta_monitor_manager_get_monitor_at_point (monitors, point.x, point.y) < 0)
+        center_pointer (backend);
+    }
 }
 
 static MetaIdleMonitor *
@@ -108,27 +136,19 @@ static void
 create_device_monitor (MetaBackend *backend,
                        int          device_id)
 {
-  g_assert (backend->device_monitors[device_id] == NULL);
+  MetaIdleMonitor *idle_monitor;
 
-  backend->device_monitors[device_id] = meta_backend_create_idle_monitor (backend, device_id);
-  backend->device_id_max = MAX (backend->device_id_max, device_id);
+  g_assert (g_hash_table_lookup (backend->device_monitors, &device_id) == NULL);
+
+  idle_monitor = meta_backend_create_idle_monitor (backend, device_id);
+  g_hash_table_insert (backend->device_monitors, &idle_monitor->device_id, idle_monitor);
 }
 
 static void
 destroy_device_monitor (MetaBackend *backend,
                         int          device_id)
 {
-  g_clear_object (&backend->device_monitors[device_id]);
-
-  if (device_id == backend->device_id_max)
-    {
-      /* Reset the max device ID */
-      int i, new_max = 0;
-      for (i = 0; i < backend->device_id_max; i++)
-        if (backend->device_monitors[i] != NULL)
-          new_max = i;
-      backend->device_id_max = new_max;
-    }
+  g_hash_table_remove (backend->device_monitors, &device_id);
 }
 
 static void
@@ -142,6 +162,55 @@ on_device_added (ClutterDeviceManager *device_manager,
   create_device_monitor (backend, device_id);
 }
 
+static inline gboolean
+device_is_slave_touchscreen (ClutterInputDevice *device)
+{
+  return (clutter_input_device_get_device_mode (device) != CLUTTER_INPUT_MODE_MASTER &&
+          clutter_input_device_get_device_type (device) == CLUTTER_TOUCHSCREEN_DEVICE);
+}
+
+static inline gboolean
+check_has_pointing_device (ClutterDeviceManager *manager)
+{
+  const GSList *devices;
+
+  devices = clutter_device_manager_peek_devices (manager);
+
+  for (; devices; devices = devices->next)
+    {
+      ClutterInputDevice *device = devices->data;
+
+      if (clutter_input_device_get_device_mode (device) == CLUTTER_INPUT_MODE_MASTER)
+        continue;
+      if (clutter_input_device_get_device_type (device) == CLUTTER_TOUCHSCREEN_DEVICE ||
+          clutter_input_device_get_device_type (device) == CLUTTER_KEYBOARD_DEVICE)
+        continue;
+
+      return TRUE;
+    }
+
+  return FALSE;
+}
+
+static inline gboolean
+check_has_slave_touchscreen (ClutterDeviceManager *manager)
+{
+  const GSList *devices;
+
+  devices = clutter_device_manager_peek_devices (manager);
+
+  for (; devices; devices = devices->next)
+    {
+      ClutterInputDevice *device = devices->data;
+
+      if (clutter_input_device_get_device_mode (device) != CLUTTER_INPUT_MODE_MASTER &&
+          clutter_input_device_get_device_type (device) == CLUTTER_TOUCHSCREEN_DEVICE)
+        return TRUE;
+    }
+
+  return FALSE;
+}
+
 static void
 on_device_removed (ClutterDeviceManager *device_manager,
                    ClutterInputDevice   *device,
@@ -151,6 +220,41 @@ on_device_removed (ClutterDeviceManager *device_manager,
   int device_id = clutter_input_device_get_device_id (device);
 
   destroy_device_monitor (backend, device_id);
+
+  /* If the device the user last interacted goes away, check again pointer
+   * visibility.
+   */
+  if (backend->current_device_id == device_id)
+    {
+      MetaCursorTracker *cursor_tracker = meta_cursor_tracker_get_for_screen (NULL);
+      gboolean has_touchscreen, has_pointing_device;
+      ClutterInputDeviceType device_type;
+
+      device_type = clutter_input_device_get_device_type (device);
+      has_touchscreen = check_has_slave_touchscreen (device_manager);
+
+      if (device_type == CLUTTER_TOUCHSCREEN_DEVICE && has_touchscreen)
+        {
+          /* There's more touchscreens left, keep the pointer hidden */
+          meta_cursor_tracker_set_pointer_visible (cursor_tracker, FALSE);
+        }
+      else if (device_type != CLUTTER_KEYBOARD_DEVICE)
+        {
+          has_pointing_device = check_has_pointing_device (device_manager);
+          meta_cursor_tracker_set_pointer_visible (cursor_tracker,
+                                                   has_pointing_device &&
+                                                   !has_touchscreen);
+        }
+    }
+}
+
+static MetaMonitorManager *
+create_monitor_manager (MetaBackend *backend)
+{
+  if (g_getenv ("META_DUMMY_MONITORS"))
+    return g_object_new (META_TYPE_MONITOR_MANAGER_DUMMY, NULL);
+
+  return META_BACKEND_GET_CLASS (backend)->create_monitor_manager (backend);
 }
 
 static void
@@ -162,7 +266,7 @@ meta_backend_real_post_init (MetaBackend *backend)
   clutter_actor_realize (priv->stage);
   META_BACKEND_GET_CLASS (backend)->select_stage_events (backend);
 
-  priv->monitor_manager = META_BACKEND_GET_CLASS (backend)->create_monitor_manager (backend);
+  priv->monitor_manager = create_monitor_manager (backend);
 
   g_signal_connect (priv->monitor_manager, "monitors-changed",
                     G_CALLBACK (on_monitors_changed), backend);
@@ -170,8 +274,13 @@ meta_backend_real_post_init (MetaBackend *backend)
 
   priv->cursor_renderer = META_BACKEND_GET_CLASS (backend)->create_cursor_renderer (backend);
 
+  backend->device_monitors = g_hash_table_new_full (g_int_hash, g_int_equal,
+                                                    NULL, (GDestroyNotify) g_object_unref);
+
   {
+    MetaCursorTracker *cursor_tracker;
     ClutterDeviceManager *manager;
+    gboolean has_touchscreen = FALSE;
     GSList *devices, *l;
 
     /* Create the core device monitor. */
@@ -189,10 +298,18 @@ meta_backend_real_post_init (MetaBackend *backend)
       {
         ClutterInputDevice *device = l->data;
         on_device_added (manager, device, backend);
+        has_touchscreen |= device_is_slave_touchscreen (device);
       }
+
+    cursor_tracker = meta_cursor_tracker_get_for_screen (NULL);
+    meta_cursor_tracker_set_pointer_visible (cursor_tracker, !has_touchscreen);
 
     g_slist_free (devices);
   }
+
+  priv->input_settings = meta_input_settings_create ();
+
+  center_pointer (backend);
 }
 
 static MetaCursorRenderer *
@@ -260,6 +377,12 @@ meta_backend_class_init (MetaBackendClass *klass)
                 0,
                 NULL, NULL, NULL,
                 G_TYPE_NONE, 1, G_TYPE_UINT);
+  g_signal_new ("last-device-changed",
+                G_TYPE_FROM_CLASS (object_class),
+                G_SIGNAL_RUN_LAST,
+                0,
+                NULL, NULL, NULL,
+                G_TYPE_NONE, 1, G_TYPE_INT);
 }
 
 static void
@@ -281,9 +404,7 @@ MetaIdleMonitor *
 meta_backend_get_idle_monitor (MetaBackend *backend,
                                int          device_id)
 {
-  g_return_val_if_fail (device_id >= 0 && device_id < 256, NULL);
-
-  return backend->device_monitors[device_id];
+  return g_hash_table_lookup (backend->device_monitors, &device_id);
 }
 
 /**
@@ -380,6 +501,45 @@ meta_backend_get_stage (MetaBackend *backend)
 {
   MetaBackendPrivate *priv = meta_backend_get_instance_private (backend);
   return priv->stage;
+}
+
+void
+meta_backend_update_last_device (MetaBackend *backend,
+                                 int          device_id)
+{
+  ClutterInputDeviceType device_type;
+  MetaCursorTracker *cursor_tracker;
+  ClutterDeviceManager *manager;
+  ClutterInputDevice *device;
+
+  if (backend->current_device_id == device_id)
+    return;
+
+  manager = clutter_device_manager_get_default ();
+  device = clutter_device_manager_get_device (manager, device_id);
+
+  if (!device ||
+      clutter_input_device_get_device_mode (device) == CLUTTER_INPUT_MODE_MASTER)
+    return;
+
+  device_type = clutter_input_device_get_device_type (device);
+
+  cursor_tracker = meta_cursor_tracker_get_for_screen (NULL);
+  backend->current_device_id = device_id;
+  g_signal_emit_by_name (backend, "last-device-changed", device_id);
+
+  if (device_type == CLUTTER_KEYBOARD_DEVICE)
+    return;
+
+  switch (device_type)
+    {
+    case CLUTTER_TOUCHSCREEN_DEVICE:
+      meta_cursor_tracker_set_pointer_visible (cursor_tracker, FALSE);
+      break;
+    default:
+      meta_cursor_tracker_set_pointer_visible (cursor_tracker, TRUE);
+      break;
+    }
 }
 
 static GType

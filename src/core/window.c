@@ -71,9 +71,10 @@
 
 static int destroying_windows_disallowed = 0;
 
-// Each window has a "stamp" which is a non-recycled 64-bit ID. They
-// start after the end of the XID space so that, for stacking
-// we can keep a guint64 that represents one or the other
+/* Each window has a "stamp" which is a non-recycled 64-bit ID. They
+ * start after the end of the XID space so that, for stacking
+ * we can keep a guint64 that represents one or the other
+ */
 static guint64 next_window_stamp = G_GUINT64_CONSTANT(0x100000000);
 
 static void     invalidate_work_areas     (MetaWindow     *window);
@@ -244,9 +245,9 @@ meta_window_real_get_default_skip_hints (MetaWindow *window,
 }
 
 static gboolean
-meta_window_real_update_icon (MetaWindow  *window,
-                              GdkPixbuf  **icon,
-                              GdkPixbuf  **mini_icon)
+meta_window_real_update_icon (MetaWindow       *window,
+                              cairo_surface_t **icon,
+                              cairo_surface_t **mini_icon)
 {
   *icon = NULL;
   *mini_icon = NULL;
@@ -259,10 +260,10 @@ meta_window_finalize (GObject *object)
   MetaWindow *window = META_WINDOW (object);
 
   if (window->icon)
-    g_object_unref (G_OBJECT (window->icon));
+    cairo_surface_destroy (window->icon);
 
   if (window->mini_icon)
-    g_object_unref (G_OBJECT (window->mini_icon));
+    cairo_surface_destroy (window->mini_icon);
 
   if (window->frame_bounds)
     cairo_region_destroy (window->frame_bounds);
@@ -312,10 +313,10 @@ meta_window_get_property(GObject         *object,
       g_value_set_string (value, win->title);
       break;
     case PROP_ICON:
-      g_value_set_object (value, win->icon);
+      g_value_set_pointer (value, win->icon);
       break;
     case PROP_MINI_ICON:
-      g_value_set_object (value, win->mini_icon);
+      g_value_set_pointer (value, win->mini_icon);
       break;
     case PROP_DECORATED:
       g_value_set_boolean (value, win->decorated);
@@ -427,17 +428,15 @@ meta_window_class_init (MetaWindowClass *klass)
                          NULL,
                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
   obj_props[PROP_ICON] =
-    g_param_spec_object ("icon",
-                         "Icon",
-                         "96 pixel sized icon",
-                         GDK_TYPE_PIXBUF,
-                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+    g_param_spec_pointer ("icon",
+                          "Icon",
+                          "96 pixel sized icon",
+                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
   obj_props[PROP_MINI_ICON] =
-    g_param_spec_object ("mini-icon",
-                         "Mini Icon",
-                         "16 pixel sized icon",
-                         GDK_TYPE_PIXBUF,
-                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+    g_param_spec_pointer ("mini-icon",
+                          "Mini Icon",
+                          "16 pixel sized icon",
+                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
   obj_props[PROP_DECORATED] =
     g_param_spec_boolean ("decorated",
                           "Decorated",
@@ -761,6 +760,20 @@ meta_window_update_desc (MetaWindow *window)
     window->desc = g_strdup_printf ("0x%lx (%.10s)", window->xwindow, window->title);
   else
     window->desc = g_strdup_printf ("0x%lx", window->xwindow);
+}
+
+static void
+meta_window_main_monitor_changed (MetaWindow *window,
+                                  const MetaMonitorInfo *old)
+{
+  META_WINDOW_GET_CLASS (window)->main_monitor_changed (window, old);
+
+  if (old)
+    g_signal_emit_by_name (window->screen, "window-left-monitor",
+                           old->number, window);
+  if (window->monitor)
+    g_signal_emit_by_name (window->screen, "window-entered-monitor",
+                           window->monitor->number, window);
 }
 
 MetaWindow *
@@ -1130,7 +1143,7 @@ _meta_window_shared_new (MetaDisplay         *display,
       meta_window_update_struts (window);
     }
 
-  g_signal_emit_by_name (window->screen, "window-entered-monitor", window->monitor->number, window);
+  meta_window_main_monitor_changed (window, NULL);
 
   /* Must add window to stack before doing move/resize, since the
    * window might have fullscreen size (i.e. should have been
@@ -1371,9 +1384,10 @@ meta_window_unmanage (MetaWindow  *window,
 
   if (window->monitor)
     {
-      g_signal_emit_by_name (window->screen, "window-left-monitor",
-                             window->monitor->number, window);
+      const MetaMonitorInfo *old = window->monitor;
+
       window->monitor = NULL;
+      meta_window_main_monitor_changed (window, old);
     }
 
   if (!window->override_redirect)
@@ -2690,7 +2704,10 @@ meta_window_maximize (MetaWindow        *window,
 
       meta_window_get_frame_rect (window, &old_rect);
 
-      meta_window_move_resize_now (window);
+      meta_window_move_resize_internal (window,
+                                        META_MOVE_RESIZE_MOVE_ACTION | META_MOVE_RESIZE_RESIZE_ACTION | META_MOVE_RESIZE_STATE_CHANGED,
+                                        NorthWestGravity,
+                                        window->unconstrained_rect);
 
       meta_window_get_frame_rect (window, &new_rect);
       meta_compositor_maximize_window (window->display->compositor,
@@ -2882,8 +2899,7 @@ meta_window_tile (MetaWindow *window)
                                    &new_rect);
 
   if (window->frame)
-    meta_ui_queue_frame_draw (window->screen->ui,
-                              window->frame->xwindow);
+    meta_frame_queue_draw (window->frame);
 }
 
 static gboolean
@@ -3044,7 +3060,7 @@ meta_window_unmaximize_internal (MetaWindow        *window,
       meta_window_client_rect_to_frame_rect (window, &target_rect, &target_rect);
 
       meta_window_move_resize_internal (window,
-                                        META_IS_MOVE_ACTION | META_IS_RESIZE_ACTION,
+                                        META_MOVE_RESIZE_MOVE_ACTION | META_MOVE_RESIZE_RESIZE_ACTION | META_MOVE_RESIZE_STATE_CHANGED,
                                         gravity,
                                         target_rect);
 
@@ -3189,9 +3205,11 @@ meta_window_make_fullscreen (MetaWindow  *window)
   if (!window->fullscreen)
     {
       meta_window_make_fullscreen_internal (window);
-      /* move_resize with new constraints
-       */
-      meta_window_queue(window, META_QUEUE_MOVE_RESIZE);
+
+      meta_window_move_resize_internal (window,
+                                        META_MOVE_RESIZE_MOVE_ACTION | META_MOVE_RESIZE_RESIZE_ACTION | META_MOVE_RESIZE_STATE_CHANGED,
+                                        NorthWestGravity,
+                                        window->unconstrained_rect);
     }
 }
 
@@ -3213,19 +3231,19 @@ meta_window_unmake_fullscreen (MetaWindow  *window)
       /* Window's size hints may have changed while maximized, making
        * saved_rect invalid.  #329152
        */
+      meta_window_frame_rect_to_client_rect (window, &target_rect, &target_rect);
       ensure_size_hints_satisfied (&target_rect, &window->size_hints);
+      meta_window_client_rect_to_frame_rect (window, &target_rect, &target_rect);
 
       /* Need to update window->has_resize_func before we move_resize()
        */
       meta_window_recalc_features (window);
       set_net_wm_state (window);
 
-      meta_window_move_resize_frame (window,
-                                     FALSE,
-                                     target_rect.x,
-                                     target_rect.y,
-                                     target_rect.width,
-                                     target_rect.height);
+      meta_window_move_resize_internal (window,
+                                        META_MOVE_RESIZE_MOVE_ACTION | META_MOVE_RESIZE_RESIZE_ACTION | META_MOVE_RESIZE_STATE_CHANGED,
+                                        NorthWestGravity,
+                                        target_rect);
 
       meta_window_update_layer (window);
 
@@ -3566,9 +3584,7 @@ meta_window_update_monitor (MetaWindow *window,
           window->screen->active_workspace != window->workspace)
         meta_window_change_workspace (window, window->screen->active_workspace);
 
-      if (old)
-        g_signal_emit_by_name (window->screen, "window-left-monitor", old->number, window);
-      g_signal_emit_by_name (window->screen, "window-entered-monitor", window->monitor->number, window);
+      meta_window_main_monitor_changed (window, old);
 
       /* If we're changing monitors, we need to update the has_maximize_func flag,
        * as the working area has changed. */
@@ -3612,19 +3628,19 @@ meta_window_move_resize_internal (MetaWindow          *window,
   /* The action has to be a move, a resize or the wayland client
    * acking our choice of size.
    */
-  g_assert (flags & (META_IS_MOVE_ACTION | META_IS_RESIZE_ACTION | META_IS_WAYLAND_RESIZE));
+  g_assert (flags & (META_MOVE_RESIZE_MOVE_ACTION | META_MOVE_RESIZE_RESIZE_ACTION | META_MOVE_RESIZE_WAYLAND_RESIZE));
 
   did_placement = !window->placed && window->calc_placement;
 
   /* We don't need it in the idle queue anymore. */
   meta_window_unqueue (window, META_QUEUE_MOVE_RESIZE);
 
-  if ((flags & META_IS_RESIZE_ACTION) && (flags & META_IS_MOVE_ACTION))
+  if ((flags & META_MOVE_RESIZE_RESIZE_ACTION) && (flags & META_MOVE_RESIZE_MOVE_ACTION))
     {
       /* We're both moving and resizing. Just use the passed in rect. */
       unconstrained_rect = frame_rect;
     }
-  else if ((flags & META_IS_RESIZE_ACTION))
+  else if ((flags & META_MOVE_RESIZE_RESIZE_ACTION))
     {
       /* If this is only a resize, then ignore the position given in
        * the parameters and instead calculate the new position from
@@ -3635,7 +3651,7 @@ meta_window_move_resize_internal (MetaWindow          *window,
                                           frame_rect.width,
                                           frame_rect.height);
     }
-  else if ((flags & META_IS_MOVE_ACTION))
+  else if ((flags & META_MOVE_RESIZE_MOVE_ACTION))
     {
       /* If this is only a move, then ignore the passed in size and
        * just use the existing size of the window. */
@@ -3644,7 +3660,7 @@ meta_window_move_resize_internal (MetaWindow          *window,
       unconstrained_rect.width = window->rect.width;
       unconstrained_rect.height = window->rect.height;
     }
-  else if ((flags & META_IS_WAYLAND_RESIZE))
+  else if ((flags & META_MOVE_RESIZE_WAYLAND_RESIZE))
     {
       /* This is a Wayland buffer acking our size. The new rect is
        * just the existing one we have. Ignore the passed-in rect
@@ -3655,7 +3671,7 @@ meta_window_move_resize_internal (MetaWindow          *window,
     g_assert_not_reached ();
 
   constrained_rect = unconstrained_rect;
-  if (flags & (META_IS_MOVE_ACTION | META_IS_RESIZE_ACTION))
+  if (flags & (META_MOVE_RESIZE_MOVE_ACTION | META_MOVE_RESIZE_RESIZE_ACTION))
     {
       MetaRectangle old_rect;
       meta_window_get_frame_rect (window, &old_rect);
@@ -3698,10 +3714,10 @@ meta_window_move_resize_internal (MetaWindow          *window,
 
   old_output_winsys_id = window->monitor->winsys_id;
 
-  meta_window_update_monitor (window, flags & META_IS_USER_ACTION);
+  meta_window_update_monitor (window, flags & META_MOVE_RESIZE_USER_ACTION);
 
   if (old_output_winsys_id != window->monitor->winsys_id &&
-      flags & META_IS_MOVE_ACTION && flags & META_IS_USER_ACTION)
+      flags & META_MOVE_RESIZE_MOVE_ACTION && flags & META_MOVE_RESIZE_USER_ACTION)
     window->preferred_output_winsys_id = window->monitor->winsys_id;
 
   if ((result & META_MOVE_RESIZE_RESULT_FRAME_SHAPE_CHANGED) && window->frame_bounds)
@@ -3739,7 +3755,7 @@ meta_window_move_frame (MetaWindow *window,
 
   g_return_if_fail (!window->override_redirect);
 
-  flags = (user_op ? META_IS_USER_ACTION : 0) | META_IS_MOVE_ACTION;
+  flags = (user_op ? META_MOVE_RESIZE_USER_ACTION : 0) | META_MOVE_RESIZE_MOVE_ACTION;
   meta_window_move_resize_internal (window, flags, NorthWestGravity, rect);
 }
 
@@ -3789,7 +3805,7 @@ meta_window_move_resize_frame (MetaWindow  *window,
 
   g_return_if_fail (!window->override_redirect);
 
-  flags = (user_op ? META_IS_USER_ACTION : 0) | META_IS_MOVE_ACTION | META_IS_RESIZE_ACTION;
+  flags = (user_op ? META_MOVE_RESIZE_USER_ACTION : 0) | META_MOVE_RESIZE_MOVE_ACTION | META_MOVE_RESIZE_RESIZE_ACTION;
 
   meta_window_move_resize_internal (window, flags, NorthWestGravity, rect);
 }
@@ -3841,7 +3857,7 @@ meta_window_resize_frame_with_gravity (MetaWindow *window,
   rect.width = w;
   rect.height = h;
 
-  flags = (user_op ? META_IS_USER_ACTION : 0) | META_IS_RESIZE_ACTION;
+  flags = (user_op ? META_MOVE_RESIZE_USER_ACTION : 0) | META_MOVE_RESIZE_RESIZE_ACTION;
   meta_window_move_resize_internal (window, flags, gravity, rect);
 }
 
@@ -4118,25 +4134,6 @@ meta_window_get_frame_rect (const MetaWindow *window,
                             MetaRectangle    *rect)
 {
   *rect = window->rect;
-}
-
-/**
- * meta_window_get_outer_rect:
- * @window: a #MetaWindow
- * @rect: (out): pointer to an allocated #MetaRectangle
- *
- * Gets the rectangle that bounds @window that is what the user thinks of
- * as the edge of the window. This doesn't include any extra reactive
- * area that we or the client adds to the window, or any area that the
- * client adds to draw a client-side shadow.
- *
- * Deprecated: 3.12: Use meta_window_get_frame_rect() instead.
- */
-void
-meta_window_get_outer_rect (const MetaWindow *window,
-                            MetaRectangle    *rect)
-{
-  meta_window_get_frame_rect (window, rect);
 }
 
 /**
@@ -4882,73 +4879,51 @@ redraw_icon (MetaWindow *window)
    * instead of the whole frame.
    */
   if (window->frame)
-    meta_ui_queue_frame_draw (window->screen->ui, window->frame->xwindow);
+    meta_frame_queue_draw (window->frame);
 }
 
-static GdkPixbuf *
+static cairo_surface_t *
+load_default_window_icon (int size)
+{
+  GtkIconTheme *theme = gtk_icon_theme_get_default ();
+  GdkPixbuf *pixbuf;
+  const char *icon_name;
+
+  if (gtk_icon_theme_has_icon (theme, META_DEFAULT_ICON_NAME))
+    icon_name = META_DEFAULT_ICON_NAME;
+  else
+    icon_name = "image-missing";
+
+  pixbuf = gtk_icon_theme_load_icon (theme, icon_name, size, 0, NULL);
+  return gdk_cairo_surface_create_from_pixbuf (pixbuf, 1, NULL);
+}
+
+static cairo_surface_t *
 get_default_window_icon (void)
 {
-  static GdkPixbuf *default_icon = NULL;
+  static cairo_surface_t *default_icon = NULL;
 
   if (default_icon == NULL)
     {
-      GtkIconTheme *theme;
-      gboolean icon_exists;
-
-      theme = gtk_icon_theme_get_default ();
-
-      icon_exists = gtk_icon_theme_has_icon (theme, META_DEFAULT_ICON_NAME);
-
-      if (icon_exists)
-        default_icon = gtk_icon_theme_load_icon (theme,
-                                                 META_DEFAULT_ICON_NAME,
-                                                 META_ICON_WIDTH,
-                                                 0,
-                                                 NULL);
-      else
-        default_icon = gtk_icon_theme_load_icon (theme,
-                                                 "image-missing",
-                                                 META_ICON_WIDTH,
-                                                 0,
-                                                 NULL);
-
+      default_icon = load_default_window_icon (META_ICON_WIDTH);
       g_assert (default_icon);
     }
 
-  return g_object_ref (default_icon);
+  return cairo_surface_reference (default_icon);
 }
 
-static GdkPixbuf *
+static cairo_surface_t *
 get_default_mini_icon (void)
 {
-  static GdkPixbuf *default_icon = NULL;
+  static cairo_surface_t *default_icon = NULL;
 
   if (default_icon == NULL)
     {
-      GtkIconTheme *theme;
-      gboolean icon_exists;
-
-      theme = gtk_icon_theme_get_default ();
-
-      icon_exists = gtk_icon_theme_has_icon (theme, META_DEFAULT_ICON_NAME);
-
-      if (icon_exists)
-        default_icon = gtk_icon_theme_load_icon (theme,
-                                                 META_DEFAULT_ICON_NAME,
-                                                 META_MINI_ICON_WIDTH,
-                                                 0,
-                                                 NULL);
-      else
-        default_icon = gtk_icon_theme_load_icon (theme,
-                                                 "image-missing",
-                                                 META_MINI_ICON_WIDTH,
-                                                 0,
-                                                 NULL);
-
+      default_icon = load_default_window_icon (META_MINI_ICON_WIDTH);
       g_assert (default_icon);
     }
 
-  return g_object_ref (default_icon);
+  return cairo_surface_reference (default_icon);
 }
 
 static void
@@ -4956,8 +4931,8 @@ meta_window_update_icon_now (MetaWindow *window,
                              gboolean    force)
 {
   gboolean changed;
-  GdkPixbuf *icon = NULL;
-  GdkPixbuf *mini_icon;
+  cairo_surface_t *icon = NULL;
+  cairo_surface_t *mini_icon;
 
   g_return_if_fail (!window->override_redirect);
 
@@ -4966,14 +4941,14 @@ meta_window_update_icon_now (MetaWindow *window,
   if (changed || force)
     {
       if (window->icon)
-        g_object_unref (window->icon);
+        cairo_surface_destroy (window->icon);
       if (icon)
         window->icon = icon;
       else
         window->icon = get_default_window_icon ();
 
       if (window->mini_icon)
-        g_object_unref (window->mini_icon);
+        cairo_surface_destroy (window->mini_icon);
       if (mini_icon)
         window->mini_icon = mini_icon;
       else
@@ -5851,7 +5826,7 @@ update_resize (MetaWindow *window,
   int new_w, new_h;
   int gravity;
   MetaRectangle old;
-  double remaining;
+  double remaining = 0;
   MetaMaximizeFlags new_unmaximize;
 
   window->display->grab_latest_motion_x = x;
@@ -6110,10 +6085,8 @@ meta_window_handle_mouse_grab_op_event  (MetaWindow         *window,
     case CLUTTER_BUTTON_RELEASE:
       if (event->button.button == 1 ||
           event->button.button == (unsigned int) meta_prefs_get_mouse_button_resize ())
-        {
-          end_grab_op (window, event);
-          return FALSE;
-        }
+        end_grab_op (window, event);
+
       return TRUE;
 
     case CLUTTER_TOUCH_BEGIN:
@@ -7449,9 +7422,7 @@ meta_window_set_title (MetaWindow *window,
   window->title = g_strdup (title);
 
   if (window->frame)
-    meta_ui_set_frame_title (window->screen->ui,
-                             window->frame->xwindow,
-                             window->title);
+    meta_frame_update_title (window->frame);
 
   meta_window_update_desc (window);
 
@@ -7583,8 +7554,6 @@ reset_ignored_crossing_serials (MetaDisplay *display)
       display->ignored_crossing_serials[i] = 0;
       ++i;
     }
-
-  display->ungrab_should_not_cause_focus_window = None;
 }
 
 typedef struct
@@ -7798,6 +7767,9 @@ meta_window_handle_ungrabbed_event (MetaWindow         *window,
   MetaDisplay *display = window->display;
   gboolean unmodified;
   gboolean is_window_grab;
+
+  if (window->frame && meta_ui_frame_handle_event (window->frame->ui_frame, event))
+    return;
 
   if (event->type != CLUTTER_BUTTON_PRESS)
     return;

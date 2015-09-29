@@ -23,7 +23,7 @@
 #ifndef META_MONITOR_CONFIG_H
 #define META_MONITOR_CONFIG_H
 
-#include "meta-monitor-manager.h"
+#include "meta-monitor-manager-private.h"
 
 #define META_TYPE_MONITOR_CONFIG            (meta_monitor_config_get_type ())
 #define META_MONITOR_CONFIG(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), META_TYPE_MONITOR_CONFIG, MetaMonitorConfig))
@@ -35,9 +35,6 @@
 GType meta_monitor_config_get_type (void) G_GNUC_CONST;
 
 MetaMonitorConfig *meta_monitor_config_new (void);
-
-gboolean           meta_monitor_config_match_current (MetaMonitorConfig  *config,
-                                                      MetaMonitorManager *manager);
 
 gboolean           meta_monitor_config_apply_stored (MetaMonitorConfig  *config,
                                                      MetaMonitorManager *manager);

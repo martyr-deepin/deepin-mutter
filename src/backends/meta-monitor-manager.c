@@ -25,7 +25,7 @@
 
 #include "config.h"
 
-#include "meta-monitor-manager.h"
+#include "meta-monitor-manager-private.h"
 
 #include <string.h>
 #include <math.h>
@@ -35,6 +35,7 @@
 #include <meta/main.h>
 #include "util-private.h"
 #include <meta/errors.h>
+#include "edid.h"
 #include "meta-monitor-config.h"
 #include "backends/x11/meta-monitor-manager-xrandr.h"
 #include "meta-backend-private.h"
@@ -42,6 +43,18 @@
 enum {
   CONFIRM_DISPLAY_CHANGE,
   SIGNALS_LAST
+};
+
+/* Array index matches MetaMonitorTransform */
+static gfloat transform_matrices[][6] = {
+  {  1,  0,  0,  0,  1,  0 }, /* normal */
+  {  0, -1,  1,  1,  0,  0 }, /* 90° */
+  { -1,  0,  1,  0, -1,  1 }, /* 180° */
+  {  0,  1,  0, -1,  0,  1 }, /* 270° */
+  { -1,  0,  1,  0,  1,  0 }, /* normal flipped */
+  {  0,  1,  0,  1,  0,  0 }, /* 90° flipped */
+  {  1,  0,  0,  0, -1,  1 }, /* 180° flipped */
+  {  0, -1,  1, -1,  0,  1 }, /* 270° flipped */
 };
 
 static int signals[SIGNALS_LAST];
@@ -56,14 +69,6 @@ static void initialize_dbus_interface (MetaMonitorManager *manager);
 static void
 meta_monitor_manager_init (MetaMonitorManager *manager)
 {
-}
-
-static void
-read_current_config (MetaMonitorManager *manager)
-{
-  manager->serial++;
-
-  META_MONITOR_MANAGER_GET_CLASS (manager)->read_current (manager);
 }
 
 /*
@@ -198,7 +203,7 @@ meta_monitor_manager_constructed (GObject *object)
 
   manager->config = meta_monitor_config_new ();
 
-  read_current_config (manager);
+  meta_monitor_manager_read_current_config (manager);
 
   if (!meta_monitor_config_apply_stored (manager->config, manager))
     meta_monitor_config_make_default (manager->config, manager);
@@ -211,24 +216,7 @@ meta_monitor_manager_constructed (GObject *object)
      so this is not needed.
   */
   if (META_IS_MONITOR_MANAGER_XRANDR (manager))
-    {
-      MetaOutput *old_outputs;
-      MetaCRTC *old_crtcs;
-      MetaMonitorMode *old_modes;
-      unsigned int n_old_outputs, n_old_modes;
-
-      old_outputs = manager->outputs;
-      n_old_outputs = manager->n_outputs;
-      old_modes = manager->modes;
-      n_old_modes = manager->n_modes;
-      old_crtcs = manager->crtcs;
-
-      read_current_config (manager);
-
-      meta_monitor_manager_free_output_array (old_outputs, n_old_outputs);
-      meta_monitor_manager_free_mode_array (old_modes, n_old_modes);
-      g_free (old_crtcs);
-    }
+    meta_monitor_manager_read_current_config (manager);
 
   make_logical_config (manager);
   initialize_dbus_interface (manager);
@@ -236,7 +224,7 @@ meta_monitor_manager_constructed (GObject *object)
   manager->in_init = FALSE;
 }
 
-void
+static void
 meta_monitor_manager_free_output_array (MetaOutput *old_outputs,
                                         int         n_old_outputs)
 {
@@ -259,7 +247,7 @@ meta_monitor_manager_free_output_array (MetaOutput *old_outputs,
   g_free (old_outputs);
 }
 
-void
+static void
 meta_monitor_manager_free_mode_array (MetaMonitorMode *old_modes,
                                       int              n_old_modes)
 {
@@ -369,11 +357,14 @@ make_display_name (MetaMonitorManager *manager,
   char *vendor_name = NULL;
   char *ret;
 
-  if (g_str_has_prefix (output->name, "LVDS") ||
-      g_str_has_prefix (output->name, "eDP"))
+  switch (output->connector_type)
     {
+    case META_CONNECTOR_TYPE_LVDS:
+    case META_CONNECTOR_TYPE_eDP:
       ret = g_strdup (_("Built-in display"));
       goto out;
+    default:
+      break;
     }
 
   if (output->width_mm > 0 && output->height_mm > 0)
@@ -419,6 +410,32 @@ make_display_name (MetaMonitorManager *manager,
   g_free (vendor_name);
 
   return ret;
+}
+
+static const char *
+get_connector_type_name (MetaConnectorType connector_type)
+{
+  switch (connector_type)
+    {
+    case META_CONNECTOR_TYPE_Unknown: return "Unknown";
+    case META_CONNECTOR_TYPE_VGA: return "VGA";
+    case META_CONNECTOR_TYPE_DVII: return "DVII";
+    case META_CONNECTOR_TYPE_DVID: return "DVID";
+    case META_CONNECTOR_TYPE_DVIA: return "DVIA";
+    case META_CONNECTOR_TYPE_Composite: return "Composite";
+    case META_CONNECTOR_TYPE_SVIDEO: return "SVIDEO";
+    case META_CONNECTOR_TYPE_LVDS: return "LVDS";
+    case META_CONNECTOR_TYPE_Component: return "Component";
+    case META_CONNECTOR_TYPE_9PinDIN: return "9PinDIN";
+    case META_CONNECTOR_TYPE_DisplayPort: return "DisplayPort";
+    case META_CONNECTOR_TYPE_HDMIA: return "HDMIA";
+    case META_CONNECTOR_TYPE_HDMIB: return "HDMIB";
+    case META_CONNECTOR_TYPE_TV: return "TV";
+    case META_CONNECTOR_TYPE_eDP: return "eDP";
+    case META_CONNECTOR_TYPE_VIRTUAL: return "VIRTUAL";
+    case META_CONNECTOR_TYPE_DSI: return "DSI";
+    default: g_assert_not_reached ();
+    }
 }
 
 static gboolean
@@ -501,6 +518,8 @@ meta_monitor_manager_handle_get_resources (MetaDBusDisplayConfig *skeleton,
                              g_variant_new_boolean (output->is_primary));
       g_variant_builder_add (&properties, "{sv}", "presentation",
                              g_variant_new_boolean (output->is_presentation));
+      g_variant_builder_add (&properties, "{sv}", "connector-type",
+                             g_variant_new_string (get_connector_type_name (output->connector_type)));
 
       edid_file = manager_class->get_edid_file (manager, output);
       if (edid_file)
@@ -1088,6 +1107,13 @@ initialize_dbus_interface (MetaMonitorManager *manager)
                                           g_object_unref);
 }
 
+/**
+ * meta_monitor_manager_get:
+ *
+ * Accessor for the singleton MetaMonitorManager.
+ *
+ * Returns: (transfer none): The only #MetaMonitorManager there is.
+ */
 MetaMonitorManager *
 meta_monitor_manager_get (void)
 {
@@ -1163,6 +1189,31 @@ meta_monitor_manager_get_screen_limits (MetaMonitorManager *manager,
 }
 
 void
+meta_monitor_manager_read_current_config (MetaMonitorManager *manager)
+{
+  MetaOutput *old_outputs;
+  MetaCRTC *old_crtcs;
+  MetaMonitorMode *old_modes;
+  unsigned int n_old_outputs, n_old_modes;
+
+  /* Some implementations of read_current use the existing information
+   * we have available, so don't free the old configuration until after
+   * read_current finishes. */
+  old_outputs = manager->outputs;
+  n_old_outputs = manager->n_outputs;
+  old_modes = manager->modes;
+  n_old_modes = manager->n_modes;
+  old_crtcs = manager->crtcs;
+
+  manager->serial++;
+  META_MONITOR_MANAGER_GET_CLASS (manager)->read_current (manager);
+
+  meta_monitor_manager_free_output_array (old_outputs, n_old_outputs);
+  meta_monitor_manager_free_mode_array (old_modes, n_old_modes);
+  g_free (old_crtcs);
+}
+
+void
 meta_monitor_manager_rebuild_derived (MetaMonitorManager *manager)
 {
   MetaMonitorInfo *old_monitor_infos;
@@ -1179,3 +1230,165 @@ meta_monitor_manager_rebuild_derived (MetaMonitorManager *manager)
   g_free (old_monitor_infos);
 }
 
+void
+meta_output_parse_edid (MetaOutput *meta_output,
+                        GBytes     *edid)
+{
+  MonitorInfo *parsed_edid;
+  gsize len;
+
+  if (!edid)
+    goto out;
+
+  parsed_edid = decode_edid (g_bytes_get_data (edid, &len));
+
+  if (parsed_edid)
+    {
+      meta_output->vendor = g_strndup (parsed_edid->manufacturer_code, 4);
+      if (parsed_edid->dsc_product_name[0])
+        meta_output->product = g_strndup (parsed_edid->dsc_product_name, 14);
+      else
+        meta_output->product = g_strdup_printf ("0x%04x", (unsigned) parsed_edid->product_code);
+      if (parsed_edid->dsc_serial_number[0])
+        meta_output->serial = g_strndup (parsed_edid->dsc_serial_number, 14);
+      else
+        meta_output->serial = g_strdup_printf ("0x%08x", parsed_edid->serial_number);
+
+      g_free (parsed_edid);
+    }
+
+ out:
+  if (!meta_output->vendor)
+    {
+      meta_output->vendor = g_strdup ("unknown");
+      meta_output->product = g_strdup ("unknown");
+      meta_output->serial = g_strdup ("unknown");
+    }
+}
+
+void
+meta_monitor_manager_on_hotplug (MetaMonitorManager *manager)
+{
+  gboolean applied_config = FALSE;
+
+  /* If the monitor has hotplug_mode_update (which is used by VMs), don't bother
+   * applying our stored configuration, because it's likely the user just resizing
+   * the window.
+   */
+  if (!meta_monitor_manager_has_hotplug_mode_update (manager))
+    {
+      if (meta_monitor_config_apply_stored (manager->config, manager))
+        applied_config = TRUE;
+    }
+
+  /* If we haven't applied any configuration, apply the default configuration. */
+  if (!applied_config)
+    meta_monitor_config_make_default (manager->config, manager);
+}
+
+static gboolean
+calculate_viewport_matrix (MetaMonitorManager *manager,
+                           MetaOutput         *output,
+                           gfloat              viewport[6])
+{
+  gfloat x, y, width, height;
+
+  if (!output->crtc)
+    return FALSE;
+
+  x = (float) output->crtc->rect.x / manager->screen_width;
+  y = (float) output->crtc->rect.y / manager->screen_height;
+  width  = (float) output->crtc->rect.width / manager->screen_width;
+  height = (float) output->crtc->rect.height / manager->screen_height;
+
+  viewport[0] = width;
+  viewport[1] = 0.0f;
+  viewport[2] = x;
+  viewport[3] = 0.0f;
+  viewport[4] = height;
+  viewport[5] = y;
+
+  return TRUE;
+}
+
+static inline void
+multiply_matrix (float a[6],
+		 float b[6],
+		 float res[6])
+{
+  res[0] = a[0] * b[0] + a[1] * b[3];
+  res[1] = a[0] * b[1] + a[1] * b[4];
+  res[2] = a[0] * b[2] + a[1] * b[5] + a[2];
+  res[3] = a[3] * b[0] + a[4] * b[3];
+  res[4] = a[3] * b[1] + a[4] * b[4];
+  res[5] = a[3] * b[2] + a[4] * b[5] + a[5];
+}
+
+gboolean
+meta_monitor_manager_get_monitor_matrix (MetaMonitorManager *manager,
+                                         MetaOutput         *output,
+                                         gfloat              matrix[6])
+{
+  gfloat viewport[9];
+
+  if (!calculate_viewport_matrix (manager, output, viewport))
+    return FALSE;
+
+  multiply_matrix (viewport, transform_matrices[output->crtc->transform],
+                   matrix);
+  return TRUE;
+}
+
+/**
+ * meta_monitor_manager_get_output_geometry:
+ * @manager: A #MetaMonitorManager
+ * @id: A valid #MetaOutput id
+ *
+ * Returns: The monitor index or -1 if @id isn't valid or the output
+ * isn't associated with a logical monitor.
+ */
+gint
+meta_monitor_manager_get_monitor_for_output (MetaMonitorManager *manager,
+                                             guint               id)
+{
+  MetaOutput *output;
+  guint i;
+
+  g_return_val_if_fail (META_IS_MONITOR_MANAGER (manager), -1);
+  g_return_val_if_fail (id < manager->n_outputs, -1);
+
+  output = &manager->outputs[id];
+  if (!output || !output->crtc)
+    return -1;
+
+  for (i = 0; i < manager->n_monitor_infos; i++)
+    if (meta_rectangle_contains_rect (&manager->monitor_infos[i].rect,
+                                      &output->crtc->rect))
+      return i;
+
+  return -1;
+}
+
+gint
+meta_monitor_manager_get_monitor_at_point (MetaMonitorManager *manager,
+                                           gfloat              x,
+                                           gfloat              y)
+{
+  unsigned int i;
+
+  for (i = 0; i < manager->n_monitor_infos; i++)
+    {
+      MetaMonitorInfo *monitor = &manager->monitor_infos[i];
+      int left, right, top, bottom;
+
+      left = monitor->rect.x;
+      right = left + monitor->rect.width;
+      top = monitor->rect.y;
+      bottom = top + monitor->rect.height;
+
+      if ((x >= left) && (x < right) && (y >= top) && (y < bottom))
+	return i;
+    }
+
+  return -1;
+}

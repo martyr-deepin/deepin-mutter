@@ -36,7 +36,7 @@
 #include <X11/Xutil.h>
 #include "stack-tracker.h"
 #include "ui.h"
-#include "meta-monitor-manager.h"
+#include "meta-monitor-manager-private.h"
 
 typedef void (* MetaScreenWindowFunc) (MetaWindow *window,
                                        gpointer    user_data);
@@ -100,8 +100,6 @@ struct _MetaScreen
 #endif
 
   Window wm_cm_selection_window;
-  guint32 wm_cm_timestamp;
-
   guint work_area_later;
   guint check_fullscreen_later;
 

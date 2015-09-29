@@ -42,16 +42,10 @@ struct _MetaKeyHandler
   GDestroyNotify user_data_free_func;
 };
 
-struct _MetaKeyBinding
-{
-  const char *name;
-  KeySym keysym;
-  KeyCode keycode;
-  unsigned int mask;
-  MetaVirtualModifier modifiers;
-  gint flags;
-  MetaKeyHandler *handler;
-};
+typedef struct _MetaResolvedKeyCombo {
+  xkb_keycode_t keycode;
+  xkb_mod_mask_t mask;
+} MetaResolvedKeyCombo;
 
 /**
  * MetaKeyCombo:
@@ -65,6 +59,15 @@ struct _MetaKeyCombo
   unsigned int keysym;
   unsigned int keycode;
   MetaVirtualModifier modifiers;
+};
+
+struct _MetaKeyBinding
+{
+  const char *name;
+  MetaKeyCombo combo;
+  MetaResolvedKeyCombo resolved_combo;
+  gint flags;
+  MetaKeyHandler *handler;
 };
 
 typedef struct
@@ -81,9 +84,6 @@ typedef struct
    */
   GSList *combos;
 
-  /* for keybindings that apply only to a window */
-  gboolean      per_window:1;
-
   /* for keybindings not added with meta_display_add_keybinding() */
   gboolean      builtin:1;
 } MetaKeyPref;
@@ -97,8 +97,9 @@ typedef struct
   xkb_mod_mask_t super_mask;
   xkb_mod_mask_t meta_mask;
   MetaKeyCombo overlay_key_combo;
+  MetaResolvedKeyCombo overlay_resolved_key_combo;
   gboolean overlay_key_only_pressed;
-  MetaKeyCombo *iso_next_group_combos;
+  MetaResolvedKeyCombo *iso_next_group_combos;
   int n_iso_next_group_combos;
 
   xkb_level_index_t keymap_num_levels;

@@ -41,7 +41,6 @@
 #include "meta-backend-x11.h"
 #include <meta/main.h>
 #include <meta/errors.h>
-#include "edid.h"
 #include "meta-monitor-config.h"
 
 #define ALL_TRANSFORMS ((1 << (META_MONITOR_TRANSFORM_FLIPPED_270 + 1)) - 1)
@@ -57,7 +56,6 @@ struct _MetaMonitorManagerXrandr
 
   Display *xdisplay;
   XRRScreenResources *resources;
-  int time;
   int rr_event_base;
   int rr_error_base;
 };
@@ -138,6 +136,58 @@ meta_monitor_transform_from_xrandr_all (Rotation rotation)
     ret |= 1 << META_MONITOR_TRANSFORM_FLIPPED_270;
 
   return ret;
+}
+
+static gboolean
+output_get_integer_property (MetaMonitorManagerXrandr *manager_xrandr,
+                             MetaOutput *output, const char *propname,
+                             gint *value)
+{
+  gboolean exists = FALSE;
+  Atom atom, actual_type;
+  int actual_format;
+  unsigned long nitems, bytes_after;
+  unsigned char *buffer;
+
+  atom = XInternAtom (manager_xrandr->xdisplay, propname, False);
+  XRRGetOutputProperty (manager_xrandr->xdisplay,
+                        (XID)output->winsys_id,
+                        atom,
+                        0, G_MAXLONG, False, False, XA_INTEGER,
+                        &actual_type, &actual_format,
+                        &nitems, &bytes_after, &buffer);
+
+  exists = (actual_type == XA_INTEGER && actual_format == 32 && nitems == 1);
+
+  if (exists && value != NULL)
+    *value = ((int*)buffer)[0];
+
+  XFree (buffer);
+  return exists;
+}
+
+static gboolean
+output_get_property_exists (MetaMonitorManagerXrandr *manager_xrandr,
+                            MetaOutput *output, const char *propname)
+{
+  gboolean exists = FALSE;
+  Atom atom, actual_type;
+  int actual_format;
+  unsigned long nitems, bytes_after;
+  unsigned char *buffer;
+
+  atom = XInternAtom (manager_xrandr->xdisplay, propname, False);
+  XRRGetOutputProperty (manager_xrandr->xdisplay,
+                        (XID)output->winsys_id,
+                        atom,
+                        0, G_MAXLONG, False, False, AnyPropertyType,
+                        &actual_type, &actual_format,
+                        &nitems, &bytes_after, &buffer);
+
+  exists = (actual_type != None);
+
+  XFree (buffer);
+  return exists;
 }
 
 static gboolean
@@ -330,7 +380,170 @@ static gboolean
 output_get_hotplug_mode_update (MetaMonitorManagerXrandr *manager_xrandr,
                                 MetaOutput               *output)
 {
-  return output_get_boolean_property (manager_xrandr, output, "hotplug_mode_update");
+  return output_get_property_exists (manager_xrandr, output, "hotplug_mode_update");
+}
+
+static gint
+output_get_suggested_x (MetaMonitorManagerXrandr *manager_xrandr,
+                        MetaOutput               *output)
+{
+  gint val;
+  if (output_get_integer_property (manager_xrandr, output, "suggested X", &val))
+    return val;
+
+  return -1;
+}
+
+static gint
+output_get_suggested_y (MetaMonitorManagerXrandr *manager_xrandr,
+                        MetaOutput               *output)
+{
+  gint val;
+  if (output_get_integer_property (manager_xrandr, output, "suggested Y", &val))
+    return val;
+
+  return -1;
+}
+
+static MetaConnectorType
+connector_type_from_atom (MetaMonitorManagerXrandr *manager_xrandr,
+                          Atom                      atom)
+{
+  Display *xdpy = manager_xrandr->xdisplay;
+
+  if (atom == XInternAtom (xdpy, "HDMI", True))
+    return META_CONNECTOR_TYPE_HDMIA;
+  if (atom == XInternAtom (xdpy, "VGA", True))
+    return META_CONNECTOR_TYPE_VGA;
+  /* Doesn't have a DRM equivalent, but means an internal panel.
+   * We could pick either LVDS or eDP here. */
+  if (atom == XInternAtom (xdpy, "Panel", True))
+    return META_CONNECTOR_TYPE_LVDS;
+  if (atom == XInternAtom (xdpy, "DVI", True) || atom == XInternAtom (xdpy, "DVI-I", True))
+    return META_CONNECTOR_TYPE_DVII;
+  if (atom == XInternAtom (xdpy, "DVI-A", True))
+    return META_CONNECTOR_TYPE_DVIA;
+  if (atom == XInternAtom (xdpy, "DVI-D", True))
+    return META_CONNECTOR_TYPE_DVID;
+  if (atom == XInternAtom (xdpy, "DisplayPort", True))
+    return META_CONNECTOR_TYPE_DisplayPort;
+
+  if (atom == XInternAtom (xdpy, "TV", True))
+    return META_CONNECTOR_TYPE_TV;
+  if (atom == XInternAtom (xdpy, "TV-Composite", True))
+    return META_CONNECTOR_TYPE_Composite;
+  if (atom == XInternAtom (xdpy, "TV-SVideo", True))
+    return META_CONNECTOR_TYPE_SVIDEO;
+  /* Another set of mismatches. */
+  if (atom == XInternAtom (xdpy, "TV-SCART", True))
+    return META_CONNECTOR_TYPE_TV;
+  if (atom == XInternAtom (xdpy, "TV-C4", True))
+    return META_CONNECTOR_TYPE_TV;
+
+  return META_CONNECTOR_TYPE_Unknown;
+}
+
+static MetaConnectorType
+output_get_connector_type_from_prop (MetaMonitorManagerXrandr *manager_xrandr,
+                                     MetaOutput               *output)
+{
+  MetaConnectorType ret = META_CONNECTOR_TYPE_Unknown;
+  Atom atom, actual_type, connector_type_atom;
+  int actual_format;
+  unsigned long nitems, bytes_after;
+  unsigned char *buffer;
+
+  atom = XInternAtom (manager_xrandr->xdisplay, "ConnectorType", False);
+  XRRGetOutputProperty (manager_xrandr->xdisplay,
+                        (XID)output->winsys_id,
+                        atom,
+                        0, G_MAXLONG, False, False, XA_ATOM,
+                        &actual_type, &actual_format,
+                        &nitems, &bytes_after, &buffer);
+
+  if (actual_type != XA_ATOM || actual_format != 32 || nitems < 1)
+    goto out;
+
+  connector_type_atom = ((Atom *) buffer)[0];
+  ret = connector_type_from_atom (manager_xrandr, connector_type_atom);
+
+ out:
+  meta_XFree (buffer);
+  return ret;
+}
+
+static MetaConnectorType
+output_get_connector_type_from_name (MetaMonitorManagerXrandr *manager_xrandr,
+                                     MetaOutput               *output)
+{
+  const char *name = output->name;
+
+  /* drmmode_display.c, which was copy/pasted across all the FOSS
+   * xf86-video-* drivers, seems to name its outputs based on the
+   * connector type, so look for that....
+   *
+   * SNA has its own naming scheme, because what else did you expect
+   * from SNA, but it's not too different, so we can thankfully use
+   * that with minor changes.
+   *
+   * http://cgit.freedesktop.org/xorg/xserver/tree/hw/xfree86/drivers/modesetting/drmmode_display.c#n953
+   * http://cgit.freedesktop.org/xorg/driver/xf86-video-intel/tree/src/sna/sna_display.c#n3486
+   */
+
+  if (g_str_has_prefix (name, "DVI"))
+    return META_CONNECTOR_TYPE_DVII;
+  if (g_str_has_prefix (name, "LVDS"))
+    return META_CONNECTOR_TYPE_LVDS;
+  if (g_str_has_prefix (name, "HDMI"))
+    return META_CONNECTOR_TYPE_HDMIA;
+  if (g_str_has_prefix (name, "VGA"))
+    return META_CONNECTOR_TYPE_VGA;
+  /* SNA uses DP, not DisplayPort. Test for both. */
+  if (g_str_has_prefix (name, "DP") || g_str_has_prefix (name, "DisplayPort"))
+    return META_CONNECTOR_TYPE_DisplayPort;
+  if (g_str_has_prefix (name, "eDP"))
+    return META_CONNECTOR_TYPE_eDP;
+  if (g_str_has_prefix (name, "Virtual"))
+    return META_CONNECTOR_TYPE_VIRTUAL;
+  if (g_str_has_prefix (name, "Composite"))
+    return META_CONNECTOR_TYPE_VGA;
+  if (g_str_has_prefix (name, "S-video"))
+    return META_CONNECTOR_TYPE_SVIDEO;
+  if (g_str_has_prefix (name, "TV"))
+    return META_CONNECTOR_TYPE_TV;
+  if (g_str_has_prefix (name, "CTV"))
+    return META_CONNECTOR_TYPE_Composite;
+  if (g_str_has_prefix (name, "DSI"))
+    return META_CONNECTOR_TYPE_DSI;
+  if (g_str_has_prefix (name, "DIN"))
+    return META_CONNECTOR_TYPE_9PinDIN;
+
+  return META_CONNECTOR_TYPE_Unknown;
+}
+
+static MetaConnectorType
+output_get_connector_type (MetaMonitorManagerXrandr *manager_xrandr,
+                           MetaOutput               *output)
+{
+  MetaConnectorType ret;
+
+  /* The "ConnectorType" property is considered mandatory since RandR 1.3,
+   * but none of the FOSS drivers support it, because we're a bunch of
+   * professional software developers.
+   *
+   * Try poking it first, without any expectations that it will work.
+   * If it's not there, we thankfully have other bonghits to try next.
+   */
+  ret = output_get_connector_type_from_prop (manager_xrandr, output);
+  if (ret != META_CONNECTOR_TYPE_Unknown)
+    return ret;
+
+  /* Fall back to heuristics based on the output name. */
+  ret = output_get_connector_type_from_name (manager_xrandr, output);
+  if (ret != META_CONNECTOR_TYPE_Unknown)
+    return ret;
+
+  return META_CONNECTOR_TYPE_Unknown;
 }
 
 static char *
@@ -338,12 +551,6 @@ get_xmode_name (XRRModeInfo *xmode)
 {
   int width = xmode->width;
   int height = xmode->height;
-
-  if (xmode->hSkew != 0)
-    {
-      width += 2 * (xmode->hSkew >> 8);
-      height += 2 * (xmode->hSkew & 0xff);
-    }
 
   return g_strdup_printf ("%dx%d", width, height);
 }
@@ -413,7 +620,6 @@ meta_monitor_manager_xrandr_read_current (MetaMonitorManager *manager)
     return;
 
   manager_xrandr->resources = resources;
-  manager_xrandr->time = resources->configTimestamp;
   manager->n_outputs = resources->noutput;
   manager->n_crtcs = resources->ncrtc;
   manager->n_modes = resources->nmode;
@@ -482,45 +688,21 @@ meta_monitor_manager_xrandr_read_current (MetaMonitorManager *manager)
       if (output->connection != RR_Disconnected)
 	{
           GBytes *edid;
-          MonitorInfo *parsed_edid;
 
 	  meta_output->winsys_id = resources->outputs[i];
 	  meta_output->name = g_strdup (output->name);
 
           edid = read_output_edid (manager_xrandr, meta_output->winsys_id);
-          if (edid)
-            {
-              gsize len;
+          meta_output_parse_edid (meta_output, edid);
+          g_bytes_unref (edid);
 
-              parsed_edid = decode_edid (g_bytes_get_data (edid, &len));
-              if (parsed_edid)
-                {
-                  meta_output->vendor = g_strndup (parsed_edid->manufacturer_code, 4);
-                  if (parsed_edid->dsc_product_name[0])
-                    meta_output->product = g_strndup (parsed_edid->dsc_product_name, 14);
-                  else
-                    meta_output->product = g_strdup_printf ("0x%04x", (unsigned)parsed_edid->product_code);
-                  if (parsed_edid->dsc_serial_number[0])
-                    meta_output->serial = g_strndup (parsed_edid->dsc_serial_number, 14);
-                  else
-                    meta_output->serial = g_strdup_printf ("0x%08x", parsed_edid->serial_number);
-
-                  g_free (parsed_edid);
-                }
-
-              g_bytes_unref (edid);
-            }
-
-          if (!meta_output->vendor)
-            {
-              meta_output->vendor = g_strdup ("unknown");
-              meta_output->product = g_strdup ("unknown");
-              meta_output->serial = g_strdup ("unknown");
-            }
 	  meta_output->width_mm = output->mm_width;
 	  meta_output->height_mm = output->mm_height;
 	  meta_output->subpixel_order = COGL_SUBPIXEL_ORDER_UNKNOWN;
           meta_output->hotplug_mode_update = output_get_hotplug_mode_update (manager_xrandr, meta_output);
+	  meta_output->suggested_x = output_get_suggested_x (manager_xrandr, meta_output);
+	  meta_output->suggested_y = output_get_suggested_y (manager_xrandr, meta_output);
+          meta_output->connector_type = output_get_connector_type (manager_xrandr, meta_output);
 
 	  meta_output->n_modes = output->nmode;
 	  meta_output->modes = g_new0 (MetaMonitorMode *, meta_output->n_modes);
@@ -747,7 +929,7 @@ meta_monitor_manager_xrandr_apply_configuration (MetaMonitorManager *manager,
           XRRSetCrtcConfig (manager_xrandr->xdisplay,
                             manager_xrandr->resources,
                             (XID)crtc->crtc_id,
-                            manager_xrandr->time,
+                            CurrentTime,
                             0, 0,
                             None,
                             RR_Rotate_0,
@@ -777,7 +959,7 @@ meta_monitor_manager_xrandr_apply_configuration (MetaMonitorManager *manager,
       XRRSetCrtcConfig (manager_xrandr->xdisplay,
                         manager_xrandr->resources,
                         (XID)crtc->crtc_id,
-                        manager_xrandr->time,
+                        CurrentTime,
                         0, 0,
                         None,
                         RR_Rotate_0,
@@ -814,26 +996,12 @@ meta_monitor_manager_xrandr_apply_configuration (MetaMonitorManager *manager,
           unsigned int j, n_outputs;
           int width, height;
           Status ok;
-          unsigned long old_controlled_mask;
-          unsigned long new_controlled_mask;
 
           mode = crtc_info->mode;
 
           n_outputs = crtc_info->outputs->len;
           outputs = g_new (XID, n_outputs);
 
-          old_controlled_mask = 0;
-          for (j = 0; j < manager->n_outputs; j++)
-            {
-              MetaOutput *output;
-
-              output = &manager->outputs[j];
-
-              if (output->crtc == crtc)
-                old_controlled_mask |= 1UL << j;
-            }
-
-          new_controlled_mask = 0;
           for (j = 0; j < n_outputs; j++)
             {
               MetaOutput *output;
@@ -842,25 +1010,14 @@ meta_monitor_manager_xrandr_apply_configuration (MetaMonitorManager *manager,
 
               output->is_dirty = TRUE;
               output->crtc = crtc;
-              new_controlled_mask |= 1UL << j;
 
               outputs[j] = output->winsys_id;
-            }
-
-          if (crtc->current_mode == mode &&
-              crtc->rect.x == crtc_info->x &&
-              crtc->rect.y == crtc_info->y &&
-              crtc->transform == crtc_info->transform &&
-              old_controlled_mask == new_controlled_mask)
-            {
-              /* No change */
-              goto next;
             }
 
           ok = XRRSetCrtcConfig (manager_xrandr->xdisplay,
                                  manager_xrandr->resources,
                                  (XID)crtc->crtc_id,
-                                 manager_xrandr->time,
+                                 CurrentTime,
                                  crtc_info->x, crtc_info->y,
                                  (XID)mode->mode_id,
                                  meta_monitor_transform_to_xrandr (crtc_info->transform),
@@ -868,7 +1025,7 @@ meta_monitor_manager_xrandr_apply_configuration (MetaMonitorManager *manager,
 
           if (ok != Success)
             {
-              meta_warning ("Configuring CRTC %d with mode %d (%d x %d @ %f) at position %d, %d and transfrom %u failed\n",
+              meta_warning ("Configuring CRTC %d with mode %d (%d x %d @ %f) at position %d, %d and transform %u failed\n",
                             (unsigned)(crtc->crtc_id), (unsigned)(mode->mode_id),
                             mode->width, mode->height, (float)mode->refresh_rate,
                             crtc_info->x, crtc_info->y, crtc_info->transform);
@@ -1002,16 +1159,6 @@ meta_monitor_manager_xrandr_set_crtc_gamma (MetaMonitorManager *manager,
 }
 
 static void
-meta_monitor_manager_xrandr_rebuild_derived (MetaMonitorManager *manager)
-{
-  /* This will be a no-op if the change was from our side, as
-     we already called it in the DBus method handler */
-  meta_monitor_config_update_current (manager->config, manager);
-
-  meta_monitor_manager_rebuild_derived (manager);
-}
-
-static void
 meta_monitor_manager_xrandr_init (MetaMonitorManagerXrandr *manager_xrandr)
 {
   MetaBackendX11 *backend = META_BACKEND_X11 (meta_get_backend ());
@@ -1070,57 +1217,26 @@ meta_monitor_manager_xrandr_handle_xevent (MetaMonitorManagerXrandr *manager_xra
 					   XEvent                   *event)
 {
   MetaMonitorManager *manager = META_MONITOR_MANAGER (manager_xrandr);
-  MetaOutput *old_outputs;
-  MetaCRTC *old_crtcs;
-  MetaMonitorMode *old_modes;
-  unsigned int n_old_outputs, n_old_modes;
-  gboolean new_config;
-  gboolean applied_config = FALSE;
+  gboolean hotplug;
 
   if ((event->type - manager_xrandr->rr_event_base) != RRScreenChangeNotify)
     return FALSE;
 
   XRRUpdateConfiguration (event);
 
-  /* Save the old structures, so they stay valid during the update */
-  old_outputs = manager->outputs;
-  n_old_outputs = manager->n_outputs;
-  old_modes = manager->modes;
-  n_old_modes = manager->n_modes;
-  old_crtcs = manager->crtcs;
+  meta_monitor_manager_read_current_config (manager);
 
-  manager->serial++;
-  meta_monitor_manager_xrandr_read_current (manager);
-
-  new_config = manager_xrandr->resources->timestamp >= manager_xrandr->resources->configTimestamp;
-
-  /* If this is the X server telling us we set a new configuration,
-   * we can simply short-cut to rebuilding our logical configuration.
-   */
-  if (new_config || meta_monitor_config_match_current (manager->config, manager))
+  hotplug = manager_xrandr->resources->timestamp < manager_xrandr->resources->configTimestamp;
+  if (hotplug)
     {
-      meta_monitor_manager_xrandr_rebuild_derived (manager);
-      goto out;
+      /* This is a hotplug event, so go ahead and build a new configuration. */
+      meta_monitor_manager_on_hotplug (manager);
     }
-
-  /* If the monitor has hotplug_mode_update (which is used by VMs), don't bother
-   * applying our stored configuration, because it's likely the user just resizing
-   * the window.
-   */
-  if (!meta_monitor_manager_has_hotplug_mode_update (manager))
+  else
     {
-      if (meta_monitor_config_apply_stored (manager->config, manager))
-        applied_config = TRUE;
+      /* Something else changed -- tell the world about it. */
+      meta_monitor_manager_rebuild_derived (manager);
     }
-
-  /* If we haven't applied any configuration, apply the default configuration. */
-  if (!applied_config)
-    meta_monitor_config_make_default (manager->config, manager);
-
- out:
-  meta_monitor_manager_free_output_array (old_outputs, n_old_outputs);
-  meta_monitor_manager_free_mode_array (old_modes, n_old_modes);
-  g_free (old_crtcs);
 
   return TRUE;
 }

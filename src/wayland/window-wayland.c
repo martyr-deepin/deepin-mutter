@@ -31,6 +31,7 @@
 #include "boxes-private.h"
 #include "stack-tracker.h"
 #include "meta-wayland-surface.h"
+#include "compositor/meta-surface-actor-wayland.h"
 
 struct _MetaWindowWayland
 {
@@ -64,6 +65,16 @@ meta_window_wayland_manage (MetaWindow *window)
                                    window->stamp,
                                    0);
   }
+
+  if (window->surface->role == META_WAYLAND_SURFACE_ROLE_XDG_POPUP)
+    {
+      MetaWaylandSurface *parent = window->surface->popup.parent;
+
+      g_assert (parent);
+
+      meta_window_set_transient_for (window, parent->window);
+      meta_window_set_type (window, META_WINDOW_DROPDOWN_MENU);
+    }
 }
 
 static void
@@ -168,7 +179,7 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
    * it can be for maximized or fullscreen.
    */
 
-  if (flags & META_IS_WAYLAND_RESIZE)
+  if (flags & META_MOVE_RESIZE_WAYLAND_RESIZE)
     {
       /* This is a call to wl_surface_commit(), ignore the constrained_rect and
        * update the real client size to match the buffer size.
@@ -188,18 +199,27 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
     }
   else
     {
+      /* If the size changed, or the state changed, then we have to wait until
+       * the client acks our configure before moving the window. */
       if (constrained_rect.width != window->rect.width ||
-          constrained_rect.height != window->rect.height)
+          constrained_rect.height != window->rect.height ||
+          (flags & META_MOVE_RESIZE_STATE_CHANGED))
         {
-          /* If we get a 0x0 size, this means that we're trying to resize
-           * a surface that doesn't have any buffer attached. This can happen
-           * when a client requests an xdg surface before bringing it up.
-           * The constrained_rect will be 1x1 because of how our constraints
-           * code works, and sending that to the window would cause it to
-           * redraw itself, so just don't send anything.
-           */
+          /* If the constrained size is 1x1 and the unconstrained size is 0x0
+           * it means that we are trying to resize a window where the client has
+           * not yet committed a buffer. The 1x1 constrained size is a result of
+           * how the constraints code works. Lets avoid trying to have the
+           * client configure itself to draw on a 1x1 surface.
+           *
+           * We cannot guard against only an empty unconstrained_rect here,
+           * because the client may have created a xdg surface without a buffer
+           * attached and asked it to be maximized. In such case we should let
+           * it know about the expected window geometry of a maximized window,
+           * even though there is currently no buffer attached. */
           if (unconstrained_rect.width == 0 &&
-              unconstrained_rect.height == 0)
+              unconstrained_rect.height == 0 &&
+              constrained_rect.width == 1 &&
+              constrained_rect.height == 1)
             return;
 
           meta_wayland_surface_configure_notify (window->surface,
@@ -258,6 +278,21 @@ meta_window_wayland_move_resize_internal (MetaWindow                *window,
 }
 
 static void
+meta_window_wayland_main_monitor_changed (MetaWindow *window,
+                                          const MetaMonitorInfo *old)
+{
+  MetaWaylandSurface *surface = window->surface;
+
+  if (surface)
+    {
+      MetaSurfaceActorWayland *actor =
+        META_SURFACE_ACTOR_WAYLAND (surface->surface_actor);
+
+      meta_surface_actor_wayland_sync_state_recursive (actor);
+    }
+}
+
+static void
 appears_focused_changed (GObject    *object,
                          GParamSpec *pspec,
                          gpointer    user_data)
@@ -295,6 +330,7 @@ meta_window_wayland_class_init (MetaWindowWaylandClass *klass)
   window_class->grab_op_began = meta_window_wayland_grab_op_began;
   window_class->grab_op_ended = meta_window_wayland_grab_op_ended;
   window_class->move_resize_internal = meta_window_wayland_move_resize_internal;
+  window_class->main_monitor_changed = meta_window_wayland_main_monitor_changed;
 }
 
 MetaWindow *
@@ -397,7 +433,7 @@ meta_window_wayland_move_resize (MetaWindow        *window,
   window->custom_frame_extents.left = new_geom.x;
   window->custom_frame_extents.top = new_geom.y;
 
-  flags = META_IS_WAYLAND_RESIZE;
+  flags = META_MOVE_RESIZE_WAYLAND_RESIZE;
 
   /* x/y are ignored when we're doing interactive resizing */
   if (!meta_grab_op_is_resizing (window->display->grab_op))
@@ -407,7 +443,7 @@ meta_window_wayland_move_resize (MetaWindow        *window,
           rect.x = wl_window->pending_move_x;
           rect.y = wl_window->pending_move_y;
           wl_window->has_pending_move = FALSE;
-          flags |= META_IS_MOVE_ACTION;
+          flags |= META_MOVE_RESIZE_MOVE_ACTION;
         }
       else
         {
@@ -419,7 +455,7 @@ meta_window_wayland_move_resize (MetaWindow        *window,
         {
           rect.x += dx;
           rect.y += dy;
-          flags |= META_IS_MOVE_ACTION;
+          flags |= META_MOVE_RESIZE_MOVE_ACTION;
         }
     }
 
@@ -429,7 +465,7 @@ meta_window_wayland_move_resize (MetaWindow        *window,
   rect.height = new_geom.height;
 
   if (rect.width != window->rect.width || rect.height != window->rect.height)
-    flags |= META_IS_RESIZE_ACTION;
+    flags |= META_MOVE_RESIZE_RESIZE_ACTION;
 
   gravity = meta_resize_gravity_from_grab_op (window->display->grab_op);
   meta_window_move_resize_internal (window, flags, gravity, rect);

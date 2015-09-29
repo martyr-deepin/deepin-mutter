@@ -24,6 +24,7 @@
 #include "config.h"
 
 #include "meta-monitor-manager-kms.h"
+#include "meta-monitor-config.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -38,7 +39,8 @@
 
 #include <meta/main.h>
 #include <meta/errors.h>
-#include "edid.h"
+
+#include <gudev/gudev.h>
 
 typedef struct {
   drmModeConnector *connector;
@@ -64,10 +66,9 @@ struct _MetaMonitorManagerKms
   drmModeConnector **connectors;
   unsigned int       n_connectors;
 
-  drmModeEncoder   **encoders;
-  unsigned int       n_encoders;
+  GUdevClient *udev;
 
-  drmModeEncoder    *current_encoder;
+  GSettings *desktop_settings;
 };
 
 struct _MetaMonitorManagerKmsClass
@@ -82,12 +83,9 @@ free_resources (MetaMonitorManagerKms *manager_kms)
 {
   unsigned i;
 
-  for (i = 0; i < manager_kms->n_encoders; i++)
-    drmModeFreeEncoder (manager_kms->encoders[i]);
   for (i = 0; i < manager_kms->n_connectors; i++)
     drmModeFreeConnector (manager_kms->connectors[i]);
 
-  g_free (manager_kms->encoders);
   g_free (manager_kms->connectors);
 }
 
@@ -202,7 +200,7 @@ find_properties (MetaMonitorManagerKms *manager_kms,
                strcmp (prop->name, "EDID") == 0)
         output_kms->edid_blob_id = output_kms->connector->prop_values[i];
 
-      drmModeFreeProperty(prop);
+      drmModeFreeProperty (prop);
     }
 }
 
@@ -224,8 +222,10 @@ read_output_edid (MetaMonitorManagerKms *manager_kms,
     }
 
   if (edid_blob->length > 0)
-    return g_bytes_new_with_free_func (edid_blob->data, edid_blob->length,
-                                       (GDestroyNotify)drmModeFreePropertyBlob, edid_blob);
+    {
+      return g_bytes_new_with_free_func (edid_blob->data, edid_blob->length,
+                                         (GDestroyNotify)drmModeFreePropertyBlob, edid_blob);
+    }
   else
     {
       drmModeFreePropertyBlob (edid_blob);
@@ -263,11 +263,77 @@ find_output_by_id (MetaOutput *outputs,
   return NULL;
 }
 
+/* The minimum resolution at which we turn on a window-scale of 2 */
+#define HIDPI_LIMIT 192
+
+/* The minimum screen height at which we turn on a window-scale of 2;
+ * below this there just isn't enough vertical real estate for GNOME
+ * apps to work, and it's better to just be tiny */
+#define HIDPI_MIN_HEIGHT 1200
+
+/* From http://en.wikipedia.org/wiki/4K_resolution#Resolutions_of_common_formats */
+#define SMALLEST_4K_WIDTH 3656
+
+/* Based on code from gnome-settings-daemon */
+static int
+compute_scale (MetaOutput *output)
+{
+  int scale = 1;
+
+  if (!output->crtc)
+    goto out;
+
+  /* Scaling makes no sense */
+  if (output->crtc->rect.width < HIDPI_MIN_HEIGHT)
+    goto out;
+
+  /* 4K TV */
+  if (output->name != NULL && strstr(output->name, "HDMI") != NULL &&
+      output->crtc->rect.width >= SMALLEST_4K_WIDTH)
+    goto out;
+
+  /* Somebody encoded the aspect ratio (16/9 or 16/10)
+   * instead of the physical size */
+  if ((output->width_mm == 160 && output->height_mm == 90) ||
+      (output->width_mm == 160 && output->height_mm == 100) ||
+      (output->width_mm == 16 && output->height_mm == 9) ||
+      (output->width_mm == 16 && output->height_mm == 10))
+    goto out;
+
+  if (output->width_mm > 0 && output->height_mm > 0)
+    {
+      double dpi_x, dpi_y;
+      dpi_x = (double)output->crtc->rect.width / (output->width_mm / 25.4);
+      dpi_y = (double)output->crtc->rect.height / (output->height_mm / 25.4);
+      /* We don't completely trust these values so both
+         must be high, and never pick higher ratio than
+         2 automatically */
+      if (dpi_x > HIDPI_LIMIT && dpi_y > HIDPI_LIMIT)
+        scale = 2;
+    }
+
+out:
+  return scale;
+}
+
+static int
+get_output_scale (MetaMonitorManager *manager,
+                  MetaOutput         *output)
+{
+  MetaMonitorManagerKms *manager_kms = META_MONITOR_MANAGER_KMS (manager);
+  int scale = g_settings_get_uint (manager_kms->desktop_settings, "scaling-factor");
+  if (scale > 0)
+    return scale;
+  else
+    return compute_scale (output);
+}
+
 static void
 meta_monitor_manager_kms_read_current (MetaMonitorManager *manager)
 {
   MetaMonitorManagerKms *manager_kms = META_MONITOR_MANAGER_KMS (manager);
   drmModeRes *resources;
+  drmModeEncoder **encoders;
   GHashTable *modes;
   GHashTableIter iter;
   drmModeModeInfo *mode;
@@ -303,7 +369,7 @@ meta_monitor_manager_kms_read_current (MetaMonitorManager *manager)
       connector = drmModeGetConnector (manager_kms->fd, resources->connectors[i]);
       manager_kms->connectors[i] = connector;
 
-      if (connector->connection == DRM_MODE_CONNECTED)
+      if (connector && connector->connection == DRM_MODE_CONNECTED)
         {
           /* Collect all modes for this connector */
           for (j = 0; j < (unsigned)connector->count_modes; j++)
@@ -311,13 +377,9 @@ meta_monitor_manager_kms_read_current (MetaMonitorManager *manager)
         }
     }
 
-  manager_kms->n_encoders = resources->count_encoders;
-  manager_kms->encoders = g_new (drmModeEncoder *, manager_kms->n_encoders);
-  for (i = 0; i < manager_kms->n_encoders; i++)
-    {
-      manager_kms->encoders[i] = drmModeGetEncoder (manager_kms->fd,
-                                                    resources->encoders[i]);
-    }
+  encoders = g_new (drmModeEncoder *, resources->count_encoders);
+  for (i = 0; i < (unsigned)resources->count_encoders; i++)
+    encoders[i] = drmModeGetEncoder (manager_kms->fd, resources->encoders[i]);
 
   manager->n_modes = g_hash_table_size (modes);
   manager->modes = g_new0 (MetaMonitorMode, manager->n_modes);
@@ -401,7 +463,7 @@ meta_monitor_manager_kms_read_current (MetaMonitorManager *manager)
       connector = manager_kms->connectors[i];
       meta_output = &manager->outputs[n_actual_outputs];
 
-      if (connector->connection == DRM_MODE_CONNECTED)
+      if (connector && connector->connection == DRM_MODE_CONNECTED)
 	{
           meta_output->driver_private = output_kms = g_slice_new0 (MetaOutputKms);
           meta_output->driver_notify = (GDestroyNotify)meta_output_destroy_notify;
@@ -410,6 +472,8 @@ meta_monitor_manager_kms_read_current (MetaMonitorManager *manager)
 	  meta_output->name = make_output_name (connector);
 	  meta_output->width_mm = connector->mmWidth;
 	  meta_output->height_mm = connector->mmHeight;
+	  meta_output->suggested_x = -1;
+	  meta_output->suggested_y = -1;
 
           switch (connector->subpixel)
             {
@@ -448,6 +512,8 @@ meta_monitor_manager_kms_read_current (MetaMonitorManager *manager)
 	  for (j = 0; j < output_kms->n_encoders; j++)
 	    {
               output_kms->encoders[j] = drmModeGetEncoder (manager_kms->fd, connector->encoders[j]);
+              if (!output_kms->encoders[j])
+                continue;
 
               /* We only list CRTCs as supported if they are supported by all encoders
                  for this connectors.
@@ -504,29 +570,13 @@ meta_monitor_manager_kms_read_current (MetaMonitorManager *manager)
           find_properties (manager_kms, output_kms);
 
           edid = read_output_edid (manager_kms, meta_output);
-          if (edid)
-            {
-              MonitorInfo *parsed_edid;
-              gsize len;
+          meta_output_parse_edid (meta_output, edid);
+          g_bytes_unref (edid);
 
-              parsed_edid = decode_edid (g_bytes_get_data (edid, &len));
-              if (parsed_edid)
-                {
-                  meta_output->vendor = g_strndup (parsed_edid->manufacturer_code, 4);
-                  meta_output->product = g_strndup (parsed_edid->dsc_product_name, 14);
-                  meta_output->serial = g_strndup (parsed_edid->dsc_serial_number, 14);
+          /* MetaConnectorType matches DRM's connector types */
+          meta_output->connector_type = (MetaConnectorType) connector->connector_type;
 
-                  g_free (parsed_edid);
-                }
-
-              g_bytes_unref (edid);
-            }
-          if (!meta_output->vendor)
-            {
-              meta_output->vendor = g_strdup ("unknown");
-              meta_output->product = g_strdup ("unknown");
-              meta_output->serial = g_strdup ("unknown");
-            }
+          meta_output->scale = get_output_scale (manager, meta_output);
 
           /* FIXME: backlight is a very driver specific thing unfortunately,
              every DDX does its own thing, and the dumb KMS API does not include it.
@@ -569,9 +619,10 @@ meta_monitor_manager_kms_read_current (MetaMonitorManager *manager)
 
       for (j = 0; j < output_kms->n_encoders; j++)
 	{
-	  for (k = 0; k < manager_kms->n_encoders; k++)
+	  for (k = 0; k < (unsigned)resources->count_encoders; k++)
 	    {
-	      if (output_kms->encoders[j]->encoder_id == manager_kms->encoders[k]->encoder_id)
+              if (output_kms->encoders[j] && encoders[k] &&
+                  output_kms->encoders[j]->encoder_id == encoders[k]->encoder_id)
 		{
                   output_kms->encoder_mask |= (1 << k);
 		  break;
@@ -618,6 +669,10 @@ meta_monitor_manager_kms_read_current (MetaMonitorManager *manager)
         }
     }
 
+  for (i = 0; i < (unsigned)resources->count_encoders; i++)
+    drmModeFreeEncoder (encoders[i]);
+  g_free (encoders);
+
   drmModeFreeResources (resources);
 }
 
@@ -635,6 +690,9 @@ meta_monitor_manager_kms_set_power_save_mode (MetaMonitorManager *manager,
                                               MetaPowerSave       mode)
 {
   MetaMonitorManagerKms *manager_kms = META_MONITOR_MANAGER_KMS (manager);
+  ClutterBackend *backend;
+  CoglContext *cogl_context;
+  CoglDisplay *cogl_display;
   uint64_t state;
   unsigned i;
 
@@ -673,6 +731,14 @@ meta_monitor_manager_kms_set_power_save_mode (MetaMonitorManager *manager,
                           meta_output->name, strerror (errno));
         }
     }
+
+  backend = clutter_get_default_backend ();
+  cogl_context = clutter_backend_get_cogl_context (backend);
+  cogl_display = cogl_context_get_display (cogl_context);
+
+  for (i = 0; i < manager->n_crtcs; i++)
+    cogl_kms_display_set_ignore_crtc (cogl_display, manager->crtcs[i].crtc_id,
+                                      mode != META_POWER_SAVE_ON);
 }
 
 static void
@@ -894,6 +960,23 @@ meta_monitor_manager_kms_set_crtc_gamma (MetaMonitorManager *manager,
 }
 
 static void
+on_uevent (GUdevClient *client,
+           const char  *action,
+           GUdevDevice *device,
+           gpointer     user_data)
+{
+  MetaMonitorManagerKms *manager_kms = META_MONITOR_MANAGER_KMS (user_data);
+  MetaMonitorManager *manager = META_MONITOR_MANAGER (manager_kms);
+
+  if (!g_udev_device_get_property_as_boolean (device, "HOTPLUG"))
+    return;
+
+  meta_monitor_manager_read_current_config (manager);
+
+  meta_monitor_manager_on_hotplug (manager);
+}
+
+static void
 meta_monitor_manager_kms_init (MetaMonitorManagerKms *manager_kms)
 {
   ClutterBackend *backend;
@@ -907,6 +990,24 @@ meta_monitor_manager_kms_init (MetaMonitorManagerKms *manager_kms)
   cogl_renderer = cogl_display_get_renderer (cogl_display);
 
   manager_kms->fd = cogl_kms_renderer_get_kms_fd (cogl_renderer);
+
+  const char *subsystems[2] = { "drm", NULL };
+  manager_kms->udev = g_udev_client_new (subsystems);
+  g_signal_connect (manager_kms->udev, "uevent",
+                    G_CALLBACK (on_uevent), manager_kms);
+
+  manager_kms->desktop_settings = g_settings_new ("org.gnome.desktop.interface");
+}
+
+static void
+meta_monitor_manager_kms_dispose (GObject *object)
+{
+  MetaMonitorManagerKms *manager_kms = META_MONITOR_MANAGER_KMS (object);
+
+  g_clear_object (&manager_kms->udev);
+  g_clear_object (&manager_kms->desktop_settings);
+
+  G_OBJECT_CLASS (meta_monitor_manager_kms_parent_class)->dispose (object);
 }
 
 static void
@@ -925,6 +1026,7 @@ meta_monitor_manager_kms_class_init (MetaMonitorManagerKmsClass *klass)
   MetaMonitorManagerClass *manager_class = META_MONITOR_MANAGER_CLASS (klass);
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
+  object_class->dispose = meta_monitor_manager_kms_dispose;
   object_class->finalize = meta_monitor_manager_kms_finalize;
 
   manager_class->read_current = meta_monitor_manager_kms_read_current;

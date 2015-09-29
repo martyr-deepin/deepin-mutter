@@ -496,13 +496,79 @@ create_guard_window (Display *xdisplay, MetaScreen *screen)
   return guard_window;
 }
 
-/* Set a black background on the root window so that we don't
- * see confusing old copies of old windows when debugging
- * and testing. */
-static void
-meta_screen_set_background (MetaScreen *screen)
+static Window
+take_manager_selection (MetaDisplay *display,
+                        Window       xroot,
+                        Atom         manager_atom,
+                        int          timestamp,
+                        gboolean     should_replace)
 {
-  XSetWindowBackground (screen->display->xdisplay, screen->xroot, 0x00000000);
+  Display *xdisplay = display->xdisplay;
+  Window current_owner, new_owner;
+
+  current_owner = XGetSelectionOwner (xdisplay, manager_atom);
+  if (current_owner != None)
+    {
+      XSetWindowAttributes attrs;
+
+      if (should_replace)
+        {
+          /* We want to find out when the current selection owner dies */
+          meta_error_trap_push (display);
+          attrs.event_mask = StructureNotifyMask;
+          XChangeWindowAttributes (xdisplay, current_owner, CWEventMask, &attrs);
+          if (meta_error_trap_pop_with_return (display) != Success)
+            current_owner = None; /* don't wait for it to die later on */
+        }
+      else
+        {
+          meta_warning (_("Display \"%s\" already has a window manager; try using the --replace option to replace the current window manager."),
+                        display->name);
+          return None;
+        }
+    }
+
+  /* We need SelectionClear and SelectionRequest events on the new owner,
+   * but those cannot be masked, so we only need NoEventMask.
+   */
+  new_owner = meta_create_offscreen_window (xdisplay, xroot, NoEventMask);
+
+  XSetSelectionOwner (xdisplay, manager_atom, new_owner, timestamp);
+
+  if (XGetSelectionOwner (xdisplay, manager_atom) != new_owner)
+    {
+      meta_warning ("Could not acquire selection: %s", XGetAtomName (xdisplay, manager_atom));
+      return None;
+    }
+
+  {
+    /* Send client message indicating that we are now the selection owner */
+    XClientMessageEvent ev;
+
+    ev.type = ClientMessage;
+    ev.window = xroot;
+    ev.message_type = display->atom_MANAGER;
+    ev.format = 32;
+    ev.data.l[0] = timestamp;
+    ev.data.l[1] = manager_atom;
+
+    XSendEvent (xdisplay, xroot, False, StructureNotifyMask, (XEvent *) &ev);
+  }
+
+  /* Wait for old window manager to go away */
+  if (current_owner != None)
+    {
+      XEvent event;
+
+      /* We sort of block infinitely here which is probably lame. */
+
+      meta_verbose ("Waiting for old window manager to exit\n");
+      do
+        XWindowEvent (xdisplay, current_owner, StructureNotifyMask, &event);
+      while (event.type != DestroyNotify);
+    }
+
+  return new_owner;
 }
 
 MetaScreen*
@@ -514,11 +580,9 @@ meta_screen_new (MetaDisplay *display,
   Window xroot;
   Display *xdisplay;
   Window new_wm_sn_owner;
-  Window current_wm_sn_owner;
   gboolean replace_current_wm;
   Atom wm_sn_atom;
   char buf[128];
-  guint32 manager_timestamp;
   MetaMonitorManager *manager;
 
   replace_current_wm = meta_get_replace_current_wm ();
@@ -546,83 +610,11 @@ meta_screen_new (MetaDisplay *display,
     }
 
   sprintf (buf, "WM_S%d", number);
+
   wm_sn_atom = XInternAtom (xdisplay, buf, False);
-
-  current_wm_sn_owner = XGetSelectionOwner (xdisplay, wm_sn_atom);
-
-  if (current_wm_sn_owner != None)
-    {
-      XSetWindowAttributes attrs;
-
-      if (!replace_current_wm)
-        {
-          meta_warning (_("Screen %d on display \"%s\" already has a window manager; try using the --replace option to replace the current window manager.\n"),
-                        number, display->name);
-
-          return NULL;
-        }
-
-      /* We want to find out when the current selection owner dies */
-      meta_error_trap_push (display);
-      attrs.event_mask = StructureNotifyMask;
-      XChangeWindowAttributes (xdisplay,
-                               current_wm_sn_owner, CWEventMask, &attrs);
-      if (meta_error_trap_pop_with_return (display) != Success)
-        current_wm_sn_owner = None; /* don't wait for it to die later on */
-    }
-
-  /* We need SelectionClear and SelectionRequest events on the new_wm_sn_owner,
-   * but those cannot be masked, so we only need NoEventMask.
-   */
-  new_wm_sn_owner = meta_create_offscreen_window (xdisplay, xroot, NoEventMask);
-
-  manager_timestamp = timestamp;
-
-  XSetSelectionOwner (xdisplay, wm_sn_atom, new_wm_sn_owner,
-                      manager_timestamp);
-
-  if (XGetSelectionOwner (xdisplay, wm_sn_atom) != new_wm_sn_owner)
-    {
-      meta_warning ("Could not acquire window manager selection on screen %d display \"%s\"\n",
-                    number, display->name);
-
-      XDestroyWindow (xdisplay, new_wm_sn_owner);
-
-      return NULL;
-    }
-
-  {
-    /* Send client message indicating that we are now the WM */
-    XClientMessageEvent ev;
-
-    ev.type = ClientMessage;
-    ev.window = xroot;
-    ev.message_type = display->atom_MANAGER;
-    ev.format = 32;
-    ev.data.l[0] = manager_timestamp;
-    ev.data.l[1] = wm_sn_atom;
-
-    XSendEvent (xdisplay, xroot, False, StructureNotifyMask, (XEvent*)&ev);
-  }
-
-  /* Wait for old window manager to go away */
-  if (current_wm_sn_owner != None)
-    {
-      XEvent event;
-
-      /* We sort of block infinitely here which is probably lame. */
-
-      meta_verbose ("Waiting for old window manager to exit\n");
-      do
-        {
-          XWindowEvent (xdisplay, current_wm_sn_owner,
-                        StructureNotifyMask, &event);
-        }
-      while (event.type != DestroyNotify);
-    }
-
-  /* select our root window events */
-  meta_error_trap_push (display);
+  new_wm_sn_owner = take_manager_selection (display, xroot, wm_sn_atom, timestamp, replace_current_wm);
+  if (new_wm_sn_owner == None)
+    return NULL;
 
   {
     long event_mask;
@@ -646,16 +638,6 @@ meta_screen_new (MetaDisplay *display,
                   StructureNotifyMask | ColormapChangeMask | PropertyChangeMask);
     XSelectInput (xdisplay, xroot, event_mask);
   }
-
-  if (meta_error_trap_pop_with_return (display) != Success)
-    {
-      meta_warning (_("Screen %d on display \"%s\" already has a window manager\n"),
-                    number, display->name);
-
-      XDestroyWindow (xdisplay, new_wm_sn_owner);
-
-      return NULL;
-    }
 
   /* Select for cursor changes so the cursor tracker is up to date. */
   XFixesSelectCursorInput (xdisplay, xroot, XFixesDisplayCursorNotifyMask);
@@ -684,11 +666,7 @@ meta_screen_new (MetaDisplay *display,
 
   screen->wm_sn_selection_window = new_wm_sn_owner;
   screen->wm_sn_atom = wm_sn_atom;
-  screen->wm_sn_timestamp = manager_timestamp;
-
-  screen->wm_cm_selection_window = meta_create_offscreen_window (xdisplay,
-                                                                 xroot,
-                                                                 NoEventMask);
+  screen->wm_sn_timestamp = timestamp;
   screen->work_area_later = 0;
   screen->check_fullscreen_later = 0;
 
@@ -700,7 +678,10 @@ meta_screen_new (MetaDisplay *display,
   screen->starting_corner = META_SCREEN_TOPLEFT;
   screen->guard_window = None;
 
-  screen->composite_overlay_window = XCompositeGetOverlayWindow (xdisplay, xroot);
+  /* If we're a Wayland compositor, then we don't grab the COW, since it
+   * will map it. */
+  if (!meta_is_wayland_compositor ())
+    screen->composite_overlay_window = XCompositeGetOverlayWindow (xdisplay, xroot);
 
   /* Now that we've gotten taken a reference count on the COW, we
    * can close the helper that is holding on to it */
@@ -709,7 +690,6 @@ meta_screen_new (MetaDisplay *display,
   reload_monitor_infos (screen);
 
   meta_screen_set_cursor (screen, META_CURSOR_DEFAULT);
-  meta_screen_set_background (screen);
 
   /* Handle creating a no_focus_window for this screen */
   screen->no_focus_window =
@@ -858,8 +838,7 @@ meta_screen_free (MetaScreen *screen,
   if (screen->check_fullscreen_later != 0)
     meta_later_remove (screen->check_fullscreen_later);
 
-  if (screen->monitor_infos)
-    g_free (screen->monitor_infos);
+  g_free (screen->monitor_infos);
 
   if (screen->tile_preview_timeout_id)
     g_source_remove (screen->tile_preview_timeout_id);
@@ -1286,9 +1265,11 @@ meta_screen_update_cursor (MetaScreen *screen)
   MetaCursorTracker *tracker = meta_cursor_tracker_get_for_screen (screen);
 
   cursor_ref = meta_cursor_reference_from_theme (cursor);
+  if (cursor_ref == NULL)
+    meta_fatal ("Could not find cursor. Perhaps set XCURSOR_PATH?");
+
   meta_cursor_tracker_set_root_cursor (tracker, cursor_ref);
-  if (cursor_ref)
-    meta_cursor_reference_unref (cursor_ref);
+  meta_cursor_reference_unref (cursor_ref);
 
   /* Set a cursor for X11 applications that don't specify their own */
   xcursor = meta_display_create_x_cursor (display, cursor);
@@ -2908,27 +2889,12 @@ meta_screen_set_cm_selection (MetaScreen *screen)
 {
   char selection[32];
   Atom a;
+  guint32 timestamp;
 
-  screen->wm_cm_timestamp = meta_display_get_current_time_roundtrip (
-                                                               screen->display);
-
-  g_snprintf (selection, sizeof(selection), "_NET_WM_CM_S%d", screen->number);
-  meta_verbose ("Setting selection: %s\n", selection);
-  a = XInternAtom (screen->display->xdisplay, selection, FALSE);
-  XSetSelectionOwner (screen->display->xdisplay, a,
-                      screen->wm_cm_selection_window, screen->wm_cm_timestamp);
-}
-
-void
-meta_screen_unset_cm_selection (MetaScreen *screen)
-{
-  char selection[32];
-  Atom a;
-
-  g_snprintf (selection, sizeof(selection), "_NET_WM_CM_S%d", screen->number);
-  a = XInternAtom (screen->display->xdisplay, selection, FALSE);
-  XSetSelectionOwner (screen->display->xdisplay, a,
-                      None, screen->wm_cm_timestamp);
+  timestamp = meta_display_get_current_time_roundtrip (screen->display);
+  g_snprintf (selection, sizeof (selection), "_NET_WM_CM_S%d", screen->number);
+  a = XInternAtom (screen->display->xdisplay, selection, False);
+  screen->wm_cm_selection_window = take_manager_selection (screen->display, screen->xroot, a, timestamp, TRUE);
 }
 
 /**
@@ -3022,7 +2988,6 @@ check_fullscreen_func (gpointer data)
 {
   MetaScreen *screen = data;
   MetaWindow *window;
-  GSList *tmp;
   GSList *fullscreen_monitors = NULL;
   GSList *obscured_monitors = NULL;
   gboolean in_fullscreen_changed = FALSE;

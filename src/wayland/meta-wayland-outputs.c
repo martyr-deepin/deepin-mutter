@@ -27,7 +27,7 @@
 #include "meta-wayland-outputs.h"
 
 #include "meta-wayland-private.h"
-#include "meta-monitor-manager.h"
+#include "meta-monitor-manager-private.h"
 
 #include <string.h>
 
@@ -40,17 +40,6 @@ typedef struct {
   GList                    *resources;
 } MetaWaylandOutput;
 
-/* The minimum resolution at which we turn on a window-scale of 2 */
-#define HIDPI_LIMIT 192
-
-/* The minimum screen height at which we turn on a window-scale of 2;
- * below this there just isn't enough vertical real estate for GNOME
- * apps to work, and it's better to just be tiny */
-#define HIDPI_MIN_HEIGHT 1200
-
-/* From http://en.wikipedia.org/wiki/4K_resolution#Resolutions_of_common_formats */
-#define SMALLEST_4K_WIDTH 3656
-
 static void
 output_resource_destroy (struct wl_resource *res)
 {
@@ -58,37 +47,6 @@ output_resource_destroy (struct wl_resource *res)
 
   wayland_output = wl_resource_get_user_data (res);
   wayland_output->resources = g_list_remove (wayland_output->resources, res);
-}
-
-/* Based on code from gnome-settings-daemon */
-static int
-compute_scale (MetaOutput *output)
-{
-  int scale = 1;
-
-  /* Scaling makes no sense */
-  if (output->crtc->rect.width < HIDPI_MIN_HEIGHT)
-    goto out;
-
-  /* 4K TV */
-  if (output->name != NULL && strstr(output->name, "HDMI") != NULL &&
-      output->crtc->rect.width >= SMALLEST_4K_WIDTH)
-    goto out;
-
-  if (output->width_mm > 0 && output->height_mm > 0)
-    {
-      double dpi_x, dpi_y;
-      dpi_x = (double)output->crtc->rect.width / (output->width_mm / 25.4);
-      dpi_y = (double)output->crtc->rect.height / (output->height_mm / 25.4);
-      /* We don't completely trust these values so both
-         must be high, and never pick higher ratio than
-         2 automatically */
-      if (dpi_x > HIDPI_LIMIT && dpi_y > HIDPI_LIMIT)
-        scale = 2;
-    }
-
-out:
-  return scale;
 }
 
 static void
@@ -138,7 +96,6 @@ bind_output (struct wl_client *client,
                        (int)output->crtc->current_mode->height,
                        (int)output->crtc->current_mode->refresh_rate);
 
-  output->scale = compute_scale (output);
   if (version >= WL_OUTPUT_SCALE_SINCE_VERSION)
     wl_output_send_scale (resource, output->scale);
 
@@ -191,24 +148,22 @@ wayland_output_update_for_output (MetaWaylandOutput *wayland_output,
           wayland_output->y != output->crtc->rect.y ||
           wayland_output->transform != wl_transform)
         {
-            wl_resource_post_event (resource,
-                                    WL_OUTPUT_GEOMETRY,
-                                    (int)output->crtc->rect.x,
-                                    (int)output->crtc->rect.y,
-                                    output->width_mm,
-                                    output->height_mm,
-                                    output->subpixel_order,
-                                    output->vendor,
-                                    output->product,
-                                    wl_transform);
+          wl_output_send_geometry (resource,
+                                   (int)output->crtc->rect.x,
+                                   (int)output->crtc->rect.y,
+                                   output->width_mm,
+                                   output->height_mm,
+                                   output->subpixel_order,
+                                   output->vendor,
+                                   output->product,
+                                   wl_transform);
         }
 
-      wl_resource_post_event (resource,
-                              WL_OUTPUT_MODE,
-                              mode_flags,
-                              (int)output->crtc->current_mode->width,
-                              (int)output->crtc->current_mode->height,
-                              (int)output->crtc->current_mode->refresh_rate);
+      wl_output_send_mode (resource,
+                           mode_flags,
+                           (int)output->crtc->current_mode->width,
+                           (int)output->crtc->current_mode->height,
+                           (int)output->crtc->current_mode->refresh_rate);
     }
 
   /* It's very important that we change the output pointer here, as

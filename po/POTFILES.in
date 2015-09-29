@@ -22,9 +22,7 @@ src/core/screen.c
 src/core/util.c
 src/core/window.c
 src/ui/frames.c
-src/ui/resizepopup.c
 src/ui/theme.c
-src/ui/theme-parser.c
 src/x11/session.c
 src/x11/window-props.c
 src/x11/xprops.c

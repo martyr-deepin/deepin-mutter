@@ -41,18 +41,17 @@
 #include "display-private.h"
 #include <meta/screen.h>
 #include "stack-tracker.h"
+#include <meta/meta-monitor-manager.h>
 
 #include "meta-display-config-shared.h"
 #include "meta-dbus-display-config.h"
 #include "meta-cursor.h"
 
-typedef struct _MetaMonitorManagerClass    MetaMonitorManagerClass;
-typedef struct _MetaMonitorManager         MetaMonitorManager;
 typedef struct _MetaMonitorConfigClass    MetaMonitorConfigClass;
 typedef struct _MetaMonitorConfig         MetaMonitorConfig;
 
-typedef struct _MetaOutput MetaOutput;
 typedef struct _MetaCRTC MetaCRTC;
+typedef struct _MetaOutput MetaOutput;
 typedef struct _MetaMonitorMode MetaMonitorMode;
 typedef struct _MetaMonitorInfo MetaMonitorInfo;
 typedef struct _MetaCRTCInfo MetaCRTCInfo;
@@ -69,6 +68,27 @@ typedef enum {
   META_MONITOR_TRANSFORM_FLIPPED_270,
 } MetaMonitorTransform;
 
+/* This matches the values in drm_mode.h */
+typedef enum {
+  META_CONNECTOR_TYPE_Unknown = 0,
+  META_CONNECTOR_TYPE_VGA = 1,
+  META_CONNECTOR_TYPE_DVII = 2,
+  META_CONNECTOR_TYPE_DVID = 3,
+  META_CONNECTOR_TYPE_DVIA = 4,
+  META_CONNECTOR_TYPE_Composite = 5,
+  META_CONNECTOR_TYPE_SVIDEO = 6,
+  META_CONNECTOR_TYPE_LVDS = 7,
+  META_CONNECTOR_TYPE_Component = 8,
+  META_CONNECTOR_TYPE_9PinDIN = 9,
+  META_CONNECTOR_TYPE_DisplayPort = 10,
+  META_CONNECTOR_TYPE_HDMIA = 11,
+  META_CONNECTOR_TYPE_HDMIB = 12,
+  META_CONNECTOR_TYPE_TV = 13,
+  META_CONNECTOR_TYPE_eDP = 14,
+  META_CONNECTOR_TYPE_VIRTUAL = 15,
+  META_CONNECTOR_TYPE_DSI = 16,
+} MetaConnectorType;
+
 struct _MetaOutput
 {
   /* The CRTC driving this output, NULL if the output is not enabled */
@@ -83,6 +103,8 @@ struct _MetaOutput
   int height_mm;
   CoglSubpixelOrder subpixel_order;
   int scale;
+
+  MetaConnectorType connector_type;
 
   MetaMonitorMode *preferred_mode;
   MetaMonitorMode **modes;
@@ -116,6 +138,8 @@ struct _MetaOutput
 
   /* get a new preferred mode on hotplug events, to handle dynamic guest resizing */
   gboolean hotplug_mode_update;
+  gint suggested_x;
+  gint suggested_y;
 };
 
 struct _MetaCRTC
@@ -200,7 +224,7 @@ struct _MetaCRTCInfo {
 
 /*
  * MetaOutputInfo:
- * this is the same as MetaOutputInfo, but for CRTCs
+ * this is the same as MetaCRTCInfo, but for outputs
  */
 struct _MetaOutputInfo {
   MetaOutput  *output;
@@ -297,10 +321,6 @@ struct _MetaMonitorManagerClass
                           unsigned short     *);
 };
 
-GType meta_monitor_manager_get_type (void);
-
-MetaMonitorManager *meta_monitor_manager_get  (void);
-
 void                meta_monitor_manager_rebuild_derived   (MetaMonitorManager *manager);
 
 MetaMonitorInfo    *meta_monitor_manager_get_monitor_infos (MetaMonitorManager *manager,
@@ -336,14 +356,23 @@ void                meta_monitor_manager_apply_configuration (MetaMonitorManager
 void                meta_monitor_manager_confirm_configuration (MetaMonitorManager *manager,
                                                                 gboolean            ok);
 
+void               meta_output_parse_edid (MetaOutput *output,
+                                           GBytes     *edid);
+
 void               meta_crtc_info_free   (MetaCRTCInfo   *info);
 void               meta_output_info_free (MetaOutputInfo *info);
 
-void               meta_monitor_manager_free_output_array (MetaOutput *old_outputs,
-                                                           int         n_old_outputs);
-void               meta_monitor_manager_free_mode_array (MetaMonitorMode *old_modes,
-                                                         int              n_old_modes);
 gboolean           meta_monitor_manager_has_hotplug_mode_update (MetaMonitorManager *manager);
+void               meta_monitor_manager_read_current_config (MetaMonitorManager *manager);
+void               meta_monitor_manager_on_hotplug (MetaMonitorManager *manager);
+
+gboolean           meta_monitor_manager_get_monitor_matrix (MetaMonitorManager *manager,
+                                                            MetaOutput         *output,
+                                                            gfloat              matrix[6]);
+
+gint               meta_monitor_manager_get_monitor_at_point (MetaMonitorManager *manager,
+                                                              gfloat              x,
+                                                              gfloat              y);
 
 /* Returns true if transform causes width and height to be inverted
    This is true for the odd transforms in the enum */

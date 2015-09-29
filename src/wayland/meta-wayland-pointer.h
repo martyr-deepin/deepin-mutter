@@ -85,6 +85,12 @@ void meta_wayland_pointer_update (MetaWaylandPointer *pointer,
 gboolean meta_wayland_pointer_handle_event (MetaWaylandPointer *pointer,
                                             const ClutterEvent *event);
 
+void meta_wayland_pointer_send_motion (MetaWaylandPointer *pointer,
+                                       const ClutterEvent *event);
+
+void meta_wayland_pointer_send_button (MetaWaylandPointer *pointer,
+                                       const ClutterEvent *event);
+
 void meta_wayland_pointer_set_focus (MetaWaylandPointer *pointer,
                                      MetaWaylandSurface *surface);
 
@@ -93,8 +99,10 @@ void meta_wayland_pointer_start_grab (MetaWaylandPointer *pointer,
 
 void meta_wayland_pointer_end_grab (MetaWaylandPointer *pointer);
 
-gboolean meta_wayland_pointer_start_popup_grab (MetaWaylandPointer *pointer,
-                                                MetaWaylandSurface *popup);
+MetaWaylandPopup *meta_wayland_pointer_start_popup_grab (MetaWaylandPointer *pointer,
+                                                         MetaWaylandSurface *popup);
+
+void meta_wayland_pointer_end_popup_grab (MetaWaylandPointer *pointer);
 
 void meta_wayland_pointer_repick (MetaWaylandPointer *pointer);
 
@@ -113,5 +121,10 @@ void meta_wayland_pointer_create_new_resource (MetaWaylandPointer *pointer,
 gboolean meta_wayland_pointer_can_grab_surface (MetaWaylandPointer *pointer,
                                                 MetaWaylandSurface *surface,
                                                 uint32_t            serial);
+
+gboolean meta_wayland_pointer_can_popup (MetaWaylandPointer *pointer,
+                                         uint32_t            serial);
+
+MetaWaylandSurface *meta_wayland_pointer_get_top_popup (MetaWaylandPointer *pointer);
 
 #endif /* META_WAYLAND_POINTER_H */

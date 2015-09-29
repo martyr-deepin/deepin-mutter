@@ -24,10 +24,13 @@
 
 #include "config.h"
 
+#include "meta-backend-native.h"
+#include "meta-backend-native-private.h"
+
 #include <meta/main.h>
 #include <clutter/evdev/clutter-evdev.h>
-#include "meta-backend-native.h"
 
+#include "meta-barrier-native.h"
 #include "meta-idle-monitor-native.h"
 #include "meta-monitor-manager-kms.h"
 #include "meta-cursor-renderer-native.h"
@@ -36,6 +39,8 @@
 struct _MetaBackendNativePrivate
 {
   MetaLauncher *launcher;
+
+  MetaBarrierManagerNative *barrier_manager;
 
   GSettings *keyboard_settings;
 };
@@ -49,9 +54,25 @@ meta_backend_native_finalize (GObject *object)
   MetaBackendNative *native = META_BACKEND_NATIVE (object);
   MetaBackendNativePrivate *priv = meta_backend_native_get_instance_private (native);
 
-  g_clear_object (&priv->keyboard_settings);
+  meta_launcher_free (priv->launcher);
 
   G_OBJECT_CLASS (meta_backend_native_parent_class)->finalize (object);
+}
+
+static void
+constrain_to_barriers (ClutterInputDevice *device,
+                       guint32             time,
+                       float              *new_x,
+                       float              *new_y)
+{
+  MetaBackendNative *native = META_BACKEND_NATIVE (meta_get_backend ());
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (native);
+
+  meta_barrier_manager_native_process (priv->barrier_manager,
+                                       device,
+                                       time,
+                                       new_x, new_y);
 }
 
 /*
@@ -63,31 +84,6 @@ meta_backend_native_finalize (GObject *object)
  *
  */
 
-static gboolean
-check_all_screen_monitors(MetaMonitorInfo *monitors,
-			  unsigned         n_monitors,
-			  float            x,
-			  float            y)
-{
-  unsigned int i;
-
-  for (i = 0; i < n_monitors; i++)
-    {
-      MetaMonitorInfo *monitor = &monitors[i];
-      int left, right, top, bottom;
-
-      left = monitor->rect.x;
-      right = left + monitor->rect.width;
-      top = monitor->rect.y;
-      bottom = left + monitor->rect.height;
-
-      if ((x >= left) && (x < right) && (y >= top) && (y < bottom))
-	return TRUE;
-    }
-
-  return FALSE;
-}
-
 static void
 constrain_all_screen_monitors (ClutterInputDevice *device,
 			       MetaMonitorInfo    *monitors,
@@ -97,25 +93,25 @@ constrain_all_screen_monitors (ClutterInputDevice *device,
 {
   ClutterPoint current;
   unsigned int i;
+  float cx, cy;
 
   clutter_input_device_get_coords (device, NULL, &current);
+
+  cx = current.x;
+  cy = current.y;
 
   /* if we're trying to escape, clamp to the CRTC we're coming from */
   for (i = 0; i < n_monitors; i++)
     {
       MetaMonitorInfo *monitor = &monitors[i];
       int left, right, top, bottom;
-      float nx, ny;
 
       left = monitor->rect.x;
       right = left + monitor->rect.width;
       top = monitor->rect.y;
-      bottom = left + monitor->rect.height;
+      bottom = top + monitor->rect.height;
 
-      nx = current.x;
-      ny = current.y;
-
-      if ((nx >= left) && (nx < right) && (ny >= top) && (ny < bottom))
+      if ((cx >= left) && (cx < right) && (cy >= top) && (cy < bottom))
 	{
 	  if (*x < left)
 	    *x = left;
@@ -141,14 +137,15 @@ pointer_constrain_callback (ClutterInputDevice *device,
   MetaMonitorManager *monitor_manager;
   MetaMonitorInfo *monitors;
   unsigned int n_monitors;
-  gboolean ret;
+
+  /* Constrain to barriers */
+  constrain_to_barriers (device, time, new_x, new_y);
 
   monitor_manager = meta_monitor_manager_get ();
   monitors = meta_monitor_manager_get_monitor_infos (monitor_manager, &n_monitors);
 
   /* if we're moving inside a monitor, we're fine */
-  ret = check_all_screen_monitors(monitors, n_monitors, *new_x, *new_y);
-  if (ret == TRUE)
+  if (meta_monitor_manager_get_monitor_at_point (monitor_manager, *new_x, *new_y) >= 0)
     return;
 
   /* if we're trying to escape, clamp to the CRTC we're coming from */
@@ -156,45 +153,14 @@ pointer_constrain_callback (ClutterInputDevice *device,
 }
 
 static void
-set_keyboard_repeat (MetaBackendNative *native)
-{
-  MetaBackendNativePrivate *priv = meta_backend_native_get_instance_private (native);
-  ClutterDeviceManager *manager = clutter_device_manager_get_default ();
-  gboolean repeat;
-  unsigned int delay, interval;
-
-  repeat = g_settings_get_boolean (priv->keyboard_settings, "repeat");
-  delay = g_settings_get_uint (priv->keyboard_settings, "delay");
-  interval = g_settings_get_uint (priv->keyboard_settings, "repeat-interval");
-
-  clutter_evdev_set_keyboard_repeat (manager, repeat, delay, interval);
-}
-
-static void
-keyboard_settings_changed (GSettings           *settings,
-                           const char          *key,
-                           gpointer             data)
-{
-  MetaBackendNative *native = data;
-  set_keyboard_repeat (native);
-}
-
-static void
 meta_backend_native_post_init (MetaBackend *backend)
 {
-  MetaBackendNative *native = META_BACKEND_NATIVE (backend);
-  MetaBackendNativePrivate *priv = meta_backend_native_get_instance_private (native);
   ClutterDeviceManager *manager = clutter_device_manager_get_default ();
 
   META_BACKEND_CLASS (meta_backend_native_parent_class)->post_init (backend);
 
   clutter_evdev_set_pointer_constrain_callback (manager, pointer_constrain_callback,
                                                 NULL, NULL);
-
-  priv->keyboard_settings = g_settings_new ("com.deepin.wrap.gnome.settings-daemon.peripherals.keyboard");
-  g_signal_connect (priv->keyboard_settings, "changed",
-                    G_CALLBACK (keyboard_settings_changed), native);
-  set_keyboard_repeat (native);
 }
 
 static MetaIdleMonitor *
@@ -302,6 +268,8 @@ meta_backend_native_init (MetaBackendNative *native)
 
   /* We're a display server, so start talking to weston-launch. */
   priv->launcher = meta_launcher_new ();
+
+  priv->barrier_manager = meta_barrier_manager_native_new ();
 }
 
 gboolean
@@ -312,6 +280,15 @@ meta_activate_vt (int vt, GError **error)
   MetaBackendNativePrivate *priv = meta_backend_native_get_instance_private (native);
 
   return meta_launcher_activate_vt (priv->launcher, vt, error);
+}
+
+MetaBarrierManagerNative *
+meta_backend_native_get_barrier_manager (MetaBackendNative *native)
+{
+  MetaBackendNativePrivate *priv =
+    meta_backend_native_get_instance_private (native);
+
+  return priv->barrier_manager;
 }
 
 /**

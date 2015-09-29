@@ -85,6 +85,10 @@ typedef enum {
    * Events go to windows normally. */
   META_EVENT_ROUTE_NORMAL,
 
+  /* In a window operation like moving or resizing. All events
+   * goes to MetaWindow, but not to the actual client window. */
+  META_EVENT_ROUTE_WINDOW_OP,
+
   /* In a compositor grab operation. All events go to the
    * compositor plugin. */
   META_EVENT_ROUTE_COMPOSITOR_GRAB,
@@ -93,9 +97,8 @@ typedef enum {
    * the Wayland application. */
   META_EVENT_ROUTE_WAYLAND_POPUP,
 
-  /* In a window operation like moving or resizing. All events
-   * goes to MetaWindow, but not to the actual client window. */
-  META_EVENT_ROUTE_WINDOW_OP,
+  /* The user is clicking on a window button. */
+  META_EVENT_ROUTE_FRAME_BUTTON,
 } MetaEventRoute;
 
 typedef gboolean (*MetaAlarmFilter) (MetaDisplay           *display,
@@ -175,7 +178,6 @@ struct _MetaDisplay
    * ignore
    */
   unsigned long ignored_crossing_serials[N_IGNORED_CROSSING_SERIALS];
-  Window ungrab_should_not_cause_focus_window;
 
   guint32 current_time;
 
@@ -448,8 +450,8 @@ void meta_display_accelerator_activate (MetaDisplay     *display,
 gboolean meta_display_modifiers_accelerator_activate (MetaDisplay *display);
 
 #ifdef HAVE_XI23
-gboolean meta_display_process_barrier_event (MetaDisplay *display,
-                                             XIEvent     *event);
+gboolean meta_display_process_barrier_xevent (MetaDisplay *display,
+                                              XIEvent     *event);
 #endif /* HAVE_XI23 */
 
 void meta_display_set_input_focus_xwindow (MetaDisplay *display,
@@ -477,6 +479,12 @@ MetaGestureTracker * meta_display_get_gesture_tracker (MetaDisplay *display);
 gboolean meta_display_show_restart_message (MetaDisplay *display,
                                             const char  *message);
 gboolean meta_display_request_restart      (MetaDisplay *display);
+
+gboolean meta_display_show_resize_popup (MetaDisplay *display,
+                                         gboolean show,
+                                         MetaRectangle *rect,
+                                         int display_w,
+                                         int display_h);
 
 void meta_restart_init (void);
 void meta_restart_finish (void);

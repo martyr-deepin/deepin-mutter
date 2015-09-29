@@ -44,7 +44,6 @@
 #include "window-private.h"
 #include "window-props.h"
 #include "xprops.h"
-#include "resizepopup.h"
 #include "session.h"
 #include "workspace-private.h"
 
@@ -491,7 +490,7 @@ meta_window_apply_session_info (MetaWindow *window,
       window->size_hints.win_gravity = info->gravity;
       gravity = window->size_hints.win_gravity;
 
-      flags = META_IS_MOVE_ACTION | META_IS_RESIZE_ACTION;
+      flags = META_MOVE_RESIZE_MOVE_ACTION | META_MOVE_RESIZE_RESIZE_ACTION;
 
       adjust_for_gravity (window, FALSE, gravity, &rect);
       meta_window_client_rect_to_frame_rect (window, &rect, &rect);
@@ -560,7 +559,7 @@ meta_window_x11_manage (MetaWindow *window)
       rect.width = window->size_hints.width;
       rect.height = window->size_hints.height;
 
-      flags = META_IS_CONFIGURE_REQUEST | META_IS_MOVE_ACTION | META_IS_RESIZE_ACTION;
+      flags = META_MOVE_RESIZE_CONFIGURE_REQUEST | META_MOVE_RESIZE_MOVE_ACTION | META_MOVE_RESIZE_RESIZE_ACTION;
 
       adjust_for_gravity (window, TRUE, gravity, &rect);
       meta_window_client_rect_to_frame_rect (window, &rect, &rect);
@@ -757,15 +756,12 @@ meta_window_x11_focus (MetaWindow *window,
       (window->shaded ||
        !(window->input || window->take_focus)))
     {
-      if (window->frame)
-        {
-          meta_topic (META_DEBUG_FOCUS,
-                      "Focusing frame of %s\n", window->desc);
-          meta_display_set_input_focus_window (window->display,
-                                               window,
-                                               TRUE,
-                                               timestamp);
-        }
+      meta_topic (META_DEBUG_FOCUS,
+                  "Focusing frame of %s\n", window->desc);
+      meta_display_set_input_focus_window (window->display,
+                                           window,
+                                           TRUE,
+                                           timestamp);
     }
   else
     {
@@ -793,7 +789,7 @@ meta_window_x11_focus (MetaWindow *window,
                * want us to send a WM_TAKE_FOCUS.
                *
                * Normally, we want to just leave the focus undisturbed until
-               * the window respnds to WM_TAKE_FOCUS, but if we're unmanaging
+               * the window responds to WM_TAKE_FOCUS, but if we're unmanaging
                * the current focus window we *need* to move the focus away, so
                * we focus the no_focus_window now (and set
                * display->focus_window to that) before sending WM_TAKE_FOCUS.
@@ -831,18 +827,28 @@ meta_window_refresh_resize_popup (MetaWindow *window)
 {
   MetaWindowX11 *window_x11 = META_WINDOW_X11 (window);
   MetaWindowX11Private *priv = meta_window_x11_get_instance_private (window_x11);
-  MetaRectangle rect;
 
-  meta_window_get_client_root_coords (window, &rect);
+  if (priv->showing_resize_popup)
+    {
+      MetaRectangle rect;
+      int display_w, display_h;
 
-  meta_ui_resize_popup_set (priv->grab_resize_popup,
-                            rect,
-                            window->size_hints.base_width,
-                            window->size_hints.base_height,
-                            window->size_hints.width_inc,
-                            window->size_hints.height_inc);
+      meta_window_get_client_root_coords (window, &rect);
 
-  meta_ui_resize_popup_set_showing (priv->grab_resize_popup, TRUE);
+      display_w = (rect.width - window->size_hints.base_width);
+      if (window->size_hints.width_inc > 0)
+        display_w /= window->size_hints.width_inc;
+
+      display_h = (rect.height - window->size_hints.base_height);
+      if (window->size_hints.height_inc > 0)
+        display_h /= window->size_hints.height_inc;
+
+      meta_display_show_resize_popup (window->display, TRUE, &rect, display_w, display_h);
+    }
+  else
+    {
+      meta_display_show_resize_popup (window->display, FALSE, NULL, 0, 0);
+    }
 }
 
 static void
@@ -859,8 +865,7 @@ meta_window_x11_grab_op_began (MetaWindow *window,
 
       if (window->size_hints.width_inc > 1 || window->size_hints.height_inc > 1)
         {
-          priv->grab_resize_popup = meta_ui_resize_popup_new (window->display->xdisplay,
-                                                              window->screen->number);
+          priv->showing_resize_popup = TRUE;
           meta_window_refresh_resize_popup (window);
         }
     }
@@ -875,10 +880,10 @@ meta_window_x11_grab_op_ended (MetaWindow *window,
   MetaWindowX11 *window_x11 = META_WINDOW_X11 (window);
   MetaWindowX11Private *priv = meta_window_x11_get_instance_private (window_x11);
 
-  if (priv->grab_resize_popup)
+  if (priv->showing_resize_popup)
     {
-      meta_ui_resize_popup_free (priv->grab_resize_popup);
-      priv->grab_resize_popup = NULL;
+      priv->showing_resize_popup = FALSE;
+      meta_window_refresh_resize_popup (window);
     }
 
   META_WINDOW_CLASS (meta_window_x11_parent_class)->grab_op_ended (window, op);
@@ -1056,7 +1061,7 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
 
   gboolean is_configure_request;
 
-  is_configure_request = (flags & META_IS_CONFIGURE_REQUEST) != 0;
+  is_configure_request = (flags & META_MOVE_RESIZE_CONFIGURE_REQUEST) != 0;
 
   meta_frame_calc_borders (window->frame, &borders);
 
@@ -1073,9 +1078,10 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
       /* Compute new frame size */
       new_w = window->rect.width + borders.invisible.left + borders.invisible.right;
 
-      new_h = borders.invisible.top + borders.invisible.bottom;
-      if (!window->shaded)
-        new_h += window->rect.height;
+      if (window->shaded)
+        new_h = borders.total.top + borders.total.bottom;
+      else
+        new_h = window->rect.height + borders.invisible.top + borders.invisible.bottom;
 
       if (new_w != window->frame->rect.width ||
           new_h != window->frame->rect.height)
@@ -1211,9 +1217,7 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
     configure_frame_first = size_dx + size_dy >= 0;
 
   if (configure_frame_first && window->frame)
-    frame_shape_changed = meta_frame_sync_to_window (window->frame,
-                                                     gravity,
-                                                     need_move_frame, need_resize_frame);
+    frame_shape_changed = meta_frame_sync_to_window (window->frame, need_resize_frame);
 
   values.border_width = 0;
   values.x = client_rect.x;
@@ -1252,9 +1256,7 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
     }
 
   if (!configure_frame_first && window->frame)
-    frame_shape_changed = meta_frame_sync_to_window (window->frame,
-                                                     gravity,
-                                                     need_move_frame, need_resize_frame);
+    frame_shape_changed = meta_frame_sync_to_window (window->frame, need_resize_frame);
 
   if (window->frame)
     window->buffer_rect = window->frame->rect;
@@ -1264,7 +1266,7 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
   if (need_configure_notify)
     send_configure_notify (window);
 
-  if (priv->grab_resize_popup)
+  if (priv->showing_resize_popup)
     meta_window_refresh_resize_popup (window);
 
   if (frame_shape_changed)
@@ -1451,9 +1453,9 @@ meta_window_x11_get_default_skip_hints (MetaWindow *window,
 }
 
 static gboolean
-meta_window_x11_update_icon (MetaWindow  *window,
-                             GdkPixbuf  **icon,
-                             GdkPixbuf  **mini_icon)
+meta_window_x11_update_icon (MetaWindow       *window,
+                             cairo_surface_t **icon,
+                             cairo_surface_t **mini_icon)
 {
   MetaWindowX11 *window_x11 = META_WINDOW_X11 (window);
   MetaWindowX11Private *priv = meta_window_x11_get_instance_private (window_x11);
@@ -1467,6 +1469,12 @@ meta_window_x11_update_icon (MetaWindow  *window,
                           META_ICON_WIDTH, META_ICON_HEIGHT,
                           mini_icon,
                           META_MINI_ICON_WIDTH, META_MINI_ICON_HEIGHT);
+}
+
+static void
+meta_window_x11_main_monitor_changed (MetaWindow *window,
+                                      const MetaMonitorInfo *old)
+{
 }
 
 static void
@@ -1487,6 +1495,7 @@ meta_window_x11_class_init (MetaWindowX11Class *klass)
   window_class->update_struts = meta_window_x11_update_struts;
   window_class->get_default_skip_hints = meta_window_x11_get_default_skip_hints;
   window_class->update_icon = meta_window_x11_update_icon;
+  window_class->main_monitor_changed = meta_window_x11_main_monitor_changed;
 }
 
 void
@@ -1684,7 +1693,7 @@ meta_window_x11_update_input_region (MetaWindow *window)
       /* Translate the set of XShape rectangles that we
        * get from the X server to a cairo_region. */
       XRectangle *rects = NULL;
-      int n_rects, ordering;
+      int n_rects = -1, ordering;
 
       meta_error_trap_push (window->display);
       rects = XShapeGetRectangles (window->display->xdisplay,
@@ -1694,21 +1703,46 @@ meta_window_x11_update_input_region (MetaWindow *window)
                                    &ordering);
       meta_error_trap_pop (window->display);
 
-      /* XXX: The x shape extension doesn't provide a way to only test if an
-       * input shape has been specified, so we have to query and throw away the
-       * rectangles. */
-      if (rects)
-        {
-          if (n_rects > 1 ||
-              (n_rects == 1 &&
-               (rects[0].x != 0 ||
-                rects[0].y != 0 ||
-                rects[0].width != priv->client_rect.width ||
-                rects[0].height != priv->client_rect.height)))
-            region = region_create_from_x_rectangles (rects, n_rects);
+      /* XXX: The X Shape specification is quite unfortunately specified.
+       *
+       * By default, the window has a shape the same as its bounding region,
+       * which we consider "NULL".
+       *
+       * If the window sets an empty region, then we'll get n_rects as 0
+       * and rects as NULL, which we need to transform back into an empty
+       * region.
+       *
+       * It would be great to have a less-broken extension for this, but
+       * hey, it's X11!
+       */
 
-          XFree (rects);
+      if (n_rects == -1)
+        {
+          /* We had an error. */
+          region = NULL;
         }
+      else if (n_rects == 0)
+        {
+          /* Client set an empty region. */
+          region = cairo_region_create ();
+        }
+      else if (n_rects == 1 &&
+               (rects[0].x == 0 ||
+                rects[0].y == 0 ||
+                rects[0].width == priv->client_rect.width ||
+                rects[0].height == priv->client_rect.height))
+        {
+          /* This is the bounding region case. Keep the
+           * region as NULL. */
+          region = NULL;
+        }
+      else
+        {
+          /* Window has a custom shape. */
+          region = region_create_from_x_rectangles (rects, n_rects);
+        }
+
+      meta_XFree (rects);
     }
 
   if (region != NULL)
@@ -1946,16 +1980,16 @@ meta_window_move_resize_request (MetaWindow *window,
    * windows offscreen when users don't want it if not constrained
    * (e.g. hitting a dropdown triangle in a fileselector to show more
    * options, which makes the window bigger).  Thus we do not set
-   * META_IS_USER_ACTION in flags to the
+   * META_MOVE_RESIZE_USER_ACTION in flags to the
    * meta_window_move_resize_internal() call.
    */
-  flags = META_IS_CONFIGURE_REQUEST;
+  flags = META_MOVE_RESIZE_CONFIGURE_REQUEST;
   if (value_mask & (CWX | CWY))
-    flags |= META_IS_MOVE_ACTION;
+    flags |= META_MOVE_RESIZE_MOVE_ACTION;
   if (value_mask & (CWWidth | CWHeight))
-    flags |= META_IS_RESIZE_ACTION;
+    flags |= META_MOVE_RESIZE_RESIZE_ACTION;
 
-  if (flags & (META_IS_MOVE_ACTION | META_IS_RESIZE_ACTION))
+  if (flags & (META_MOVE_RESIZE_MOVE_ACTION | META_MOVE_RESIZE_RESIZE_ACTION))
     {
       MetaRectangle rect, monitor_rect;
 

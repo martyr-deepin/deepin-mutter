@@ -6,6 +6,7 @@ lib_LTLIBRARIES = libdeepin-mutter.la
 SUBDIRS=compositor/plugins
 
 EXTRA_DIST =
+NULL =
 
 AM_CPPFLAGS = \
 	-DCLUTTER_ENABLE_COMPOSITOR_API					\
@@ -31,31 +32,37 @@ AM_CPPFLAGS = \
 	-DMUTTER_PKGLIBDIR=\"$(pkglibdir)\"				\
 	-DMUTTER_PLUGIN_DIR=\"$(MUTTER_PLUGIN_DIR)\"			\
 	-DGETTEXT_PACKAGE=\"$(GETTEXT_PACKAGE)\"			\
-	-DXWAYLAND_PATH=\"$(XWAYLAND_PATH)\"
+	-DXWAYLAND_PATH=\"$(XWAYLAND_PATH)\"				\
+	$(NULL)
 
 deepin_mutter_built_sources = \
 	$(dbus_idle_built_sources)		\
 	$(dbus_display_config_built_sources)	\
 	$(dbus_login1_built_sources)		\
 	mutter-enum-types.h 			\
-	mutter-enum-types.c
+	mutter-enum-types.c			\
+	$(NULL)
 
 if HAVE_WAYLAND
 deepin_mutter_built_sources += \
 	gtk-shell-protocol.c			\
 	gtk-shell-server-protocol.h		\
 	xdg-shell-protocol.c			\
-	xdg-shell-server-protocol.h
+	xdg-shell-server-protocol.h		\
+	$(NULL)
 endif
 
-wayland_protocols = \
+wayland_protocols =				\
 	wayland/protocol/gtk-shell.xml		\
-	wayland/protocol/xdg-shell.xml
+	wayland/protocol/xdg-shell.xml		\
+	$(NULL)
 
 libdeepin_mutter_la_SOURCES =				\
 	backends/meta-backend.c			\
 	meta/meta-backend.h			\
 	backends/meta-backend-private.h		\
+	backends/meta-barrier.c			\
+	backends/meta-barrier-private.h		\
 	backends/meta-cursor.c			\
 	backends/meta-cursor.h			\
 	backends/meta-cursor-private.h		\
@@ -68,10 +75,13 @@ libdeepin_mutter_la_SOURCES =				\
 	backends/meta-idle-monitor-private.h	\
 	backends/meta-idle-monitor-dbus.c	\
 	backends/meta-idle-monitor-dbus.h	\
+	backends/meta-input-settings.c		\
+	backends/meta-input-settings-private.h	\
 	backends/meta-monitor-config.c		\
 	backends/meta-monitor-config.h		\
 	backends/meta-monitor-manager.c		\
-	backends/meta-monitor-manager.h		\
+	meta/meta-monitor-manager.h		\
+	backends/meta-monitor-manager-private.h	\
 	backends/meta-monitor-manager-dummy.c	\
 	backends/meta-monitor-manager-dummy.h	\
 	backends/meta-stage.h			\
@@ -80,15 +90,18 @@ libdeepin_mutter_la_SOURCES =				\
 	backends/edid.h				\
 	backends/x11/meta-backend-x11.c			\
 	backends/x11/meta-backend-x11.h			\
+	backends/x11/meta-barrier-x11.c			\
+	backends/x11/meta-barrier-x11.h			\
 	backends/x11/meta-cursor-renderer-x11.c		\
 	backends/x11/meta-cursor-renderer-x11.h		\
 	backends/x11/meta-idle-monitor-xsync.c		\
 	backends/x11/meta-idle-monitor-xsync.h		\
+	backends/x11/meta-input-settings-x11.c		\
+	backends/x11/meta-input-settings-x11.h		\
 	backends/x11/meta-monitor-manager-xrandr.c	\
 	backends/x11/meta-monitor-manager-xrandr.h	\
 	core/meta-accel-parse.c			\
 	core/meta-accel-parse.h			\
-	core/barrier.c				\
 	meta/barrier.h				\
 	core/bell.c				\
 	core/bell.h				\
@@ -162,8 +175,6 @@ libdeepin_mutter_la_SOURCES =				\
 	meta/errors.h				\
 	core/frame.c				\
 	core/frame.h				\
-	ui/gradient.c				\
-	meta/gradient.h				\
 	core/meta-gesture-tracker.c		\
 	core/meta-gesture-tracker-private.h	\
 	core/keybindings.c			\
@@ -195,9 +206,6 @@ libdeepin_mutter_la_SOURCES =				\
 	ui/ui.h					\
 	ui/frames.c				\
 	ui/frames.h				\
-	ui/resizepopup.c			\
-	ui/resizepopup.h			\
-	ui/theme-parser.c			\
 	ui/theme.c				\
 	meta/theme.h				\
 	ui/theme-private.h			\
@@ -222,7 +230,8 @@ libdeepin_mutter_la_SOURCES =				\
 	x11/window-x11-private.h		\
 	x11/xprops.c				\
 	x11/xprops.h				\
-	x11/mutter-Xatomtype.h
+	x11/mutter-Xatomtype.h			\
+	$(NULL)
 
 if HAVE_WAYLAND
 libdeepin_mutter_la_SOURCES +=				\
@@ -244,6 +253,8 @@ libdeepin_mutter_la_SOURCES +=				\
 	wayland/meta-wayland-keyboard.h		\
 	wayland/meta-wayland-pointer.c		\
 	wayland/meta-wayland-pointer.h		\
+	wayland/meta-wayland-popup.c		\
+	wayland/meta-wayland-popup.h		\
 	wayland/meta-wayland-seat.c		\
 	wayland/meta-wayland-seat.h		\
 	wayland/meta-wayland-touch.c		\
@@ -255,29 +266,35 @@ libdeepin_mutter_la_SOURCES +=				\
 	wayland/meta-wayland-outputs.c		\
 	wayland/meta-wayland-outputs.h		\
 	wayland/window-wayland.c		\
-	wayland/window-wayland.h
+	wayland/window-wayland.h		\
+	$(NULL)
 endif
 
 if HAVE_NATIVE_BACKEND
 libdeepin_mutter_la_SOURCES +=					\
 	backends/native/meta-backend-native.c		\
 	backends/native/meta-backend-native.h		\
+	backends/native/meta-backend-native-private.h	\
+	backends/native/meta-barrier-native.c		\
+	backends/native/meta-barrier-native.h		\
 	backends/native/meta-cursor-renderer-native.c	\
 	backends/native/meta-cursor-renderer-native.h	\
 	backends/native/meta-idle-monitor-native.c	\
 	backends/native/meta-idle-monitor-native.h	\
+	backends/native/meta-input-settings-native.c	\
+	backends/native/meta-input-settings-native.h	\
 	backends/native/meta-monitor-manager-kms.c	\
 	backends/native/meta-monitor-manager-kms.h	\
 	backends/native/meta-launcher.c			\
 	backends/native/meta-launcher.h			\
 	backends/native/dbus-utils.c			\
-	backends/native/dbus-utils.h
+	backends/native/dbus-utils.h			\
+	$(NULL)
 endif
 
-nodist_libdeepin_mutter_la_SOURCES =			\
-	$(deepin_mutter_built_sources)
+nodist_libdeepin_mutter_la_SOURCES = $(deepin_mutter_built_sources)
 
-libdeepin_mutter_la_LDFLAGS = -no-undefined
+libdeepin_mutter_la_LDFLAGS = -no-undefined -export-symbols-regex "^(meta|ag)_.*"
 libdeepin_mutter_la_LIBADD  = $(MUTTER_LIBS) $(MUTTER_NATIVE_BACKEND_LIBS)
 
 # Headers installed for plugins; introspected information will
@@ -290,7 +307,6 @@ libdeepin_mutterinclude_headers =			\
 	meta/compositor.h			\
 	meta/display.h				\
 	meta/errors.h				\
-	meta/gradient.h				\
 	meta/group.h				\
 	meta/keybindings.h			\
 	meta/main.h				\
@@ -302,6 +318,7 @@ libdeepin_mutterinclude_headers =			\
 	meta/meta-cursor-tracker.h		\
 	meta/meta-idle-monitor.h		\
 	meta/meta-plugin.h			\
+	meta/meta-monitor-manager.h		\
 	meta/meta-shaped-texture.h		\
 	meta/meta-shadow-factory.h		\
 	meta/meta-window-actor.h		\
@@ -311,7 +328,8 @@ libdeepin_mutterinclude_headers =			\
 	meta/types.h				\
 	meta/util.h				\
 	meta/window.h				\
-	meta/workspace.h
+	meta/workspace.h			\
+	$(NULL)
 
 libdeepin_mutterinclude_built_headers =		\
 	meta/meta-version.h
@@ -392,14 +410,15 @@ DISTCLEANFILES = 				\
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = libmutter.pc
 
-EXTRA_DIST +=				\
-	$(wayland_protocols)		\
-	libmutter.pc.in \
-	mutter-enum-types.h.in \
-	mutter-enum-types.c.in \
-	org.freedesktop.login1.xml	\
+EXTRA_DIST +=					\
+	$(wayland_protocols)			\
+	libmutter.pc.in				\
+	mutter-enum-types.h.in			\
+	mutter-enum-types.c.in			\
+	org.freedesktop.login1.xml		\
 	org.gnome.Mutter.DisplayConfig.xml	\
-	org.gnome.Mutter.IdleMonitor.xml
+	org.gnome.Mutter.IdleMonitor.xml	\
+	$(NULL)
 
 BUILT_SOURCES =					\
 	$(deepin_mutter_built_sources)			\

@@ -1,3 +1,146 @@
+3.16.1
+======
+* Add function to refresh all background instances [Rui; #739178]
+* Fix swapped scroll methods on wayland [Ondrej; #746870]
+* Manually activate stage to fix accessibility on wayland [Ray, Rui; #746670]
+* Center pointer on primary monitor on startup [Carlos; #746896]
+* wayland: Reword synchronized state application semantics [Jonas; #743617]
+* Ensure input settings are applied on startup [Rui; #747434]
+* Misc. bug fixes [Jonas, Giovanni, Calvin, Ray, Rui; #744932, #746509, #746692,
+  #746510, #746545, #747263]
+
+Contributors:
+  Jonas Ådahl, Giovanni Campagna, Carlos Garnacho, Ondrej Holy, Rui Matos,
+  Jasper St. Pierre, Ray Strode, Calvin Walton
+
+Translations:
+  Khaled Hosny [ar], Marek Černocký [cs]
+
+3.16.0
+======
+* wayland: Don't skip notifying about initial maximized state [Jonas; #745303]
+
+Contributors:
+  Jonas Ådahl
+
+Translations:
+  Kjartan Maraas [nb], Jiri Grönroos [fi], Andika Triwidada [id],
+  Inaki Larranaga Murgoitio [eu], Ask H. Larsen [da], Muhammet Kara [tr]
+
+3.15.92
+=======
+* Ensure pointer visibility on monitor changes [Rui, Marek; #745121, #745752]
+* Fix geometry of shaded windows [Florian; #746145]
+* Take over cursor visibility handling from gsd [Carlos; #712775]
+* Fix touch interaction on window decorations [Carlos; #745335]
+* Add options for libinput_config_click_method [Carlos; #746290]
+* Scale window decorations on HiDPI displays [Florian; #744354]
+* Misc. bug fixes [Carlos, Ray, Rui; #745163, #746295, #746098, #745734]
+
+Contributors:
+  Marek Chalupa, Carlos Garnacho, Rui Matos, Florian Müllner,
+  Jasper St. Pierre, Ray Strode
+
+Translations:
+  Piotr Drąg [pl], Milo Casagrande [it], Changwoo Ryu [ko],
+  Daniel Korostil [uk], Baurzhan Muftakhidinov [kk], Trần Ngọc Quân [vi],
+  Alexander Shopov [bg], Jordi Mas [ca], Samir Ribic [bs], A S Alam [pa],
+  Matej Urbančič [sl]
+
+3.15.91
+=======
+* wayland: Fix nested compositor mode [Jonas; #745401]
+* wayland: Fix pointer constraining [Marek; #727337]
+* wayland: Fix input region on HiDPI [Jonas; #744933]
+* Allow themes to style buttons differently based on function [Horst; #745108]
+* Misc. bug fixes and cleanups [Ray, Rui, Alban; #745141, #745118, #745476,
+  #745442]
+
+Contributors:
+  Jonas Ådahl, Alban Browaeys, Marek Chalupa, Horst, Rui Matos,
+  Jasper St. Pierre, Ray Strode
+
+Translations:
+  Chao-Hsiung Liao [zh_TW], Efstathios Iosifidis [el], Dušan Kazik [sk],
+  Balázs Úr [hu], Daniel Mustieles [es], Claude Paroz [fr], Stas Solovey [ru],
+  Yosef Or Boczko [he], Rafael Ferreira [pt_BR], Aurimas Černius [lt],
+  Fran Dieguez [gl], Anders Jonsson [sv], Мирослав Николић [sr, sr@latin]
+
+3.15.90
+=======
+* Initialize MetaOutput even when we can't get the EDID [Rui; #743412]
+* Expose MetaMonitorManager to introspection [Rui; #743745]
+* Fix flash on unredirection [Chris; #743858]
+* Update xdg-shell implementation to v5 [Jonas; #744452]
+* Do not try to use seat devices that aren't (yet) present [Ray; #744640]
+* Add keybindings for switching to VT8-VT12 [Ray; #744800]
+* Misc bug fixes [Jonas, Cosimo; #743678, #744500]
+
+Contributors:
+  Jonas Ådahl, Cosimo Cecchi, Carlos Garnacho, Rui Matos, Jasper St. Pierre,
+  Ray Strode, Chris Wilson
+
+Translations:
+  Yosef Or Boczko [he], Yuri Myasoedov [ru], Kristjan SCHMIDT [eo],
+  Matej Urbančič [sl], Dušan Kazik [sk]
+
+3.15.4
+======
+* Use GTK+ theme for window decorations instead of metacity [Florian; #741917]
+* Export the same EDID information on X11 and wayland [Carlos; #742882]
+* Apply input device configuration on wayland [Carlos; #739397]
+* Implement pointer barriers on wayland [Jonas; #706655]
+* Misc. bug fixes (Ting-Wei, Rui, Ikey, Florian, Marek, Jonas; #741829,
+  #738630, #737463, #698995, #727893, #742825, #742824, #742841, #743173,
+  #743189, #743217, #743254]
+
+Contributors:
+  Jonas Ådahl, Giovanni Campagna, Marek Chalupa, Ikey Doherty, Adel Gadllah,
+  Carlos Garnacho, Ting-Wei Lan, Rui Matos, Florian Müllner, Jasper St. Pierre,
+  Rico Tzschichholz
+
+Translations:
+  Matej Urbančič [sl], Balázs Úr [hu], Marek Černocký [cs],
+  Inaki Larranaga Murgoitio [eu], Rafael Ferreira [pt_BR],
+  Daniel Mustieles [es], Fran Dieguez [gl]
+
+3.15.3
+======
+* Don't leave left-over frames queued [Owen; #738686]
+* Set CRTC configuration even if it might be redundant [Rui; #740838]
+
+Contributors:
+  Rui Matos, Jasper St. Pierre, Rico Tzschichholz, Owen W. Taylor
+
+Translations:
+  Trần Ngọc Quân [vi], Muhammet Kara [tr]
+
+3.15.2
+======
+* Don't enable hiDPI on monitors with broken EDID [Bastien; #734839]
+* Prevent crash applying monitor config for a closed lid [Rui; #739450]
+* Fix "flicker" during startup transition [Ray; #740377]
+* Misc. bug fixes [Lan, Florian, Carlos; #731521, #740133, #738890]
+
+Contributors:
+  Emmanuele Bassi, Carlos Garnacho, Jonathon Jongsma, Ting-Wei Lan, Rui Matos,
+  Florian Müllner, Bastien Nocera, Jasper St. Pierre, Ray Strode
+
+Translations:
+  Kjartan Maraas [nb]
+
+3.15.1
+======
+* Use GResources for theme loading [Cosimo; #736936]
+* Fix headerbar drag getting stuck on xwayland [Carlos; #738411]
+* Fix wayland hiDPI regressions [Adel; #739161]
+* Misc bug fixes and cleanups [Jasper, Rui, Carlos; #662962, #738630, #738888,
+  #738890]
+
+Contributors:
+  Cosimo Cecchi, Adel Gadllah, Carlos Garnacho, Rui Matos, Florian Müllner,
+  Jasper St. Pierre
+
 3.14.1
 ======
 * Fix move-titlebar-onscreen function [Florian; #736915]

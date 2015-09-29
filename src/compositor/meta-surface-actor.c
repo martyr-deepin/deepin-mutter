@@ -49,6 +49,8 @@ meta_surface_actor_pick (ClutterActor       *actor,
 {
   MetaSurfaceActor *self = META_SURFACE_ACTOR (actor);
   MetaSurfaceActorPrivate *priv = self->priv;
+  ClutterActorIter iter;
+  ClutterActor *child;
 
   if (!clutter_actor_should_pick_paint (actor))
     return;
@@ -92,6 +94,11 @@ meta_surface_actor_pick (ClutterActor       *actor,
       cogl_framebuffer_draw_rectangles (fb, pipeline, rectangles, n_rects);
       cogl_object_unref (pipeline);
     }
+
+  clutter_actor_iter_init (&iter, actor);
+
+  while (clutter_actor_iter_next (&iter, &child))
+    clutter_actor_paint (child);
 }
 
 static void

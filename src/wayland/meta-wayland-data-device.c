@@ -410,6 +410,13 @@ data_device_start_drag (struct wl_client *client,
       seat->pointer.grab != &seat->pointer.default_grab)
     return;
 
+  if (icon_resource &&
+      meta_wayland_surface_set_role (wl_resource_get_user_data (icon_resource),
+                                     META_WAYLAND_SURFACE_ROLE_DND,
+                                     resource,
+                                     WL_DATA_DEVICE_ERROR_ROLE) != 0)
+    return;
+
   data_device->current_grab = drag_grab = g_slice_new0 (MetaWaylandDragGrab);
 
   drag_grab->generic.interface = &drag_grab_interface;
@@ -547,9 +554,16 @@ data_device_set_selection (struct wl_client *client,
   meta_wayland_data_device_set_selection (data_device, source, serial);
 }
 
+static void
+data_device_release(struct wl_client *client, struct wl_resource *resource)
+{
+  wl_resource_destroy(resource);
+}
+
 static const struct wl_data_device_interface data_device_interface = {
   data_device_start_drag,
   data_device_set_selection,
+  data_device_release,
 };
 
 static void

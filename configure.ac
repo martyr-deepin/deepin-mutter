@@ -1,7 +1,7 @@
 AC_PREREQ(2.62)
 
 m4_define([mutter_major_version], [3])
-m4_define([mutter_minor_version], [14])
+m4_define([mutter_minor_version], [16])
 m4_define([mutter_micro_version], [1])
 
 m4_define([mutter_version],
@@ -75,13 +75,12 @@ CLUTTER_PACKAGE=clutter-1.0
 
 MUTTER_PC_MODULES="
    gtk+-3.0 >= 3.9.11
-   gio-unix-2.0 >= 2.25.10
+   gio-unix-2.0 >= 2.35.1
    pango >= 1.2.0
    cairo >= 1.10.0
-   gsettings-desktop-schemas >= 3.7.3
-   $CLUTTER_PACKAGE >= 1.19.5
+   gsettings-desktop-schemas >= 3.15.92
+   $CLUTTER_PACKAGE >= 1.21.3
    cogl-1.0 >= 1.17.1
-   gbm >= 10.3
    upower-glib >= 0.99.0
    gnome-desktop-3.0
    xcomposite >= 0.2
@@ -94,6 +93,7 @@ MUTTER_PC_MODULES="
    xkeyboard-config
    xkbcommon >= 0.4.3
    xkbcommon-x11
+   xrender
    x11-xcb
    xcb-randr
 "
@@ -204,22 +204,39 @@ AC_SUBST(XWAYLAND_PATH)
 
 PKG_CHECK_MODULES(MUTTER, $MUTTER_PC_MODULES)
 
-PKG_CHECK_MODULES(MUTTER_NATIVE_BACKEND, [clutter-egl-1.0 libdrm libsystemd libinput], [have_native_backend=yes], [have_native_backend=no])
-if test $have_native_backend = yes; then
-   AC_DEFINE([HAVE_NATIVE_BACKEND],[1],[Define if you want to enable the native (KMS) backend based on systemd])
-fi
-AM_CONDITIONAL([HAVE_NATIVE_BACKEND],[test $have_native_backend = yes])
+MUTTER_NATIVE_BACKEND_MODULES="clutter-egl-1.0 libdrm libsystemd libinput gudev-1.0 gbm >= 10.3"
 
-PKG_CHECK_MODULES(MUTTER_WAYLAND, [clutter-wayland-1.0 clutter-wayland-compositor-1.0 wayland-server >= 1.5.90], [have_wayland=yes], [have_wayland=no])
-if test $have_wayland = yes; then
-   AC_PATH_PROG([WAYLAND_SCANNER],[wayland-scanner],[no])
-   AS_IF([test $WAYLAND_SCANNER = "no"],
-     AC_MSG_ERROR([Could not find wayland-scanner in your PATH, required for parsing wayland extension protocols]))
-   AC_SUBST([WAYLAND_SCANNER])
+AC_ARG_ENABLE(native-backend,
+  AS_HELP_STRING([--disable-native-backend], [disable mutter native (KMS) backend]),,
+  enable_native_backend=auto
+)
+AS_IF([test "$enable_native_backend" = "yes"], [have_native_backend=yes],
+      [test "$enable_native_backend" = "auto"], PKG_CHECK_EXISTS([$MUTTER_NATIVE_BACKEND_MODULES], [have_native_backend=yes]))
 
-   AC_DEFINE([HAVE_WAYLAND],[1],[Define if you want to enable Wayland support])
-fi
-AM_CONDITIONAL([HAVE_WAYLAND],[test $have_wayland = yes])
+AS_IF([test "$have_native_backend" = "yes"], [
+  PKG_CHECK_MODULES([MUTTER_NATIVE_BACKEND], [$MUTTER_NATIVE_BACKEND_MODULES])
+  AC_DEFINE([HAVE_NATIVE_BACKEND],[1], [Define if you want to enable the native (KMS) backend based on systemd])
+])
+AM_CONDITIONAL([HAVE_NATIVE_BACKEND],[test "$have_native_backend" = "yes"])
+
+MUTTER_WAYLAND_MODULES="clutter-wayland-1.0 clutter-wayland-compositor-1.0 wayland-server >= 1.6.90"
+
+AC_ARG_ENABLE(wayland,
+  AS_HELP_STRING([--disable-wayland], [disable mutter on wayland support]),,
+  enable_wayland=auto
+)
+AS_IF([test "$enable_wayland" = "yes"], [have_wayland=yes],
+      [test "$enable_wayland" = "auto"], PKG_CHECK_EXISTS([$MUTTER_WAYLAND_MODULES], [have_wayland=yes]))
+
+AS_IF([test "$have_wayland" = "yes"], [
+  PKG_CHECK_MODULES([MUTTER_WAYLAND], [$MUTTER_WAYLAND_MODULES])
+  AC_PATH_PROG([WAYLAND_SCANNER],[wayland-scanner],[no])
+  AS_IF([test $WAYLAND_SCANNER = "no"],
+    [AC_MSG_ERROR([Could not find wayland-scanner in your PATH, required for parsing wayland extension protocols])])
+  AC_SUBST([WAYLAND_SCANNER])
+  AC_DEFINE([HAVE_WAYLAND],[1],[Define if you want to enable Wayland support])
+])
+AM_CONDITIONAL([HAVE_WAYLAND],[test "$have_wayland" = "yes"])
 
 PKG_CHECK_EXISTS([xi >= 1.6.99.1],
                  AC_DEFINE([HAVE_XI23],[1],[Define if you have support for XInput 2.3 or greater]))
@@ -420,6 +437,8 @@ mutter-$VERSION
 	libcanberra:              ${have_libcanberra}
 	Introspection:            ${found_introspection}
 	Session management:       ${found_sm}
+	Wayland:                  ${have_wayland}
+	Native (KMS) backend:     ${have_native_backend}
 "
 
 
