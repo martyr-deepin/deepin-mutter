@@ -1073,10 +1073,9 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
       /* Compute new frame size */
       new_w = window->rect.width + borders.invisible.left + borders.invisible.right;
 
-      if (window->shaded)
-        new_h = borders.total.top + borders.total.bottom;
-      else
-        new_h = window->rect.height + borders.invisible.top + borders.invisible.bottom;
+      new_h = borders.invisible.top + borders.invisible.bottom;
+      if (!window->shaded)
+        new_h += window->rect.height;
 
       if (new_w != window->frame->rect.width ||
           new_h != window->frame->rect.height)

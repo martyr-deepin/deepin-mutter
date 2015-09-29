@@ -1214,7 +1214,7 @@ meta_grab_op_is_moving (MetaGrabOp op)
   if (!grab_op_is_window (op))
     return FALSE;
 
-  return !meta_grab_op_is_resizing (op);
+  return (op & META_GRAB_OP_WINDOW_DIR_MASK) == 0;
 }
 
 /**
@@ -1965,7 +1965,7 @@ meta_display_end_grab_op (MetaDisplay *display,
        * beginning of the grab_op.
        */
       if (!meta_prefs_get_raise_on_click () &&
-          !display->grab_threshold_movement_reached)
+          display->grab_threshold_movement_reached)
         meta_window_raise (display->grab_window);
 
       meta_window_grab_op_ended (grab_window, grab_op);

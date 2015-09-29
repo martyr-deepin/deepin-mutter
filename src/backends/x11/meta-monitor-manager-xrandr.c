@@ -141,30 +141,6 @@ meta_monitor_transform_from_xrandr_all (Rotation rotation)
 }
 
 static gboolean
-output_get_property_exists (MetaMonitorManagerXrandr *manager_xrandr,
-                            MetaOutput *output, const char *propname)
-{
-  gboolean exists = FALSE;
-  Atom atom, actual_type;
-  int actual_format;
-  unsigned long nitems, bytes_after;
-  unsigned char *buffer;
-
-  atom = XInternAtom (manager_xrandr->xdisplay, propname, False);
-  XRRGetOutputProperty (manager_xrandr->xdisplay,
-                        (XID)output->winsys_id,
-                        atom,
-                        0, G_MAXLONG, False, False, AnyPropertyType,
-                        &actual_type, &actual_format,
-                        &nitems, &bytes_after, &buffer);
-
-  exists = (actual_type != None);
-
-  XFree (buffer);
-  return exists;
-}
-
-static gboolean
 output_get_boolean_property (MetaMonitorManagerXrandr *manager_xrandr,
                              MetaOutput *output, const char *propname)
 {
@@ -354,7 +330,7 @@ static gboolean
 output_get_hotplug_mode_update (MetaMonitorManagerXrandr *manager_xrandr,
                                 MetaOutput               *output)
 {
-  return output_get_property_exists (manager_xrandr, output, "hotplug_mode_update");
+  return output_get_boolean_property (manager_xrandr, output, "hotplug_mode_update");
 }
 
 static char *
@@ -838,12 +814,26 @@ meta_monitor_manager_xrandr_apply_configuration (MetaMonitorManager *manager,
           unsigned int j, n_outputs;
           int width, height;
           Status ok;
+          unsigned long old_controlled_mask;
+          unsigned long new_controlled_mask;
 
           mode = crtc_info->mode;
 
           n_outputs = crtc_info->outputs->len;
           outputs = g_new (XID, n_outputs);
 
+          old_controlled_mask = 0;
+          for (j = 0; j < manager->n_outputs; j++)
+            {
+              MetaOutput *output;
+
+              output = &manager->outputs[j];
+
+              if (output->crtc == crtc)
+                old_controlled_mask |= 1UL << j;
+            }
+
+          new_controlled_mask = 0;
           for (j = 0; j < n_outputs; j++)
             {
               MetaOutput *output;
@@ -852,8 +842,19 @@ meta_monitor_manager_xrandr_apply_configuration (MetaMonitorManager *manager,
 
               output->is_dirty = TRUE;
               output->crtc = crtc;
+              new_controlled_mask |= 1UL << j;
 
               outputs[j] = output->winsys_id;
+            }
+
+          if (crtc->current_mode == mode &&
+              crtc->rect.x == crtc_info->x &&
+              crtc->rect.y == crtc_info->y &&
+              crtc->transform == crtc_info->transform &&
+              old_controlled_mask == new_controlled_mask)
+            {
+              /* No change */
+              goto next;
             }
 
           ok = XRRSetCrtcConfig (manager_xrandr->xdisplay,
@@ -1096,7 +1097,7 @@ meta_monitor_manager_xrandr_handle_xevent (MetaMonitorManagerXrandr *manager_xra
   /* If this is the X server telling us we set a new configuration,
    * we can simply short-cut to rebuilding our logical configuration.
    */
-  if (new_config)
+  if (new_config || meta_monitor_config_match_current (manager->config, manager))
     {
       meta_monitor_manager_xrandr_rebuild_derived (manager);
       goto out;

@@ -100,7 +100,7 @@ struct _MetaWindowActorPrivate
   guint		    disposed               : 1;
 
   /* If set, the client needs to be sent a _NET_WM_FRAME_DRAWN
-   * client message for one or more messages in ->frames */
+   * client message using the most recent frame in ->frames */
   guint             needs_frame_drawn      : 1;
   guint             repaint_scheduled      : 1;
 
@@ -118,21 +118,10 @@ struct _MetaWindowActorPrivate
 
 typedef struct _FrameData FrameData;
 
-/* Each time the application updates the sync request counter to a new even value
- * value, we queue a frame into the windows list of frames. Once we're painting
- * an update "in response" to the window, we fill in frame_counter with the
- * Cogl counter for that frame, and send _NET_WM_FRAME_DRAWN at the end of the
- * frame. _NET_WM_FRAME_TIMINGS is sent when we get a frame_complete callback.
- *
- * As an exception, if a window is completely obscured, we try to throttle drawning
- * to a slower frame rate. In this case, frame_counter stays -1 until
- * send_frame_message_timeout() runs, at which point we send both the
- * _NET_WM_FRAME_DRAWN and _NET_WM_FRAME_TIMINGS messages.
- */
 struct _FrameData
 {
-  guint64 sync_request_serial;
   int64_t frame_counter;
+  guint64 sync_request_serial;
   gint64 frame_drawn_time;
 };
 
@@ -667,30 +656,6 @@ clip_shadow_under_window (MetaWindowActor *self)
 }
 
 static void
-assign_frame_counter_to_frames (MetaWindowActor *self)
-{
-  MetaWindowActorPrivate *priv = self->priv;
-  GList *l;
-
-  /* If the window is obscured, then we're expecting to deal with sending
-   * frame messages in a timeout, rather than in this paint cycle.
-   */
-  if (priv->send_frame_messages_timer != 0)
-    return;
-
-  for (l = priv->frames; l; l = l->next)
-    {
-      FrameData *frame = l->data;
-
-      if (frame->frame_counter == -1)
-        {
-          CoglOnscreen *onscreen = COGL_ONSCREEN (cogl_get_draw_framebuffer());
-          frame->frame_counter = cogl_onscreen_get_frame_counter (onscreen);
-        }
-    }
-}
-
-static void
 meta_window_actor_paint (ClutterActor *actor)
 {
   MetaWindowActor *self = META_WINDOW_ACTOR (actor);
@@ -706,8 +671,6 @@ meta_window_actor_paint (ClutterActor *actor)
     {
       g_source_remove (priv->send_frame_messages_timer);
       priv->send_frame_messages_timer = 0;
-
-      assign_frame_counter_to_frames (self);
     }
 
   if (shadow != NULL)
@@ -910,27 +873,16 @@ send_frame_messages_timeout (gpointer data)
 {
   MetaWindowActor *self = (MetaWindowActor *) data;
   MetaWindowActorPrivate *priv = self->priv;
-  GList *l;
+  FrameData *frame = g_slice_new0 (FrameData);
 
-  for (l = priv->frames; l;)
-    {
-      GList *l_next = l->next;
-      FrameData *frame = l->data;
+  frame->sync_request_serial = priv->window->sync_request_serial;
 
-      if (frame->frame_counter == -1)
-        {
-          do_send_frame_drawn (self, frame);
-          do_send_frame_timings (self, frame, 0, 0);
-
-          priv->frames = g_list_delete_link (priv->frames, l);
-          frame_data_free (frame);
-        }
-
-      l = l_next;
-    }
+  do_send_frame_drawn (self, frame);
+  do_send_frame_timings (self, frame, 0, 0);
 
   priv->needs_frame_drawn = FALSE;
   priv->send_frame_messages_timer = 0;
+  frame_data_free (frame);
 
   return FALSE;
 }
@@ -939,10 +891,6 @@ static void
 queue_send_frame_messages_timeout (MetaWindowActor *self)
 {
   MetaWindowActorPrivate *priv = self->priv;
-
-  if (priv->send_frame_messages_timer != 0)
-    return;
-
   MetaDisplay *display = meta_window_get_display (priv->window);
   gint64 current_time = meta_compositor_monotonic_time_to_server_time (display, g_get_monotonic_time ());
   MetaMonitorManager *monitor_manager = meta_monitor_manager_get ();
@@ -985,7 +933,6 @@ meta_window_actor_queue_frame_drawn (MetaWindowActor *self,
     return;
 
   frame = g_slice_new0 (FrameData);
-  frame->frame_counter = -1;
 
   priv->needs_frame_drawn = TRUE;
 
@@ -1208,7 +1155,7 @@ gboolean
 meta_window_actor_should_unredirect (MetaWindowActor *self)
 {
   MetaWindowActorPrivate *priv = self->priv;
-  if (!meta_window_actor_is_destroyed (self) && priv->surface)
+  if (priv->surface)
     return meta_surface_actor_should_unredirect (priv->surface);
   else
     return FALSE;
@@ -1958,12 +1905,24 @@ meta_window_actor_handle_updates (MetaWindowActor *self)
 void
 meta_window_actor_pre_paint (MetaWindowActor *self)
 {
+  MetaWindowActorPrivate *priv = self->priv;
+  GList *l;
+
   if (meta_window_actor_is_destroyed (self))
     return;
 
   meta_window_actor_handle_updates (self);
 
-  assign_frame_counter_to_frames (self);
+  for (l = priv->frames; l != NULL; l = l->next)
+    {
+      FrameData *frame = l->data;
+
+      if (frame->frame_counter == 0)
+        {
+          CoglOnscreen *onscreen = COGL_ONSCREEN (cogl_get_draw_framebuffer());
+          frame->frame_counter = cogl_onscreen_get_frame_counter (onscreen);
+        }
+    }
 }
 
 static void
@@ -2004,23 +1963,16 @@ meta_window_actor_post_paint (MetaWindowActor *self)
   if (meta_window_actor_is_destroyed (self))
     return;
 
-  /* If the window had damage, but wasn't actually redrawn because
-   * it is obscured, we should wait until timer expiration before
-   * sending _NET_WM_FRAME_* messages.
-   */
-  if (priv->send_frame_messages_timer == 0 &&
-      priv->needs_frame_drawn)
+ /* This window had damage, but wasn't actually redrawn because
+  * it is obscured. So we should wait until timer expiration
+  * before sending _NET_WM_FRAME_* messages.
+  */
+  if (priv->send_frame_messages_timer != 0)
+    return;
+
+  if (priv->needs_frame_drawn)
     {
-      GList *l;
-
-      for (l = priv->frames; l; l = l->next)
-        {
-          FrameData *frame = l->data;
-
-          if (frame->frame_drawn_time == 0)
-            do_send_frame_drawn (self, frame);
-        }
-
+      do_send_frame_drawn (self, priv->frames->data);
       priv->needs_frame_drawn = FALSE;
     }
 
@@ -2105,20 +2057,15 @@ meta_window_actor_frame_complete (MetaWindowActor *self,
     {
       GList *l_next = l->next;
       FrameData *frame = l->data;
-      gint64 frame_counter = cogl_frame_info_get_frame_counter (frame_info);
 
-      if (frame->frame_counter != -1 && frame->frame_counter <= frame_counter)
+      if (frame->frame_counter == cogl_frame_info_get_frame_counter (frame_info))
         {
-          if (G_UNLIKELY (frame->frame_drawn_time == 0))
-            g_warning ("%s: Frame has assigned frame counter but no frame drawn time",
-                       priv->window->desc);
-          if (G_UNLIKELY (frame->frame_counter < frame_counter))
-            g_warning ("%s: frame_complete callback never occurred for frame %" G_GINT64_FORMAT,
-                       priv->window->desc, frame->frame_counter);
-
-          priv->frames = g_list_delete_link (priv->frames, l);
-          send_frame_timings (self, frame, frame_info, presentation_time);
-          frame_data_free (frame);
+          if (frame->frame_drawn_time != 0)
+            {
+              priv->frames = g_list_delete_link (priv->frames, l);
+              send_frame_timings (self, frame, frame_info, presentation_time);
+              frame_data_free (frame);
+            }
         }
 
       l = l_next;
