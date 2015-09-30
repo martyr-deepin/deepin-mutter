@@ -121,7 +121,7 @@ meta_region_builder_finish (MetaRegionBuilder *builder)
 
   return result;
 }
-
+
 
 /* MetaRegionIterator */
 
@@ -171,7 +171,36 @@ meta_region_iterator_next (MetaRegionIterator *iter)
       iter->line_end = TRUE;
     }
 }
-
+
+cairo_region_t *
+meta_region_scale (cairo_region_t *region, int scale)
+{
+  int n_rects, i;
+  cairo_rectangle_int_t *rects;
+  cairo_region_t *scaled_region;
+
+  if (scale == 1)
+    return cairo_region_copy (region);
+
+  n_rects = cairo_region_num_rectangles (region);
+
+  rects = g_malloc (sizeof(cairo_rectangle_int_t) * n_rects);
+  for (i = 0; i < n_rects; i++)
+    {
+      cairo_region_get_rectangle (region, i, &rects[i]);
+      rects[i].x *= scale;
+      rects[i].y *= scale;
+      rects[i].width *= scale;
+      rects[i].height *= scale;
+    }
+
+  scaled_region = cairo_region_create_rectangles (rects, n_rects);
+
+  g_free (rects);
+
+  return scaled_region;
+}
+
 static void
 add_expanded_rect (MetaRegionBuilder  *builder,
                    int                 x,

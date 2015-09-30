@@ -9,7 +9,7 @@ AUTOMAKE_OPTIONS = 1.6
 # of using the various options.
 
 # The name of the module, e.g. 'glib'.
-DOC_MODULE=deepin-mutter
+DOC_MODULE=meta
 
 # Uncomment for versioned docs and specify the version of the module, e.g. '2'.
 #DOC_MODULE_VERSION=2
@@ -79,10 +79,9 @@ IGNORE_HFILES= \
 	iconcache.h \
 	inlinepixbufs.h \
 	keybindings-private.h \
-	menu.h \
-	metaaccellabel.h \
 	meta-background-actor-private.h \
 	meta-background-group-private.h \
+	meta-dbus-login1.h \
 	meta-module.h \
 	meta-plugin-manager.h \
 	meta-shadow-factory-private.h \
@@ -112,6 +111,24 @@ IGNORE_HFILES= \
 	workspace-private.h \
 	xprops.h \
 	$(NULL)
+
+if !HAVE_NATIVE_BACKEND
+IGNORE_HFILES+= \
+	meta-backend-native.h \
+	meta-barrier-native.h \
+	meta-cursor-renderer-native.h \
+	meta-idle-monitor-native.h \
+	meta-input-settings-native.h \
+	meta-monitor-manager-kms.h \
+	$(NULL)
+endif
+
+if !HAVE_WAYLAND
+IGNORE_HFILES += \
+	meta-surface-actor-wayland.h	\
+	wayland				\
+	$(NULL)
+endif
 
 MKDB_OPTIONS+=--ignore-files="$(IGNORE_HFILES)"
 
@@ -164,3 +181,7 @@ TESTS_ENVIRONMENT = cd $(srcdir) && \
 endif
 
 -include $(top_srcdir)/git.mk
+
+# rename files with prefix 'deepin-'
+install-data-hook:
+	mv $(DESTDIR)$(HTML_DIR)/$(DOC_MODULE) $(DESTDIR)$(HTML_DIR)/deepin-mutter

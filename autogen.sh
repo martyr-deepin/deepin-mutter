@@ -4,8 +4,7 @@
 srcdir=`dirname $0`
 test -z "$srcdir" && srcdir=.
 
-PKG_NAME="deepin-mutter"
-REQUIRED_AUTOMAKE_VERSION=1.10
+REQUIRED_AUTOMAKE_VERSION=1.11
 
 (test -f $srcdir/configure.ac \
   && test -d $srcdir/src) || {
@@ -19,4 +18,4 @@ which gnome-autogen.sh || {
     echo "your distribution's package manager)."
     exit 1
 }
-USE_GNOME2_MACROS=1 USE_COMMON_DOC_BUILD=yes . gnome-autogen.sh
+. gnome-autogen.sh

@@ -1,8 +1,8 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*- */
 
-/* 
+/*
  * Copyright (C) 2002 Sun Microsystems Inc.
- * 
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
  * published by the Free Software Foundation; either version 2 of the
@@ -12,23 +12,20 @@
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <X11/Xlib.h>
-#ifdef HAVE_XKB
 #include <X11/XKBlib.h>
-#endif
 #include "display-private.h"
 #include "frame.h"
 
-#ifdef HAVE_XKB
 /**
  * meta_bell_notify:
  * @display: The display the bell event came in on
- * @xkb_ev: The bell event we just received 
+ * @xkb_ev: The bell event we just received
  *
  * Gives the user some kind of visual bell; in fact, this is our response
  * to any kind of bell request, but we set it up so that we only get
@@ -37,7 +34,6 @@
  * If the configure script found we had no XKB, this does not exist.
  */
 void meta_bell_notify (MetaDisplay *display, XkbAnyEvent *xkb_ev);
-#endif
 
 /**
  * meta_bell_set_audible:
@@ -60,12 +56,6 @@ void meta_bell_set_audible (MetaDisplay *display, gboolean audible);
  * place to look for bell notifications), then asking it
  * to send us bell notifications, and then also switching
  * off the audible bell if we're using a visual one ourselves.
- *
- * Unlike most X extensions we use, we only initialise XKB here
- * (rather than in main()). It's possible that XKB is not
- * installed at all, but if that was known at build time
- * we will have HAVE_XKB undefined, which will cause this
- * function to be a no-op.
  *
  * \bug There is a line of code that's never run that tells
  * XKB to reset the bell status after we quit. Bill H said

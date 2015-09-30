@@ -35,6 +35,7 @@
 #define META_PLUGIN_MAP              (1<<3)
 #define META_PLUGIN_DESTROY          (1<<4)
 #define META_PLUGIN_SWITCH_WORKSPACE (1<<5)
+#define META_PLUGIN_UNMINIMIZE       (1<<6)
 
 #define META_PLUGIN_ALL_EFFECTS      (~0)
 
@@ -44,7 +45,7 @@
  */
 typedef struct MetaPluginManager MetaPluginManager;
 
-MetaPluginManager * meta_plugin_manager_new (MetaScreen *screen);
+MetaPluginManager * meta_plugin_manager_new (MetaCompositor *compositor);
 
 void     meta_plugin_manager_load         (const gchar       *plugin_name);
 
@@ -80,4 +81,17 @@ gboolean meta_plugin_manager_show_tile_preview (MetaPluginManager *mgr,
                                                 MetaRectangle     *tile_rect,
                                                 int                tile_monitor_number);
 gboolean meta_plugin_manager_hide_tile_preview (MetaPluginManager *mgr);
+
+void meta_plugin_manager_show_window_menu (MetaPluginManager  *mgr,
+                                           MetaWindow         *window,
+                                           MetaWindowMenuType  menu,
+                                           int                 x,
+                                           int                 y);
+
+void meta_plugin_manager_show_window_menu_for_rect (MetaPluginManager  *mgr,
+		                                    MetaWindow         *window,
+						    MetaWindowMenuType  menu,
+						    MetaRectangle      *rect);
+
+
 #endif

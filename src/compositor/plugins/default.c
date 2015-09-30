@@ -32,9 +32,8 @@
 #include <gmodule.h>
 #include <string.h>
 
-#define DESTROY_TIMEOUT   250
+#define DESTROY_TIMEOUT   100
 #define MINIMIZE_TIMEOUT  250
-#define MAXIMIZE_TIMEOUT  250
 #define MAP_TIMEOUT       250
 #define SWITCH_TIMEOUT    500
 
@@ -77,18 +76,6 @@ static void map        (MetaPlugin      *plugin,
                         MetaWindowActor *actor);
 static void destroy    (MetaPlugin      *plugin,
                         MetaWindowActor *actor);
-static void maximize   (MetaPlugin      *plugin,
-                        MetaWindowActor *actor,
-                        gint             x,
-                        gint             y,
-                        gint             width,
-                        gint             height);
-static void unmaximize (MetaPlugin      *plugin,
-                        MetaWindowActor *actor,
-                        gint             x,
-                        gint             y,
-                        gint             width,
-                        gint             height);
 
 static void switch_workspace (MetaPlugin          *plugin,
                               gint                 from,
@@ -135,12 +122,8 @@ typedef struct _ActorPrivate
   ClutterActor *orig_parent;
 
   ClutterTimeline *tml_minimize;
-  ClutterTimeline *tml_maximize;
   ClutterTimeline *tml_destroy;
   ClutterTimeline *tml_map;
-
-  gboolean      is_minimized : 1;
-  gboolean      is_maximized : 1;
 } ActorPrivate;
 
 /* callback data for when animations complete */
@@ -216,8 +199,6 @@ meta_default_plugin_class_init (MetaDefaultPluginClass *klass)
   plugin_class->start            = start;
   plugin_class->map              = map;
   plugin_class->minimize         = minimize;
-  plugin_class->maximize         = maximize;
-  plugin_class->unmaximize       = unmaximize;
   plugin_class->destroy          = destroy;
   plugin_class->switch_workspace = switch_workspace;
   plugin_class->show_tile_preview = show_tile_preview;
@@ -314,7 +295,7 @@ on_monitors_changed (MetaScreen *screen,
 {
   MetaDefaultPlugin *self = META_DEFAULT_PLUGIN (plugin);
   int i, n;
-  GRand *rand = g_rand_new_with_seed (12345);
+  GRand *rand = g_rand_new_with_seed (123456);
 
   clutter_actor_destroy_all_children (self->priv->background_group);
 
@@ -322,15 +303,16 @@ on_monitors_changed (MetaScreen *screen,
   for (i = 0; i < n; i++)
     {
       MetaRectangle rect;
-      ClutterActor *background;
+      ClutterActor *background_actor;
+      MetaBackground *background;
       ClutterColor color;
 
       meta_screen_get_monitor_geometry (screen, i, &rect);
 
-      background = meta_background_actor_new ();
+      background_actor = meta_background_actor_new (screen, i);
 
-      clutter_actor_set_position (background, rect.x, rect.y);
-      clutter_actor_set_size (background, rect.width, rect.height);
+      clutter_actor_set_position (background_actor, rect.x, rect.y);
+      clutter_actor_set_size (background_actor, rect.width, rect.height);
 
       /* Don't use rand() here, mesa calls srand() internally when
          parsing the driconf XML, but it's nice if the colors are
@@ -341,9 +323,13 @@ on_monitors_changed (MetaScreen *screen,
                           g_rand_int_range (rand, 0, 255),
                           g_rand_int_range (rand, 0, 255),
                           255);
-      clutter_actor_set_background_color (background, &color);
 
-      clutter_actor_add_child (self->priv->background_group, background);
+      background = meta_background_new (screen);
+      meta_background_set_color (background, &color);
+      meta_background_actor_set_background (META_BACKGROUND_ACTOR (background_actor), background);
+      g_object_unref (background);
+
+      clutter_actor_add_child (self->priv->background_group, background_actor);
     }
 
   g_rand_free (rand);
@@ -488,8 +474,6 @@ on_minimize_effect_complete (ClutterTimeline *timeline, EffectCompleteData *data
   /* FIXME - we shouldn't assume the original scale, it should be saved
    * at the start of the effect */
   clutter_actor_set_scale (data->actor, 1.0, 1.0);
-  clutter_actor_move_anchor_point_from_gravity (data->actor,
-                                                CLUTTER_GRAVITY_NORTH_WEST);
 
   /* Now notify the manager that we are done with this effect */
   meta_plugin_minimize_completed (plugin, window_actor);
@@ -524,11 +508,6 @@ minimize (MetaPlugin *plugin, MetaWindowActor *window_actor)
       EffectCompleteData *data = g_new0 (EffectCompleteData, 1);
       ActorPrivate *apriv = get_actor_private (window_actor);
 
-      apriv->is_minimized = TRUE;
-
-      clutter_actor_move_anchor_point_from_gravity (actor,
-                                                    CLUTTER_GRAVITY_CENTER);
-
       animation = clutter_actor_animate (actor,
                                          CLUTTER_EASE_IN_SINE,
                                          MINIMIZE_TIMEOUT,
@@ -549,126 +528,6 @@ minimize (MetaPlugin *plugin, MetaWindowActor *window_actor)
     meta_plugin_minimize_completed (plugin, window_actor);
 }
 
-/*
- * Minimize effect completion callback; this function restores actor state, and
- * calls the manager callback function.
- */
-static void
-on_maximize_effect_complete (ClutterTimeline *timeline, EffectCompleteData *data)
-{
-  /*
-   * Must reverse the effect of the effect.
-   */
-  MetaPlugin *plugin = data->plugin;
-  MetaWindowActor *window_actor = META_WINDOW_ACTOR (data->actor);
-  ActorPrivate *apriv = get_actor_private (window_actor);
-
-  apriv->tml_maximize = NULL;
-
-  /* FIXME - don't assume the original scale was 1.0 */
-  clutter_actor_set_scale (data->actor, 1.0, 1.0);
-  clutter_actor_move_anchor_point_from_gravity (data->actor,
-                                                CLUTTER_GRAVITY_NORTH_WEST);
-
-  /* Now notify the manager that we are done with this effect */
-  meta_plugin_maximize_completed (plugin, window_actor);
-
-  g_free (data);
-}
-
-/*
- * The Nature of Maximize operation is such that it is difficult to do a visual
- * effect that would work well. Scaling, the obvious effect, does not work that
- * well, because at the end of the effect we end up with window content bigger
- * and differently laid out than in the real window; this is a proof concept.
- *
- * (Something like a sound would be more appropriate.)
- */
-static void
-maximize (MetaPlugin *plugin,
-          MetaWindowActor *window_actor,
-          gint end_x, gint end_y, gint end_width, gint end_height)
-{
-  MetaWindowType type;
-  ClutterActor *actor = CLUTTER_ACTOR (window_actor);
-  MetaWindow *meta_window = meta_window_actor_get_meta_window (window_actor);
-
-  gdouble  scale_x    = 1.0;
-  gdouble  scale_y    = 1.0;
-  gfloat   anchor_x   = 0;
-  gfloat   anchor_y   = 0;
-
-  type = meta_window_get_window_type (meta_window);
-
-  if (type == META_WINDOW_NORMAL)
-    {
-      ClutterAnimation *animation;
-      EffectCompleteData *data = g_new0 (EffectCompleteData, 1);
-      ActorPrivate *apriv = get_actor_private (window_actor);
-      gfloat width, height;
-      gfloat x, y;
-
-      apriv->is_maximized = TRUE;
-
-      clutter_actor_get_size (actor, &width, &height);
-      clutter_actor_get_position (actor, &x, &y);
-
-      /*
-       * Work out the scale and anchor point so that the window is expanding
-       * smoothly into the target size.
-       */
-      scale_x = (gdouble)end_width / (gdouble) width;
-      scale_y = (gdouble)end_height / (gdouble) height;
-
-      anchor_x = (gdouble)(x - end_x)*(gdouble)width /
-        ((gdouble)(end_width - width));
-      anchor_y = (gdouble)(y - end_y)*(gdouble)height /
-        ((gdouble)(end_height - height));
-
-      clutter_actor_move_anchor_point (actor, anchor_x, anchor_y);
-
-      animation = clutter_actor_animate (actor,
-                                         CLUTTER_EASE_IN_SINE,
-                                         MAXIMIZE_TIMEOUT,
-                                         "scale-x", scale_x,
-                                         "scale-y", scale_y,
-                                         NULL);
-      apriv->tml_maximize = clutter_animation_get_timeline (animation);
-      data->plugin = plugin;
-      data->actor = actor;
-      g_signal_connect (apriv->tml_maximize, "completed",
-                        G_CALLBACK (on_maximize_effect_complete),
-                        data);
-      return;
-    }
-
-  meta_plugin_maximize_completed (plugin, window_actor);
-}
-
-/*
- * See comments on the maximize() function.
- *
- * (Just a skeleton code.)
- */
-static void
-unmaximize (MetaPlugin *plugin,
-            MetaWindowActor *window_actor,
-            gint end_x, gint end_y, gint end_width, gint end_height)
-{
-  MetaWindow *meta_window = meta_window_actor_get_meta_window (window_actor);
-  MetaWindowType type = meta_window_get_window_type (meta_window);
-
-  if (type == META_WINDOW_NORMAL)
-    {
-      ActorPrivate *apriv = get_actor_private (window_actor);
-
-      apriv->is_maximized = FALSE;
-    }
-
-  /* Do this conditionally, if the effect requires completion callback. */
-  meta_plugin_unmaximize_completed (plugin, window_actor);
-}
-
 static void
 on_map_effect_complete (ClutterTimeline *timeline, EffectCompleteData *data)
 {
@@ -680,9 +539,6 @@ on_map_effect_complete (ClutterTimeline *timeline, EffectCompleteData *data)
   ActorPrivate  *apriv = get_actor_private (window_actor);
 
   apriv->tml_map = NULL;
-
-  clutter_actor_move_anchor_point_from_gravity (data->actor,
-                                                CLUTTER_GRAVITY_NORTH_WEST);
 
   /* Now notify the manager that we are done with this effect */
   meta_plugin_map_completed (plugin, window_actor);
@@ -727,9 +583,6 @@ map (MetaPlugin *plugin, MetaWindowActor *window_actor)
       g_signal_connect (apriv->tml_map, "completed",
                         G_CALLBACK (on_map_effect_complete),
                         data);
-
-      apriv->is_minimized = FALSE;
-
     }
   else
     meta_plugin_map_completed (plugin, window_actor);
@@ -769,14 +622,12 @@ destroy (MetaPlugin *plugin, MetaWindowActor *window_actor)
       EffectCompleteData *data = g_new0 (EffectCompleteData, 1);
       ActorPrivate *apriv = get_actor_private (window_actor);
 
-      clutter_actor_move_anchor_point_from_gravity (actor,
-                                                    CLUTTER_GRAVITY_CENTER);
-
       animation = clutter_actor_animate (actor,
-                                         CLUTTER_EASE_IN_SINE,
+                                         CLUTTER_EASE_OUT_QUAD,
                                          DESTROY_TIMEOUT,
-                                         "scale-x", 0.0,
-                                         "scale-y", 1.0,
+                                         "opacity", 0,
+                                         "scale-x", 0.8,
+                                         "scale-y", 0.8,
                                          NULL);
       apriv->tml_destroy = clutter_animation_get_timeline (animation);
       data->plugin = plugin;
@@ -890,12 +741,6 @@ kill_window_effects (MetaPlugin      *plugin,
     {
       clutter_timeline_stop (apriv->tml_minimize);
       g_signal_emit_by_name (apriv->tml_minimize, "completed", NULL);
-    }
-
-  if (apriv->tml_maximize)
-    {
-      clutter_timeline_stop (apriv->tml_maximize);
-      g_signal_emit_by_name (apriv->tml_maximize, "completed", NULL);
     }
 
   if (apriv->tml_map)
