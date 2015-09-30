@@ -663,7 +663,7 @@ lookup_device_settings (ClutterInputDevice *device)
   if (type == CLUTTER_TOUCHSCREEN_DEVICE)
     {
       group = "touchscreens";
-      schema = "org.gnome.desktop.peripherals.touchscreen";
+      schema = "com.deepin.wrap.gnome.desktop.peripherals.touchscreen";
     }
   else if (type == CLUTTER_TABLET_DEVICE ||
            type == CLUTTER_PEN_DEVICE ||
@@ -671,14 +671,14 @@ lookup_device_settings (ClutterInputDevice *device)
            type == CLUTTER_CURSOR_DEVICE)
     {
       group = "tablets";
-      schema = "org.gnome.desktop.peripherals.tablet";
+      schema = "com.deepin.wrap.gnome.desktop.peripherals.tablet";
     }
   else
     return NULL;
 
   vendor = clutter_input_device_get_vendor_id (device);
   product = clutter_input_device_get_product_id (device);
-  path = g_strdup_printf ("/org/gnome/desktop/peripherals/%s/%s:%s/",
+  path = g_strdup_printf ("/com/deepin/wrap/gnome/desktop/peripherals/%s/%s:%s/",
                           group, vendor, product);
 
   settings = g_settings_new_with_path (schema, path);
@@ -828,19 +828,19 @@ meta_input_settings_init (MetaInputSettings *settings)
   g_signal_connect (priv->device_manager, "device-removed",
                     G_CALLBACK (meta_input_settings_device_removed), settings);
 
-  priv->mouse_settings = g_settings_new ("org.gnome.desktop.peripherals.mouse");
+  priv->mouse_settings = g_settings_new ("com.deepin.wrap.gnome.desktop.peripherals.mouse");
   g_signal_connect (priv->mouse_settings, "changed",
                     G_CALLBACK (meta_input_settings_changed_cb), settings);
 
-  priv->touchpad_settings = g_settings_new ("org.gnome.desktop.peripherals.touchpad");
+  priv->touchpad_settings = g_settings_new ("com.deepin.wrap.gnome.desktop.peripherals.touchpad");
   g_signal_connect (priv->touchpad_settings, "changed",
                     G_CALLBACK (meta_input_settings_changed_cb), settings);
 
-  priv->trackball_settings = g_settings_new ("org.gnome.desktop.peripherals.trackball");
+  priv->trackball_settings = g_settings_new ("com.deepin.wrap.gnome.desktop.peripherals.trackball");
   g_signal_connect (priv->trackball_settings, "changed",
                     G_CALLBACK (meta_input_settings_changed_cb), settings);
 
-  priv->keyboard_settings = g_settings_new ("org.gnome.desktop.peripherals.keyboard");
+  priv->keyboard_settings = g_settings_new ("com.deepin.wrap.gnome.desktop.peripherals.keyboard");
   g_signal_connect (priv->keyboard_settings, "changed",
                     G_CALLBACK (meta_input_settings_changed_cb), settings);
 

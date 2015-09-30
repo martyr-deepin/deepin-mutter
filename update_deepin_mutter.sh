@@ -11,6 +11,6 @@ find . -type f | grep -v "${grep_ignore_files}" | xargs grep -P 'org.gnome.[^A-Z
 echo "==> replace gsettings path"
 for f in $(find . -type f | grep -v "${grep_ignore_files}" | xargs grep -l -P 'org.gnome.[^A-Z]'); do
   echo "  -> ${f}"
-  sed -e 's=org.gnome.=com.deepin.wrap.gnome.=' \
+  sed -e 's=org\.gnome\.=com.deepin.wrap.gnome.=' \
       -e 's=/org/gnome/=/com/deepin/wrap/gnome/=' -i "${f}"
 done

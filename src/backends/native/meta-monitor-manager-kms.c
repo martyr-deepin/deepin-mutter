@@ -996,7 +996,7 @@ meta_monitor_manager_kms_init (MetaMonitorManagerKms *manager_kms)
   g_signal_connect (manager_kms->udev, "uevent",
                     G_CALLBACK (on_uevent), manager_kms);
 
-  manager_kms->desktop_settings = g_settings_new ("org.gnome.desktop.interface");
+  manager_kms->desktop_settings = g_settings_new ("com.deepin.wrap.gnome.desktop.interface");
 }
 
 static void
