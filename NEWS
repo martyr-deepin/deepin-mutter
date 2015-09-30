@@ -1,3 +1,32 @@
+3.16.3
+======
+* Fix kill dialog not showing when first PING fails [Rui; #749076]
+* wayland: Reset idle time appropriately [Rui; #749711, #749994]
+* Fix crash when trying to focus a hidden window [Florian; #751715]
+
+Contributors:
+  Rui Matos, Florian Müllner, Jasper St. Pierre
+
+Translations:
+  Bernd Homuth [de]
+
+3.16.2
+======
+* Fix scroll button setting [Ondrej; #747967]
+* Don't reset idle time for non-hardware events [Rui; #748541]
+* Honor default value for click method setting [Rui; #746290]
+* Misc. bug fixes [Rui; #748478]
+
+Contributors:
+  Carlos Garnacho, Ondrej Holy, Rui Matos
+
+3.16.1.1
+========
+* Prevent a crash when switching VTs or adding input devices [Carlos; #747886]
+
+Contributors:
+  Carlos Garnacho
+
 3.16.1
 ======
 * Add function to refresh all background instances [Rui; #739178]
