@@ -21,7 +21,7 @@ porting work easier.
 
 ## Dependencies
 
-### Build Dependencies
+### Build dependencies
 
 - debhelper (>= 9)
 - intltool (>= 0.41)
@@ -29,7 +29,7 @@ porting work easier.
 - gobject-introspection (>= 1.41.3)
 - gsettings-desktop-schemas (>= 3.15.92)
 
-### Runtime Dependencies
+### Runtime dependencies
 
 - cairo (>= 1.10.0)
 - clutter-1.0 (>= 1.21.3)
@@ -174,7 +174,7 @@ Any usage issues can ask for help via
 
 We encourage you to report issues and contribute changes
 
-* [Contirubtion guide for users](http://wiki.deepin.org/index.php?title=Contribution_Guidelines_for_Users)
+* [Contribution guide for users](http://wiki.deepin.org/index.php?title=Contribution_Guidelines_for_Users)
 * [Contribution guide for developers](http://wiki.deepin.org/index.php?title=Contribution_Guidelines_for_Developers).
 
 ## License
