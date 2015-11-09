@@ -2,7 +2,7 @@ AC_PREREQ(2.62)
 
 m4_define([mutter_major_version], [3])
 m4_define([mutter_minor_version], [16])
-m4_define([mutter_micro_version], [3])
+m4_define([mutter_micro_version], [4])
 
 m4_define([mutter_version],
           [mutter_major_version.mutter_minor_version.mutter_micro_version])
@@ -334,6 +334,11 @@ if test "x$enable_debug" = "xyes"; then
 fi
 
 GTK_DOC_CHECK([1.15], [--flavour no-tmpl])
+
+AC_CHECK_DECL([GL_EXT_x11_sync_object],
+              [],
+              [AC_MSG_ERROR([GL_EXT_x11_sync_object definition not found, please update your GL headers])],
+              [#include <GL/glx.h>])
 
 #### Warnings (last since -Werror can disturb other tests)
 
