@@ -26,6 +26,7 @@
 #include "meta-backend-x11.h"
 #include "meta-input-settings-x11.h"
 
+#include <string.h>
 #include <gdk/gdkx.h>
 #include <X11/Xatom.h>
 #include <X11/extensions/XInput2.h>
@@ -34,6 +35,41 @@
 #include <meta/errors.h>
 
 G_DEFINE_TYPE (MetaInputSettingsX11, meta_input_settings_x11, META_TYPE_INPUT_SETTINGS)
+
+static void *
+get_property (ClutterInputDevice *device,
+              const gchar        *property,
+              Atom                type,
+              int                 format,
+              gulong              nitems)
+{
+  MetaBackend *backend = meta_get_backend ();
+  Display *xdisplay = meta_backend_x11_get_xdisplay (META_BACKEND_X11 (backend));
+  gulong nitems_ret, bytes_after_ret;
+  int rc, device_id, format_ret;
+  Atom property_atom, type_ret;
+  guchar *data_ret = NULL;
+
+  property_atom = XInternAtom (xdisplay, property, True);
+  if (!property_atom)
+    return NULL;
+
+  device_id = clutter_input_device_get_device_id (device);
+
+  rc = XIGetProperty (xdisplay, device_id, property_atom,
+                      0, 10, False, type, &type_ret, &format_ret,
+                      &nitems_ret, &bytes_after_ret, &data_ret);
+  if (rc == Success && type_ret == type && format_ret == format && nitems_ret >= nitems)
+    {
+      if (nitems_ret > nitems)
+        g_warning ("Property '%s' for device '%s' returned %lu items, expected %lu",
+                   property, clutter_input_device_get_device_name (device), nitems_ret, nitems);
+      return data_ret;
+    }
+
+  meta_XFree (data_ret);
+  return NULL;
+}
 
 static void
 change_property (ClutterInputDevice *device,
@@ -45,23 +81,23 @@ change_property (ClutterInputDevice *device,
 {
   MetaBackend *backend = meta_get_backend ();
   Display *xdisplay = meta_backend_x11_get_xdisplay (META_BACKEND_X11 (backend));
-  gulong nitems_ret, bytes_after_ret;
-  int rc, device_id, format_ret;
-  Atom property_atom, type_ret;
+  int device_id;
+  Atom property_atom;
   guchar *data_ret;
 
-  property_atom = XInternAtom (xdisplay, property, False);
+  property_atom = XInternAtom (xdisplay, property, True);
+  if (!property_atom)
+    return;
+
   device_id = clutter_input_device_get_device_id (device);
 
-  rc = XIGetProperty (xdisplay, device_id, property_atom,
-                      0, 0, False, type, &type_ret, &format_ret,
-                      &nitems_ret, &bytes_after_ret, &data_ret);
+  data_ret = get_property (device, property, type, format, nitems);
+  if (!data_ret)
+    return;
 
+  XIChangeProperty (xdisplay, device_id, property_atom, type,
+                    format, XIPropModeReplace, data, nitems);
   meta_XFree (data_ret);
-
-  if (rc == Success && type_ret == type && format_ret == format)
-    XIChangeProperty (xdisplay, device_id, property_atom, type,
-                      format, XIPropModeReplace, data, nitems);
 }
 
 static void
@@ -70,6 +106,12 @@ meta_input_settings_x11_set_send_events (MetaInputSettings        *settings,
                                          GDesktopDeviceSendEvents  mode)
 {
   guchar values[2] = { 0 }; /* disabled, disabled-on-external-mouse */
+  guchar *available;
+
+  available = get_property (device, "libinput Send Events Modes Available",
+                            XA_INTEGER, 8, 2);
+  if (!available)
+    return;
 
   switch (mode)
     {
@@ -83,8 +125,14 @@ meta_input_settings_x11_set_send_events (MetaInputSettings        *settings,
       break;
     }
 
-  change_property (device, "libinput Send Events Mode Enabled",
-                   XA_INTEGER, 8, &values, 2);
+  if ((values[0] && !available[0]) || (values[1] && !available[1]))
+    g_warning ("Device '%s' does not support sendevents mode %d\n",
+               clutter_input_device_get_device_name (device), mode);
+  else
+    change_property (device, "libinput Send Events Mode Enabled",
+                     XA_INTEGER, 8, &values, 2);
+
+  meta_XFree (available);
 }
 
 static void
@@ -156,6 +204,12 @@ meta_input_settings_x11_set_scroll_method (MetaInputSettings            *setting
                                            GDesktopTouchpadScrollMethod  mode)
 {
   guchar values[3] = { 0 }; /* 2fg, edge, button. The last value is unused */
+  guchar *available;
+
+  available = get_property (device, "libinput Scroll Methods Available",
+                            XA_INTEGER, 8, 3);
+  if (!available)
+    return;
 
   switch (mode)
     {
@@ -171,8 +225,14 @@ meta_input_settings_x11_set_scroll_method (MetaInputSettings            *setting
       g_assert_not_reached ();
     }
 
-  change_property (device, "libinput Scroll Method Enabled",
-                   XA_INTEGER, 8, &values, 3);
+  if ((values[0] && !available[0]) || (values[1] && !available[1]))
+    g_warning ("Device '%s' does not support scroll mode %d\n",
+               clutter_input_device_get_device_name (device), mode);
+  else
+    change_property (device, "libinput Scroll Method Enabled",
+                     XA_INTEGER, 8, &values, 3);
+
+  meta_XFree (available);
 }
 
 static void
@@ -180,7 +240,7 @@ meta_input_settings_x11_set_scroll_button (MetaInputSettings  *settings,
                                            ClutterInputDevice *device,
                                            guint               button)
 {
-  change_property (device, "libinput Scroll Method Enabled",
+  change_property (device, "libinput Button Scrolling Button",
                    XA_INTEGER, 32, &button, 1);
 }
 
@@ -190,16 +250,28 @@ meta_input_settings_x11_set_click_method (MetaInputSettings           *settings,
                                           GDesktopTouchpadClickMethod  mode)
 {
   guchar values[2] = { 0 }; /* buttonareas, clickfinger */
+  guchar *defaults, *available;
+
+  available = get_property (device, "libinput Click Methods Available",
+                            XA_INTEGER, 8, 2);
+  if (!available)
+    return;
 
   switch (mode)
     {
+    case G_DESKTOP_TOUCHPAD_CLICK_METHOD_DEFAULT:
+      defaults = get_property (device, "libinput Click Method Enabled Default",
+                               XA_INTEGER, 8, 2);
+      if (!defaults)
+        break;
+      memcpy (values, defaults, 2);
+      meta_XFree (defaults);
+      break;
     case G_DESKTOP_TOUCHPAD_CLICK_METHOD_NONE:
       break;
     case G_DESKTOP_TOUCHPAD_CLICK_METHOD_AREAS:
       values[0] = 1;
       break;
-    case G_DESKTOP_TOUCHPAD_CLICK_METHOD_DEFAULT:
-      /* XXX: We can't be much smarter yet, x11 doesn't expose default settings */
     case G_DESKTOP_TOUCHPAD_CLICK_METHOD_FINGERS:
       values[1] = 1;
       break;
@@ -208,8 +280,14 @@ meta_input_settings_x11_set_click_method (MetaInputSettings           *settings,
       return;
   }
 
-  change_property (device, "libinput Click Method Enabled",
-                   XA_INTEGER, 8, &values, 2);
+  if ((values[0] && !available[0]) || (values[1] && !available[1]))
+    g_warning ("Device '%s' does not support click method %d\n",
+               clutter_input_device_get_device_name (device), mode);
+  else
+    change_property (device, "libinput Click Method Enabled",
+                     XA_INTEGER, 8, &values, 2);
+
+  meta_XFree(available);
 }
 
 static void

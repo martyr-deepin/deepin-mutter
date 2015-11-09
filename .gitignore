@@ -58,10 +58,8 @@ testgradient
 m4/*
 INSTALL
 mkinstalldirs
-src/mutter-enum-types.[ch]
-src/stamp-mutter-enum-types.h
-src/mutter-marshal.[ch]
-src/stamp-mutter-marshal.h
+meta-enum-types.[ch]
+src/stamp-meta-enum-types.h
 src/meta-dbus-display-config.[ch]
 src/meta-dbus-idle-monitor.[ch]
 src/meta-dbus-login1.[ch]
@@ -69,6 +67,8 @@ src/gtk-shell-protocol.c
 src/gtk-shell-server-protocol.h
 src/xdg-shell-protocol.c
 src/xdg-shell-server-protocol.h
+src/pointer-gestures-protocol.c
+src/pointer-gestures-server-protocol.h
 src/xserver-protocol.c
 src/xserver-server-protocol.h
 src/meta/meta-version.h

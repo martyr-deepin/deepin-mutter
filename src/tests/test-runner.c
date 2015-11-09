@@ -1094,7 +1094,6 @@ main (int argc, char **argv)
   if (all_tests)
     {
       GFile *test_dir = g_file_new_for_path (MUTTER_PKGDATADIR "/tests");
-      GError *error = NULL;
 
       if (!find_metatests_in_directory (test_dir, tests, &error))
         {
@@ -1120,7 +1119,7 @@ main (int argc, char **argv)
 
   /* Then initalize mutter with a different set of arguments */
 
-  char *fake_args[] = { NULL, "--wayland" };
+  char *fake_args[] = { NULL, (char *)"--wayland" };
   fake_args[0] = argv[0];
   char **fake_argv = fake_args;
   int fake_argc = 2;

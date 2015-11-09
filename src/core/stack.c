@@ -288,8 +288,7 @@ windows_on_different_monitor (MetaWindow *a,
   if (a->screen != b->screen)
     return TRUE;
 
-  return meta_screen_get_monitor_for_window (a->screen, a) !=
-    meta_screen_get_monitor_for_window (b->screen, b);
+  return a->monitor != b->monitor;
 }
 
 /* Get layer ignoring any transient or group relationships */
@@ -1056,7 +1055,7 @@ stack_sync_to_xserver (MetaStack *stack)
   all_root_children_stacked = g_array_new (FALSE, FALSE, sizeof (guint64));
   x11_hidden_stack_ids = g_array_new (FALSE, FALSE, sizeof (guint64));
 
-  meta_topic (META_DEBUG_STACK, "Top to bottom: ");
+  meta_topic (META_DEBUG_STACK, "Bottom to top: ");
   meta_push_no_msg_prefix ();
 
   for (tmp = g_list_last(stack->sorted); tmp != NULL; tmp = tmp->prev)
@@ -1089,11 +1088,7 @@ stack_sync_to_xserver (MetaStack *stack)
       if (w->hidden)
 	{
           if (w->client_type == META_WINDOW_CLIENT_TYPE_X11)
-            {
-              guint64 stack_id = top_level_window;
-
-              g_array_append_val (x11_hidden_stack_ids, stack_id);
-            }
+            g_array_append_val (x11_hidden_stack_ids, top_level_window);
 	  continue;
 	}
 
@@ -1239,23 +1234,9 @@ get_default_focus_window (MetaStack     *stack,
 {
   /* Find the topmost, focusable, mapped, window.
    * not_this_one is being unfocused or going away, so exclude it.
-   * Also, prefer to focus transient parent of not_this_one,
-   * or top window in same group as not_this_one.
    */
 
-  MetaWindow *transient_parent;
-  MetaWindow *topmost_in_group;
-  MetaWindow *topmost_overall;
-  MetaGroup *not_this_one_group;
   GList *l;
-
-  transient_parent = NULL;
-  topmost_in_group = NULL;
-  topmost_overall = NULL;
-  if (not_this_one)
-    not_this_one_group = meta_window_get_group (not_this_one);
-  else
-    not_this_one_group = NULL;
 
   stack_ensure_sorted (stack);
 
@@ -1273,49 +1254,25 @@ get_default_focus_window (MetaStack     *stack,
       if (window->unmaps_pending > 0)
         continue;
 
-      if (window->minimized)
-        continue;
-
       if (window->unmanaging)
         continue;
 
       if (!(window->input || window->take_focus))
         continue;
 
-      if (workspace != NULL && !meta_window_located_on_workspace (window, workspace))
+      if (!meta_window_should_be_showing (window))
         continue;
 
       if (must_be_at_point && !window_contains_point (window, root_x, root_y))
         continue;
 
-      if (not_this_one != NULL)
-        {
-          if (transient_parent == NULL &&
-              meta_window_get_transient_for (not_this_one) == window)
-            transient_parent = window;
+      if (window->type == META_WINDOW_DOCK)
+        continue;
 
-          if (topmost_in_group == NULL &&
-              not_this_one_group != NULL &&
-              not_this_one_group == meta_window_get_group (window))
-            topmost_in_group = window;
-        }
-
-      if (topmost_overall == NULL && window->type != META_WINDOW_DOCK)
-        topmost_overall = window;
-
-      /* We could try to bail out early here for efficiency in
-       * some cases, but it's just not worth the code.
-       */
+      return window;
     }
 
-  if (transient_parent)
-    return transient_parent;
-  else if (topmost_in_group)
-    return topmost_in_group;
-  else if (topmost_overall)
-    return topmost_overall;
-  else
-    return NULL;
+  return NULL;
 }
 
 MetaWindow*

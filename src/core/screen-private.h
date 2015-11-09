@@ -41,14 +41,6 @@
 typedef void (* MetaScreenWindowFunc) (MetaWindow *window,
                                        gpointer    user_data);
 
-typedef enum
-{
-  META_SCREEN_UP,
-  META_SCREEN_DOWN,
-  META_SCREEN_LEFT,
-  META_SCREEN_RIGHT
-} MetaScreenDirection;
-
 #define META_WIREFRAME_XOR_LINE_WIDTH 2
 
 struct _MetaScreen
@@ -157,8 +149,12 @@ const MetaMonitorInfo* meta_screen_get_current_monitor_info_for_pos   (MetaScree
                                                                        int y);
 const MetaMonitorInfo* meta_screen_get_monitor_for_rect   (MetaScreen    *screen,
                                                            MetaRectangle *rect);
-const MetaMonitorInfo* meta_screen_get_monitor_for_window (MetaScreen    *screen,
-                                                           MetaWindow    *window);
+const MetaMonitorInfo* meta_screen_calculate_monitor_for_window (MetaScreen    *screen,
+                                                                 MetaWindow    *window);
+
+const MetaMonitorInfo* meta_screen_get_monitor_for_point (MetaScreen    *screen,
+                                                          int            x,
+                                                          int            y);
 
 
 const MetaMonitorInfo* meta_screen_get_monitor_neighbor (MetaScreen *screen,

@@ -173,18 +173,6 @@ meta_core_toggle_maximize (Display *xdisplay,
 }
 
 void
-meta_core_change_workspace (Display *xdisplay,
-                            Window   frame_xwindow,
-                            int      new_workspace)
-{
-  MetaWindow *window = get_window (xdisplay, frame_xwindow);
-
-  meta_window_change_workspace (window,
-                                meta_screen_get_workspace_by_index (window->screen,
-                                                                    new_workspace));
-}
-
-void
 meta_core_show_window_menu (Display            *xdisplay,
                             Window              frame_xwindow,
                             MetaWindowMenuType  menu,
@@ -215,19 +203,6 @@ meta_core_show_window_menu_for_rect (Display            *xdisplay,
   meta_window_focus (window, timestamp);
 
   meta_window_show_menu_for_rect (window, menu, rect);
-}
-
-const char*
-meta_core_get_workspace_name_with_index (Display *xdisplay,
-                                         Window   xroot,
-                                         int      index)
-{
-  MetaDisplay *display;
-  MetaWorkspace *workspace;
-
-  display = meta_display_for_x_display (xdisplay);
-  workspace = meta_screen_get_workspace_by_index (display->screen, index);
-  return workspace ? meta_workspace_get_name (workspace) : NULL;
 }
 
 gboolean

@@ -25,8 +25,17 @@
 #include <glib.h>
 
 #include "meta-wayland-types.h"
+#include "meta-wayland-pointer-gesture-swipe.h"
+#include "meta-wayland-pointer-gesture-pinch.h"
+#include "meta-wayland-surface.h"
 
 #include <meta/meta-cursor-tracker.h>
+
+#define META_TYPE_WAYLAND_SURFACE_ROLE_CURSOR (meta_wayland_surface_role_cursor_get_type ())
+G_DECLARE_FINAL_TYPE (MetaWaylandSurfaceRoleCursor,
+                      meta_wayland_surface_role_cursor,
+                      META, WAYLAND_SURFACE_ROLE_CURSOR,
+                      MetaWaylandSurfaceRole);
 
 struct _MetaWaylandPointerGrabInterface
 {
@@ -44,22 +53,26 @@ struct _MetaWaylandPointerGrab
   MetaWaylandPointer *pointer;
 };
 
+struct _MetaWaylandPointerClient
+{
+  struct wl_list pointer_resources;
+  struct wl_list swipe_gesture_resources;
+  struct wl_list pinch_gesture_resources;
+};
+
 struct _MetaWaylandPointer
 {
   struct wl_display *display;
 
-  struct wl_list resource_list;
-  struct wl_list focus_resource_list;
+  MetaWaylandPointerClient *focus_client;
+  GHashTable *pointer_clients;
 
   MetaWaylandSurface *focus_surface;
   struct wl_listener focus_surface_listener;
   guint32 focus_serial;
   guint32 click_serial;
 
-  MetaCursorTracker *cursor_tracker;
   MetaWaylandSurface *cursor_surface;
-  struct wl_listener cursor_surface_destroy_listener;
-  int hotspot_x, hotspot_y;
 
   MetaWaylandPointerGrab *grab;
   MetaWaylandPointerGrab default_grab;
@@ -111,8 +124,6 @@ void meta_wayland_pointer_get_relative_coordinates (MetaWaylandPointer *pointer,
                                                     wl_fixed_t         *x,
                                                     wl_fixed_t         *y);
 
-void meta_wayland_pointer_update_cursor_surface (MetaWaylandPointer *pointer);
-
 void meta_wayland_pointer_create_new_resource (MetaWaylandPointer *pointer,
                                                struct wl_client   *client,
                                                struct wl_resource *seat_resource,
@@ -126,5 +137,9 @@ gboolean meta_wayland_pointer_can_popup (MetaWaylandPointer *pointer,
                                          uint32_t            serial);
 
 MetaWaylandSurface *meta_wayland_pointer_get_top_popup (MetaWaylandPointer *pointer);
+
+MetaWaylandPointerClient * meta_wayland_pointer_get_pointer_client (MetaWaylandPointer *pointer,
+                                                                    struct wl_client   *client);
+void meta_wayland_pointer_unbind_pointer_client_resource (struct wl_resource *resource);
 
 #endif /* META_WAYLAND_POINTER_H */

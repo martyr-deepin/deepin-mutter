@@ -78,6 +78,7 @@ typedef enum
   META_MOVE_RESIZE_RESIZE_ACTION     = 1 << 3,
   META_MOVE_RESIZE_WAYLAND_RESIZE    = 1 << 4,
   META_MOVE_RESIZE_STATE_CHANGED     = 1 << 5,
+  META_MOVE_RESIZE_DONT_SYNC_COMPOSITOR = 1 << 6,
 } MetaMoveResizeFlags;
 
 typedef enum
@@ -174,9 +175,6 @@ struct _MetaWindow
 
   /* Whether the window is marked as urgent */
   guint urgent : 1;
-
-  /* Whether we have to fullscreen after placement */
-  guint fullscreen_after_placement : 1;
 
   /* Area to cover when in fullscreen mode.  If _NET_WM_FULLSCREEN_MONITORS has
    * been overridden (via a client message), the window will cover the union of
@@ -434,7 +432,6 @@ struct _MetaWindow
 
   /* Managed by delete.c */
   int dialog_pid;
-  guint is_alive : 1;
 
   /* maintained by group.c */
   MetaGroup *group;
@@ -482,6 +479,7 @@ struct _MetaWindowClass
   gboolean (*update_icon)        (MetaWindow       *window,
                                   cairo_surface_t **icon,
                                   cairo_surface_t **mini_icon);
+  void (*update_main_monitor)    (MetaWindow *window);
   void (*main_monitor_changed)   (MetaWindow *window,
                                   const MetaMonitorInfo *old);
 };
@@ -694,5 +692,7 @@ void meta_window_grab_op_ended (MetaWindow *window, MetaGrabOp op);
 void meta_window_set_alive (MetaWindow *window, gboolean is_alive);
 
 gboolean meta_window_has_pointer (MetaWindow *window);
+
+void meta_window_emit_size_changed (MetaWindow *window);
 
 #endif

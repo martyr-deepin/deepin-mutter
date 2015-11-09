@@ -26,16 +26,20 @@
 
 #include "meta-surface-actor-wayland.h"
 
+#include <math.h>
 #include <cogl/cogl-wayland-server.h>
 #include "meta-shaped-texture-private.h"
 
+#include "wayland/meta-wayland-buffer.h"
 #include "wayland/meta-wayland-private.h"
+#include "wayland/meta-window-wayland.h"
 
 #include "compositor/region-utils.h"
 
 struct _MetaSurfaceActorWaylandPrivate
 {
   MetaWaylandSurface *surface;
+  struct wl_list frame_callback_list;
 };
 typedef struct _MetaSurfaceActorWaylandPrivate MetaSurfaceActorWaylandPrivate;
 
@@ -80,51 +84,87 @@ meta_surface_actor_wayland_is_unredirected (MetaSurfaceActor *actor)
   return FALSE;
 }
 
-static int
-get_output_scale (int winsys_id)
-{
-  MetaMonitorManager *monitor_manager = meta_monitor_manager_get ();
-  MetaOutput *outputs;
-  guint n_outputs, i;
-  int output_scale = 1;
-
-  outputs = meta_monitor_manager_get_outputs (monitor_manager, &n_outputs);
-
-  for (i = 0; i < n_outputs; i++)
-    {
-      if (outputs[i].winsys_id == winsys_id)
-        {
-          output_scale = outputs[i].scale;
-          break;
-        }
-    }
-
-  return output_scale;
-}
-
 double
 meta_surface_actor_wayland_get_scale (MetaSurfaceActorWayland *actor)
 {
    MetaSurfaceActorWaylandPrivate *priv = meta_surface_actor_wayland_get_instance_private (actor);
    MetaWaylandSurface *surface = priv->surface;
-   MetaWindow *window = surface->window;
+   MetaWindow *window;
    int output_scale = 1;
 
-   while (surface)
-    {
-      if (surface->window)
-        {
-          window = surface->window;
-          break;
-        }
-      surface = surface->sub.parent;
-    }
+   if (!surface)
+     return 1;
+
+   window = meta_wayland_surface_get_toplevel_window (surface);
 
    /* XXX: We do not handle x11 clients yet */
    if (window && window->client_type != META_WINDOW_CLIENT_TYPE_X11)
-     output_scale = get_output_scale (window->monitor->winsys_id);
+     output_scale = meta_window_wayland_get_main_monitor_scale (window);
 
    return (double)output_scale / (double)priv->surface->scale;
+}
+
+static void
+logical_to_actor_position (MetaSurfaceActorWayland *self,
+                           int                     *x,
+                           int                     *y)
+{
+  MetaWaylandSurface *surface = meta_surface_actor_wayland_get_surface (self);
+  MetaWindow *toplevel_window;
+  int monitor_scale = 1;
+
+  toplevel_window = meta_wayland_surface_get_toplevel_window (surface);
+  if (toplevel_window)
+    monitor_scale = meta_window_wayland_get_main_monitor_scale (toplevel_window);
+
+  *x = *x * monitor_scale;
+  *y = *y * monitor_scale;
+}
+
+/* Convert the current actor state to the corresponding subsurface rectangle
+ * in logical pixel coordinate space. */
+void
+meta_surface_actor_wayland_get_subsurface_rect (MetaSurfaceActorWayland *self,
+                                                MetaRectangle           *rect)
+{
+  MetaWaylandSurface *surface = meta_surface_actor_wayland_get_surface (self);
+  CoglTexture *texture = surface->buffer->texture;
+  MetaWindow *toplevel_window;
+  int monitor_scale;
+  float x, y;
+
+  toplevel_window = meta_wayland_surface_get_toplevel_window (surface);
+  monitor_scale = meta_window_wayland_get_main_monitor_scale (toplevel_window);
+
+  clutter_actor_get_position (CLUTTER_ACTOR (self), &x, &y);
+  *rect = (MetaRectangle) {
+    .x = x / monitor_scale,
+    .y = y / monitor_scale,
+    .width = cogl_texture_get_width (texture) / surface->scale,
+    .height = cogl_texture_get_height (texture) / surface->scale,
+  };
+}
+
+void
+meta_surface_actor_wayland_sync_subsurface_state (MetaSurfaceActorWayland *self)
+{
+  MetaWaylandSurface *surface = meta_surface_actor_wayland_get_surface (self);
+  MetaWindow *window;
+  int x = surface->offset_x + surface->sub.x;
+  int y = surface->offset_y + surface->sub.y;
+
+  window = meta_wayland_surface_get_toplevel_window (surface);
+  if (window && window->client_type == META_WINDOW_CLIENT_TYPE_X11)
+    {
+      /* Bail directly if this is part of a Xwayland window and warn
+       * if there happen to be offsets anyway since that is not supposed
+       * to happen. */
+      g_warn_if_fail (x == 0 && y == 0);
+      return;
+    }
+
+  logical_to_actor_position (self, &x, &y);
+  clutter_actor_set_position (CLUTTER_ACTOR (self), x, y);
 }
 
 void
@@ -158,6 +198,10 @@ meta_surface_actor_wayland_sync_state (MetaSurfaceActorWayland *self)
                                            scaled_input_region);
       cairo_region_destroy (scaled_input_region);
     }
+  else
+    {
+      meta_surface_actor_set_input_region (META_SURFACE_ACTOR (self), NULL);
+    }
 
   /* Opaque region */
   if (surface->opaque_region)
@@ -173,31 +217,88 @@ meta_surface_actor_wayland_sync_state (MetaSurfaceActorWayland *self)
                                             scaled_opaque_region);
       cairo_region_destroy (scaled_opaque_region);
     }
+  else
+    {
+      meta_surface_actor_set_opaque_region (META_SURFACE_ACTOR (self), NULL);
+    }
+
+  meta_surface_actor_wayland_sync_subsurface_state (self);
 }
 
 void
 meta_surface_actor_wayland_sync_state_recursive (MetaSurfaceActorWayland *self)
 {
   MetaWaylandSurface *surface = meta_surface_actor_wayland_get_surface (self);
+  MetaWindow *window = meta_wayland_surface_get_toplevel_window (surface);
   GList *iter;
 
   meta_surface_actor_wayland_sync_state (self);
 
-  for (iter = surface->subsurfaces; iter != NULL; iter = iter->next)
+  if (window && window->client_type != META_WINDOW_CLIENT_TYPE_X11)
     {
-      MetaWaylandSurface *subsurf = iter->data;
+      for (iter = surface->subsurfaces; iter != NULL; iter = iter->next)
+        {
+          MetaWaylandSurface *subsurf = iter->data;
 
-      meta_surface_actor_wayland_sync_state_recursive (
-        META_SURFACE_ACTOR_WAYLAND (subsurf->surface_actor));
+          meta_surface_actor_wayland_sync_state_recursive (
+            META_SURFACE_ACTOR_WAYLAND (subsurf->surface_actor));
+        }
     }
+}
+
+gboolean
+meta_surface_actor_wayland_is_on_monitor (MetaSurfaceActorWayland *self,
+                                          MetaMonitorInfo         *monitor)
+{
+  float x, y, width, height;
+  cairo_rectangle_int_t actor_rect;
+  cairo_region_t *region;
+  gboolean is_on_monitor;
+
+  clutter_actor_get_transformed_position (CLUTTER_ACTOR (self), &x, &y);
+  clutter_actor_get_transformed_size (CLUTTER_ACTOR (self), &width, &height);
+
+  actor_rect.x = (int)roundf (x);
+  actor_rect.y = (int)roundf (y);
+  actor_rect.width = (int)roundf (x + width) - actor_rect.x;
+  actor_rect.height = (int)roundf (y + height) - actor_rect.y;
+
+  /* Calculate the scaled surface actor region. */
+  region = cairo_region_create_rectangle (&actor_rect);
+
+  cairo_region_intersect_rectangle (region,
+				    &((cairo_rectangle_int_t) {
+				      .x = monitor->rect.x,
+				      .y = monitor->rect.y,
+				      .width = monitor->rect.width,
+				      .height = monitor->rect.height,
+				    }));
+
+  is_on_monitor = !cairo_region_is_empty (region);
+  cairo_region_destroy (region);
+
+  return is_on_monitor;
+}
+
+void
+meta_surface_actor_wayland_add_frame_callbacks (MetaSurfaceActorWayland *self,
+                                                struct wl_list *frame_callbacks)
+{
+  MetaSurfaceActorWaylandPrivate *priv = meta_surface_actor_wayland_get_instance_private (self);
+
+  wl_list_insert_list (&priv->frame_callback_list, frame_callbacks);
 }
 
 static MetaWindow *
 meta_surface_actor_wayland_get_window (MetaSurfaceActor *actor)
 {
   MetaSurfaceActorWaylandPrivate *priv = meta_surface_actor_wayland_get_instance_private (META_SURFACE_ACTOR_WAYLAND (actor));
+  MetaWaylandSurface *surface = priv->surface;
 
-  return priv->surface->window;
+  if (!surface)
+    return NULL;
+
+  return surface->window;
 }
 
 static void
@@ -237,6 +338,25 @@ meta_surface_actor_wayland_get_preferred_height  (ClutterActor *self,
 }
 
 static void
+meta_surface_actor_wayland_paint (ClutterActor *actor)
+{
+  MetaSurfaceActorWayland *self = META_SURFACE_ACTOR_WAYLAND (actor);
+  MetaSurfaceActorWaylandPrivate *priv =
+    meta_surface_actor_wayland_get_instance_private (self);
+
+  if (priv->surface)
+    {
+      MetaWaylandCompositor *compositor = priv->surface->compositor;
+      meta_wayland_surface_update_outputs (priv->surface);
+
+      wl_list_insert_list (&compositor->frame_callbacks, &priv->frame_callback_list);
+      wl_list_init (&priv->frame_callback_list);
+    }
+
+  CLUTTER_ACTOR_CLASS (meta_surface_actor_wayland_parent_class)->paint (actor);
+}
+
+static void
 meta_surface_actor_wayland_dispose (GObject *object)
 {
   MetaSurfaceActorWayland *self = META_SURFACE_ACTOR_WAYLAND (object);
@@ -255,6 +375,7 @@ meta_surface_actor_wayland_class_init (MetaSurfaceActorWaylandClass *klass)
 
   actor_class->get_preferred_width = meta_surface_actor_wayland_get_preferred_width;
   actor_class->get_preferred_height = meta_surface_actor_wayland_get_preferred_height;
+  actor_class->paint = meta_surface_actor_wayland_paint;
 
   surface_actor_class->process_damage = meta_surface_actor_wayland_process_damage;
   surface_actor_class->pre_paint = meta_surface_actor_wayland_pre_paint;
@@ -282,6 +403,7 @@ meta_surface_actor_wayland_new (MetaWaylandSurface *surface)
 
   g_assert (meta_is_wayland_compositor ());
 
+  wl_list_init (&priv->frame_callback_list);
   priv->surface = surface;
 
   return META_SURFACE_ACTOR (self);
@@ -300,4 +422,19 @@ meta_surface_actor_wayland_get_surface (MetaSurfaceActorWayland *self)
 {
   MetaSurfaceActorWaylandPrivate *priv = meta_surface_actor_wayland_get_instance_private (self);
   return priv->surface;
+}
+
+void
+meta_surface_actor_wayland_surface_destroyed (MetaSurfaceActorWayland *self)
+{
+  MetaWaylandFrameCallback *callback, *next;
+  MetaSurfaceActorWaylandPrivate *priv =
+    meta_surface_actor_wayland_get_instance_private (self);
+
+  wl_list_for_each_safe (callback, next, &priv->frame_callback_list, link)
+    {
+      wl_resource_destroy (callback->resource);
+    }
+
+  priv->surface = NULL;
 }

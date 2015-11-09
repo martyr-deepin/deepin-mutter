@@ -72,6 +72,98 @@ meta_monitor_manager_init (MetaMonitorManager *manager)
 }
 
 /*
+ * rules for constructing a tiled monitor
+ * 1. find a tile_group_id
+ * 2. iterate over all outputs for that tile group id
+ * 3. see if output has a crtc and if it is configured for the tile size
+ * 4. calculate the total tile size
+ * 5. set tile finished size
+ * 6. check for more tile_group_id
+*/
+static void
+construct_tile_monitor (MetaMonitorManager *manager,
+                        GArray *monitor_infos,
+                        guint32 tile_group_id)
+{
+  MetaMonitorInfo info;
+  unsigned i;
+
+  for (i = 0; i < monitor_infos->len; i++)
+    {
+      MetaMonitorInfo *pinfo = &g_array_index (monitor_infos, MetaMonitorInfo, i);
+
+      if (pinfo->tile_group_id == tile_group_id)
+        return;
+    }
+
+  /* didn't find it */
+  info.number = monitor_infos->len;
+  info.tile_group_id = tile_group_id;
+  info.is_presentation = FALSE;
+  info.refresh_rate = 0.0;
+  info.width_mm = 0;
+  info.height_mm = 0;
+  info.is_primary = FALSE;
+  info.rect.x = INT_MAX;
+  info.rect.y = INT_MAX;
+  info.rect.width = 0;
+  info.rect.height = 0;
+  info.winsys_id = 0;
+  info.n_outputs = 0;
+  info.monitor_winsys_xid = 0;
+
+  for (i = 0; i < manager->n_outputs; i++)
+    {
+      MetaOutput *output = &manager->outputs[i];
+
+      if (!output->tile_info.group_id)
+        continue;
+
+      if (output->tile_info.group_id != tile_group_id)
+        continue;
+
+      if (!output->crtc)
+        continue;
+
+      if (output->crtc->rect.width != (int)output->tile_info.tile_w ||
+          output->crtc->rect.height != (int)output->tile_info.tile_h)
+        continue;
+
+      if (output->tile_info.loc_h_tile == 0 && output->tile_info.loc_v_tile == 0)
+        {
+          info.refresh_rate = output->crtc->current_mode->refresh_rate;
+          info.width_mm = output->width_mm;
+          info.height_mm = output->height_mm;
+          info.winsys_id = output->winsys_id;
+        }
+
+      /* hack */
+      if (output->crtc->rect.x < info.rect.x)
+        info.rect.x = output->crtc->rect.x;
+      if (output->crtc->rect.y < info.rect.y)
+        info.rect.y = output->crtc->rect.y;
+
+      if (output->tile_info.loc_h_tile == 0)
+        info.rect.height += output->tile_info.tile_h;
+
+      if (output->tile_info.loc_v_tile == 0)
+        info.rect.width += output->tile_info.tile_w;
+
+      if (info.n_outputs > META_MAX_OUTPUTS_PER_MONITOR)
+        continue;
+
+      info.outputs[info.n_outputs++] = output;
+    }
+
+  /* if we don't have a winsys id, i.e. we haven't found tile 0,0
+     don't try and add this to the monitor infos */
+  if (!info.winsys_id)
+    return;
+
+  g_array_append_val (monitor_infos, info);
+}
+
+/*
  * make_logical_config:
  *
  * Turn outputs and CRTCs into logical MetaMonitorInfo,
@@ -81,6 +173,7 @@ meta_monitor_manager_init (MetaMonitorManager *manager)
 static void
 make_logical_config (MetaMonitorManager *manager)
 {
+  MetaMonitorManagerClass *manager_class = META_MONITOR_MANAGER_GET_CLASS (manager);
   GArray *monitor_infos;
   unsigned int i, j;
 
@@ -91,6 +184,15 @@ make_logical_config (MetaMonitorManager *manager)
      for each of them, unless they reference a rectangle that
      is already there.
   */
+  /* for tiling we need to work out how many tiled outputs there are */
+  for (i = 0; i < manager->n_outputs; i++)
+    {
+      MetaOutput *output = &manager->outputs[i];
+
+      if (output->tile_info.group_id)
+        construct_tile_monitor (manager, monitor_infos, output->tile_info.group_id);
+    }
+
   for (i = 0; i < manager->n_crtcs; i++)
     {
       MetaCRTC *crtc = &manager->crtcs[i];
@@ -102,8 +204,8 @@ make_logical_config (MetaMonitorManager *manager)
       for (j = 0; j < monitor_infos->len; j++)
         {
           MetaMonitorInfo *info = &g_array_index (monitor_infos, MetaMonitorInfo, j);
-          if (meta_rectangle_equal (&crtc->rect,
-                                    &info->rect))
+          if (meta_rectangle_contains_rect (&info->rect,
+                                            &crtc->rect))
             {
               crtc->logical_monitor = info;
               break;
@@ -115,7 +217,10 @@ make_logical_config (MetaMonitorManager *manager)
           MetaMonitorInfo info;
 
           info.number = monitor_infos->len;
+          info.tile_group_id = 0;
           info.rect = crtc->rect;
+          info.refresh_rate = crtc->current_mode->refresh_rate;
+          info.scale = 1;
           info.is_primary = FALSE;
           /* This starts true because we want
              is_presentation only if all outputs are
@@ -125,7 +230,8 @@ make_logical_config (MetaMonitorManager *manager)
           info.is_presentation = TRUE;
           info.in_fullscreen = -1;
           info.winsys_id = 0;
-
+          info.n_outputs = 0;
+          info.monitor_winsys_xid = 0;
           g_array_append_val (monitor_infos, info);
 
           crtc->logical_monitor = &g_array_index (monitor_infos, MetaMonitorInfo,
@@ -147,6 +253,9 @@ make_logical_config (MetaMonitorManager *manager)
       if (output->crtc == NULL)
         continue;
 
+      if (output->tile_info.group_id)
+        continue;
+
       /* We must have a logical monitor on every CRTC at this point */
       g_assert (output->crtc->logical_monitor != NULL);
 
@@ -155,8 +264,17 @@ make_logical_config (MetaMonitorManager *manager)
       info->is_primary = info->is_primary || output->is_primary;
       info->is_presentation = info->is_presentation && output->is_presentation;
 
+      info->width_mm = output->width_mm;
+      info->height_mm = output->height_mm;
+
+      info->outputs[0] = output;
+      info->n_outputs = 1;
+
       if (output->is_primary || info->winsys_id == 0)
-        info->winsys_id = output->winsys_id;
+        {
+          info->scale = output->scale;
+          info->winsys_id = output->winsys_id;
+        }
 
       if (info->is_primary)
         manager->primary_monitor_index = info->number;
@@ -164,6 +282,10 @@ make_logical_config (MetaMonitorManager *manager)
 
   manager->n_monitor_infos = monitor_infos->len;
   manager->monitor_infos = (void*)g_array_free (monitor_infos, FALSE);
+
+  if (manager_class->add_monitor)
+    for (i = 0; i < manager->n_monitor_infos; i++)
+      manager_class->add_monitor (manager, &manager->monitor_infos[i]);
 }
 
 static void
@@ -265,14 +387,29 @@ meta_monitor_manager_free_mode_array (MetaMonitorMode *old_modes,
 }
 
 static void
+meta_monitor_manager_free_crtc_array (MetaCRTC *old_crtcs,
+                                      int       n_old_crtcs)
+{
+  int i;
+
+  for (i = 0; i < n_old_crtcs; i++)
+    {
+      if (old_crtcs[i].driver_notify)
+        old_crtcs[i].driver_notify (&old_crtcs[i]);
+    }
+
+  g_free (old_crtcs);
+}
+
+static void
 meta_monitor_manager_finalize (GObject *object)
 {
   MetaMonitorManager *manager = META_MONITOR_MANAGER (object);
 
   meta_monitor_manager_free_output_array (manager->outputs, manager->n_outputs);
   meta_monitor_manager_free_mode_array (manager->modes, manager->n_modes);
+  meta_monitor_manager_free_crtc_array (manager->crtcs, manager->n_crtcs);
   g_free (manager->monitor_infos);
-  g_free (manager->crtcs);
 
   G_OBJECT_CLASS (meta_monitor_manager_parent_class)->finalize (object);
 }
@@ -353,16 +490,14 @@ static char *
 make_display_name (MetaMonitorManager *manager,
                    MetaOutput         *output)
 {
-  char *inches = NULL;
-  char *vendor_name = NULL;
-  char *ret;
+  g_autofree char *inches = NULL;
+  g_autofree char *vendor_name = NULL;
 
   switch (output->connector_type)
     {
     case META_CONNECTOR_TYPE_LVDS:
     case META_CONNECTOR_TYPE_eDP:
-      ret = g_strdup (_("Built-in display"));
-      goto out;
+      return g_strdup (_("Built-in display"));
     default:
       break;
     }
@@ -398,18 +533,12 @@ make_display_name (MetaMonitorManager *manager,
       /* TRANSLATORS: this is a monitor vendor name, followed by a
        * size in inches, like 'Dell 15"'
        */
-      ret = g_strdup_printf (_("%s %s"), vendor_name, inches);
+      return g_strdup_printf (_("%s %s"), vendor_name, inches);
     }
   else
     {
-      ret = g_strdup (vendor_name);
+      return g_strdup (vendor_name);
     }
-
- out:
-  g_free (inches);
-  g_free (vendor_name);
-
-  return ret;
 }
 
 static const char *
@@ -520,6 +649,10 @@ meta_monitor_manager_handle_get_resources (MetaDBusDisplayConfig *skeleton,
                              g_variant_new_boolean (output->is_presentation));
       g_variant_builder_add (&properties, "{sv}", "connector-type",
                              g_variant_new_string (get_connector_type_name (output->connector_type)));
+      g_variant_builder_add (&properties, "{sv}", "underscanning",
+                             g_variant_new_boolean (output->is_underscanning));
+      g_variant_builder_add (&properties, "{sv}", "supports-underscanning",
+                             g_variant_new_boolean (output->supports_underscanning));
 
       edid_file = manager_class->get_edid_file (manager, output);
       if (edid_file)
@@ -538,6 +671,20 @@ meta_monitor_manager_handle_get_resources (MetaDBusDisplayConfig *skeleton,
                                                                edid, TRUE));
               g_bytes_unref (edid);
             }
+        }
+
+      if (output->tile_info.group_id)
+        {
+          g_variant_builder_add (&properties, "{sv}", "tile",
+                                 g_variant_new ("(uuuuuuuu)",
+                                                output->tile_info.group_id,
+                                                output->tile_info.flags,
+                                                output->tile_info.max_h_tiles,
+                                                output->tile_info.max_v_tiles,
+                                                output->tile_info.loc_h_tile,
+                                                output->tile_info.loc_v_tile,
+                                                output->tile_info.tile_w,
+                                                output->tile_info.tile_h));
         }
 
       g_variant_builder_add (&output_builder, "(uxiausauaua{sv})",
@@ -737,8 +884,7 @@ meta_monitor_manager_handle_apply_configuration  (MetaDBusDisplayConfig *skeleto
           crtc_info->y = 0;
         }
 
-      if (transform < META_MONITOR_TRANSFORM_NORMAL ||
-          transform > META_MONITOR_TRANSFORM_FLIPPED_270 ||
+      if (transform > META_MONITOR_TRANSFORM_FLIPPED_270 ||
           ((crtc->all_transforms & (1 << transform)) == 0))
         {
           g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR,
@@ -808,7 +954,7 @@ meta_monitor_manager_handle_apply_configuration  (MetaDBusDisplayConfig *skeleto
   while (g_variant_iter_loop (&output_iter, "(u@a{sv})", &output_index, &properties))
     {
       MetaOutputInfo *output_info;
-      gboolean primary, presentation;
+      gboolean primary, presentation, underscanning;
 
       if (output_index >= manager->n_outputs)
         {
@@ -826,6 +972,9 @@ meta_monitor_manager_handle_apply_configuration  (MetaDBusDisplayConfig *skeleto
 
       if (g_variant_lookup (properties, "presentation", "b", &presentation))
         output_info->is_presentation = presentation;
+
+      if (g_variant_lookup (properties, "underscanning", "b", &underscanning))
+        output_info->is_underscanning = underscanning;
 
       g_ptr_array_add (output_infos, output_info);
     }
@@ -1194,37 +1343,58 @@ meta_monitor_manager_read_current_config (MetaMonitorManager *manager)
   MetaOutput *old_outputs;
   MetaCRTC *old_crtcs;
   MetaMonitorMode *old_modes;
-  unsigned int n_old_outputs, n_old_modes;
+  unsigned int n_old_outputs, n_old_crtcs, n_old_modes;
 
   /* Some implementations of read_current use the existing information
    * we have available, so don't free the old configuration until after
    * read_current finishes. */
   old_outputs = manager->outputs;
   n_old_outputs = manager->n_outputs;
+  old_crtcs = manager->crtcs;
+  n_old_crtcs = manager->n_crtcs;
   old_modes = manager->modes;
   n_old_modes = manager->n_modes;
-  old_crtcs = manager->crtcs;
 
   manager->serial++;
   META_MONITOR_MANAGER_GET_CLASS (manager)->read_current (manager);
 
   meta_monitor_manager_free_output_array (old_outputs, n_old_outputs);
   meta_monitor_manager_free_mode_array (old_modes, n_old_modes);
-  g_free (old_crtcs);
+  meta_monitor_manager_free_crtc_array (old_crtcs, n_old_crtcs);
 }
 
 void
 meta_monitor_manager_rebuild_derived (MetaMonitorManager *manager)
 {
+  MetaMonitorManagerClass *manager_class = META_MONITOR_MANAGER_GET_CLASS (manager);
   MetaMonitorInfo *old_monitor_infos;
-
+  unsigned old_n_monitor_infos;
+  unsigned i, j;
   old_monitor_infos = manager->monitor_infos;
+  old_n_monitor_infos = manager->n_monitor_infos;
 
   if (manager->in_init)
     return;
 
   make_logical_config (manager);
 
+  if (manager_class->delete_monitor)
+    {
+      for (i = 0; i < old_n_monitor_infos; i++)
+        {
+          gboolean delete_mon = TRUE;
+          for (j = 0; j < manager->n_monitor_infos; j++)
+            {
+              if (manager->monitor_infos[j].monitor_winsys_xid == old_monitor_infos[i].monitor_winsys_xid)
+                {
+                  delete_mon = FALSE;
+                  break;
+                }
+            }
+          if (delete_mon)
+            manager_class->delete_monitor (manager, old_monitor_infos[i].monitor_winsys_xid);
+        }
+    }
   g_signal_emit_by_name (manager, "monitors-changed");
 
   g_free (old_monitor_infos);
@@ -1245,25 +1415,35 @@ meta_output_parse_edid (MetaOutput *meta_output,
   if (parsed_edid)
     {
       meta_output->vendor = g_strndup (parsed_edid->manufacturer_code, 4);
-      if (parsed_edid->dsc_product_name[0])
-        meta_output->product = g_strndup (parsed_edid->dsc_product_name, 14);
-      else
-        meta_output->product = g_strdup_printf ("0x%04x", (unsigned) parsed_edid->product_code);
-      if (parsed_edid->dsc_serial_number[0])
-        meta_output->serial = g_strndup (parsed_edid->dsc_serial_number, 14);
-      else
-        meta_output->serial = g_strdup_printf ("0x%08x", parsed_edid->serial_number);
+      if (!g_utf8_validate (meta_output->vendor, -1, NULL))
+        g_clear_pointer (&meta_output->vendor, g_free);
+
+      meta_output->product = g_strndup (parsed_edid->dsc_product_name, 14);
+      if (!g_utf8_validate (meta_output->product, -1, NULL) ||
+          meta_output->product[0] == '\0')
+        {
+          g_clear_pointer (&meta_output->product, g_free);
+          meta_output->product = g_strdup_printf ("0x%04x", (unsigned) parsed_edid->product_code);
+        }
+
+      meta_output->serial = g_strndup (parsed_edid->dsc_serial_number, 14);
+      if (!g_utf8_validate (meta_output->serial, -1, NULL) ||
+          meta_output->serial[0] == '\0')
+        {
+          g_clear_pointer (&meta_output->serial, g_free);
+          meta_output->serial = g_strdup_printf ("0x%08x", parsed_edid->serial_number);
+        }
 
       g_free (parsed_edid);
     }
 
  out:
   if (!meta_output->vendor)
-    {
-      meta_output->vendor = g_strdup ("unknown");
-      meta_output->product = g_strdup ("unknown");
-      meta_output->serial = g_strdup ("unknown");
-    }
+    meta_output->vendor = g_strdup ("unknown");
+  if (!meta_output->product)
+    meta_output->product = g_strdup ("unknown");
+  if (!meta_output->serial)
+    meta_output->serial = g_strdup ("unknown");
 }
 
 void

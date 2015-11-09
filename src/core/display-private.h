@@ -121,7 +121,7 @@ struct _MetaDisplay
    * class is constructed.
    */
 #define item(x)  Atom atom_##x;
-#include <meta/atomnames.h>
+#include <x11/atomnames.h>
 #undef item
 
   /* The window and serial of the most recent FocusIn event. */
@@ -217,9 +217,6 @@ struct _MetaDisplay
   guint       grab_have_pointer : 1;
   guint       grab_have_keyboard : 1;
   guint       grab_frame_action : 1;
-  /* During a resize operation, the directions in which we've broken
-   * out of the initial maximization state */
-  guint       grab_resize_unmaximize : 2; /* MetaMaximizeFlags */
   MetaRectangle grab_initial_window_pos;
   int         grab_initial_x, grab_initial_y;  /* These are only relevant for */
   gboolean    grab_threshold_movement_reached; /* raise_on_click == FALSE.    */

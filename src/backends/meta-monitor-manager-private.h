@@ -56,6 +56,7 @@ typedef struct _MetaMonitorMode MetaMonitorMode;
 typedef struct _MetaMonitorInfo MetaMonitorInfo;
 typedef struct _MetaCRTCInfo MetaCRTCInfo;
 typedef struct _MetaOutputInfo MetaOutputInfo;
+typedef struct _MetaTileInfo MetaTileInfo;
 
 typedef enum {
   META_MONITOR_TRANSFORM_NORMAL,
@@ -88,6 +89,17 @@ typedef enum {
   META_CONNECTOR_TYPE_VIRTUAL = 15,
   META_CONNECTOR_TYPE_DSI = 16,
 } MetaConnectorType;
+
+struct _MetaTileInfo {
+  guint32 group_id;
+  guint32 flags;
+  guint32 max_h_tiles;
+  guint32 max_v_tiles;
+  guint32 loc_h_tile;
+  guint32 loc_v_tile;
+  guint32 tile_w;
+  guint32 tile_h;
+};
 
 struct _MetaOutput
 {
@@ -132,6 +144,8 @@ struct _MetaOutput
   */
   gboolean is_primary;
   gboolean is_presentation;
+  gboolean is_underscanning;
+  gboolean supports_underscanning;
 
   gpointer driver_private;
   GDestroyNotify driver_notify;
@@ -140,6 +154,8 @@ struct _MetaOutput
   gboolean hotplug_mode_update;
   gint suggested_x;
   gint suggested_y;
+
+  MetaTileInfo tile_info;
 };
 
 struct _MetaCRTC
@@ -158,7 +174,11 @@ struct _MetaCRTC
   /* Used when changing configuration */
   gboolean is_dirty;
 
-  MetaCursorReference *cursor;
+  /* Used by cursor renderer backend */
+  void *cursor_renderer_private;
+
+  gpointer driver_private;
+  GDestroyNotify driver_notify;
 };
 
 struct _MetaMonitorMode
@@ -175,6 +195,7 @@ struct _MetaMonitorMode
   GDestroyNotify driver_notify;
 };
 
+#define META_MAX_OUTPUTS_PER_MONITOR 4
 /**
  * MetaMonitorInfo:
  *
@@ -190,9 +211,14 @@ struct _MetaMonitorInfo
   int number;
   int xinerama_index;
   MetaRectangle rect;
+  /* for tiled monitors these are calculated, from untiled just copied */
+  float refresh_rate;
+  int width_mm;
+  int height_mm;
   gboolean is_primary;
   gboolean is_presentation; /* XXX: not yet used */
   gboolean in_fullscreen;
+  int scale;
 
   /* The primary or first output for this monitor, 0 if we can't figure out.
      It can be matched to a winsys_id of a MetaOutput.
@@ -203,6 +229,12 @@ struct _MetaMonitorInfo
      the primary one).
   */
   glong winsys_id;
+
+  guint32 tile_group_id;
+
+  int monitor_winsys_xid;
+  int n_outputs;
+  MetaOutput *outputs[META_MAX_OUTPUTS_PER_MONITOR];
 };
 
 /*
@@ -230,6 +262,7 @@ struct _MetaOutputInfo {
   MetaOutput  *output;
   gboolean     is_primary;
   gboolean     is_presentation;
+  gboolean     is_underscanning;
 };
 
 #define META_TYPE_MONITOR_MANAGER            (meta_monitor_manager_get_type ())
@@ -319,6 +352,13 @@ struct _MetaMonitorManagerClass
                           unsigned short     *,
                           unsigned short     *,
                           unsigned short     *);
+
+  void (*add_monitor) (MetaMonitorManager *,
+                       MetaMonitorInfo *);
+
+  void (*delete_monitor) (MetaMonitorManager *,
+                          int monitor_winsys_xid);
+
 };
 
 void                meta_monitor_manager_rebuild_derived   (MetaMonitorManager *manager);

@@ -189,7 +189,7 @@ reload_modmap (MetaKeyBindingManager *keys)
 
   /* Modifiers to find. */
   struct {
-    char *name;
+    const char *name;
     xkb_mod_mask_t *mask_p;
   } mods[] = {
     { "ScrollLock", &scroll_lock_mask },
@@ -3187,7 +3187,7 @@ handle_move_to_monitor (MetaDisplay    *display,
   gint which = binding->handler->data;
   const MetaMonitorInfo *current, *new;
 
-  current = meta_screen_get_monitor_for_window (screen, window);
+  current = window->monitor;
   new = meta_screen_get_monitor_neighbor (screen, current->number, which);
 
   if (new == NULL)

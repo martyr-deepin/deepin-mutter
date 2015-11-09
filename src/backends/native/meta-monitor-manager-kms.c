@@ -55,7 +55,18 @@ typedef struct {
 
   uint32_t dpms_prop_id;
   uint32_t edid_blob_id;
+  uint32_t tile_blob_id;
+
+  int suggested_x;
+  int suggested_y;
+  uint32_t hotplug_mode_update;
 } MetaOutputKms;
+
+typedef struct {
+  uint32_t underscan_prop_id;
+  uint32_t underscan_hborder_prop_id;
+  uint32_t underscan_vborder_prop_id;
+} MetaCRTCKms;
 
 struct _MetaMonitorManagerKms
 {
@@ -104,7 +115,7 @@ make_output_name (drmModeConnector *connector)
   static const char * const connector_type_names[] = {
     "unknown", "VGA", "DVII", "DVID", "DVID", "Composite",
     "SVIDEO", "LVDS", "Component", "9PinDIN", "DisplayPort",
-    "HDMIA", "HDMIB", "TV", "eDP"
+    "HDMIA", "HDMIB", "TV", "eDP", "Virtual", "DSI"
   };
   const char *connector_type_name;
 
@@ -135,6 +146,12 @@ static void
 meta_monitor_mode_destroy_notify (MetaMonitorMode *output)
 {
   g_slice_free (drmModeModeInfo, output->driver_private);
+}
+
+static void
+meta_crtc_destroy_notify (MetaCRTC *crtc)
+{
+  g_free (crtc->driver_private);
 }
 
 static gboolean
@@ -181,24 +198,67 @@ drm_mode_hash (gconstpointer ptr)
 }
 
 static void
-find_properties (MetaMonitorManagerKms *manager_kms,
-                 MetaOutputKms         *output_kms)
+find_connector_properties (MetaMonitorManagerKms *manager_kms,
+                           MetaOutputKms         *output_kms)
 {
-  drmModePropertyPtr prop;
   int i;
 
+  output_kms->hotplug_mode_update = 0;
+  output_kms->suggested_x = -1;
+  output_kms->suggested_y = -1;
   for (i = 0; i < output_kms->connector->count_props; i++)
     {
-      prop = drmModeGetProperty (manager_kms->fd, output_kms->connector->props[i]);
+      drmModePropertyPtr prop = drmModeGetProperty (manager_kms->fd, output_kms->connector->props[i]);
       if (!prop)
         continue;
 
-      if ((prop->flags & DRM_MODE_PROP_ENUM) &&
-          strcmp(prop->name, "DPMS") == 0)
+      if ((prop->flags & DRM_MODE_PROP_ENUM) && strcmp (prop->name, "DPMS") == 0)
         output_kms->dpms_prop_id = prop->prop_id;
-      else if ((prop->flags & DRM_MODE_PROP_BLOB) &&
-               strcmp (prop->name, "EDID") == 0)
+      else if ((prop->flags & DRM_MODE_PROP_BLOB) && strcmp (prop->name, "EDID") == 0)
         output_kms->edid_blob_id = output_kms->connector->prop_values[i];
+      else if ((prop->flags & DRM_MODE_PROP_BLOB) &&
+               strcmp (prop->name, "TILE") == 0)
+        output_kms->tile_blob_id = output_kms->connector->prop_values[i];
+      else if ((prop->flags & DRM_MODE_PROP_RANGE) &&
+               strcmp (prop->name, "suggested X") == 0)
+        output_kms->suggested_x = output_kms->connector->prop_values[i];
+      else if ((prop->flags & DRM_MODE_PROP_RANGE) &&
+               strcmp (prop->name, "suggested Y") == 0)
+        output_kms->suggested_y = output_kms->connector->prop_values[i];
+      else if ((prop->flags & DRM_MODE_PROP_RANGE) &&
+               strcmp (prop->name, "hotplug_mode_update") == 0)
+        output_kms->hotplug_mode_update = output_kms->connector->prop_values[i];
+      
+      drmModeFreeProperty (prop);
+    }
+}
+
+static void
+find_crtc_properties (MetaMonitorManagerKms *manager_kms,
+                      MetaCRTC *meta_crtc)
+{
+  MetaCRTCKms *crtc_kms;
+  drmModeObjectPropertiesPtr props;
+  size_t i;
+
+  crtc_kms = meta_crtc->driver_private;
+
+  props = drmModeObjectGetProperties (manager_kms->fd, meta_crtc->crtc_id, DRM_MODE_OBJECT_CRTC);
+  if (!props)
+    return;
+
+  for (i = 0; i < props->count_props; i++)
+    {
+      drmModePropertyPtr prop = drmModeGetProperty (manager_kms->fd, props->props[i]);
+      if (!prop)
+        continue;
+
+      if ((prop->flags & DRM_MODE_PROP_ENUM) && strcmp (prop->name, "underscan") == 0)
+        crtc_kms->underscan_prop_id = prop->prop_id;
+      else if ((prop->flags & DRM_MODE_PROP_RANGE) && strcmp (prop->name, "underscan hborder") == 0)
+        crtc_kms->underscan_hborder_prop_id = prop->prop_id;
+      else if ((prop->flags & DRM_MODE_PROP_RANGE) && strcmp (prop->name, "underscan vborder") == 0)
+        crtc_kms->underscan_vborder_prop_id = prop->prop_id;
 
       drmModeFreeProperty (prop);
     }
@@ -230,6 +290,47 @@ read_output_edid (MetaMonitorManagerKms *manager_kms,
     {
       drmModeFreePropertyBlob (edid_blob);
       return NULL;
+    }
+}
+
+static gboolean
+output_get_tile_info (MetaMonitorManagerKms *manager_kms,
+                      MetaOutput            *output)
+{
+  MetaOutputKms *output_kms = output->driver_private;
+  drmModePropertyBlobPtr tile_blob = NULL;
+  int ret;
+
+  if (output_kms->tile_blob_id == 0)
+    return FALSE;
+
+  tile_blob = drmModeGetPropertyBlob (manager_kms->fd, output_kms->tile_blob_id);
+  if (!tile_blob)
+    {
+      meta_warning ("Failed to read TILE of output %s: %s\n", output->name, strerror(errno));
+      return FALSE;
+    }
+
+  if (tile_blob->length > 0)
+    {
+      ret = sscanf ((char *)tile_blob->data, "%d:%d:%d:%d:%d:%d:%d:%d",
+                    &output->tile_info.group_id,
+                    &output->tile_info.flags,
+                    &output->tile_info.max_h_tiles,
+                    &output->tile_info.max_v_tiles,
+                    &output->tile_info.loc_h_tile,
+                    &output->tile_info.loc_v_tile,
+                    &output->tile_info.tile_w,
+                    &output->tile_info.tile_h);
+
+      if (ret != 8)
+        return FALSE;
+      return TRUE;
+    }
+  else
+    {
+      drmModeFreePropertyBlob (tile_blob);
+      return FALSE;
     }
 }
 
@@ -442,6 +543,10 @@ meta_monitor_manager_kms_read_current (MetaMonitorManager *manager)
           height = MAX (height, meta_crtc->rect.y + meta_crtc->rect.height);
         }
 
+      meta_crtc->driver_private = g_new0 (MetaCRTCKms, 1);
+      meta_crtc->driver_notify = (GDestroyNotify) meta_crtc_destroy_notify;
+      find_crtc_properties (manager_kms, meta_crtc);
+
       drmModeFreeCrtc (crtc);
     }
 
@@ -472,8 +577,6 @@ meta_monitor_manager_kms_read_current (MetaMonitorManager *manager)
 	  meta_output->name = make_output_name (connector);
 	  meta_output->width_mm = connector->mmWidth;
 	  meta_output->height_mm = connector->mmHeight;
-	  meta_output->suggested_x = -1;
-	  meta_output->suggested_y = -1;
 
           switch (connector->subpixel)
             {
@@ -498,11 +601,17 @@ meta_monitor_manager_kms_read_current (MetaMonitorManager *manager)
               break;
             }
 
+	  meta_output->preferred_mode = NULL;
 	  meta_output->n_modes = connector->count_modes;
 	  meta_output->modes = g_new0 (MetaMonitorMode *, meta_output->n_modes);
-	  for (j = 0; j < meta_output->n_modes; j++)
+	  for (j = 0; j < meta_output->n_modes; j++) {
             meta_output->modes[j] = find_meta_mode (manager, &connector->modes[j]);
-	  meta_output->preferred_mode = meta_output->modes[0];
+            if (connector->modes[j].type & DRM_MODE_TYPE_PREFERRED)
+              meta_output->preferred_mode = meta_output->modes[j];
+          }
+
+          if (!meta_output->preferred_mode)
+            meta_output->preferred_mode = meta_output->modes[0];
 
           output_kms->connector = connector;
           output_kms->n_encoders = connector->count_encoders;
@@ -567,8 +676,11 @@ meta_monitor_manager_kms_read_current (MetaMonitorManager *manager)
               meta_output->is_presentation = FALSE;
             }
 
-          find_properties (manager_kms, output_kms);
-
+          find_connector_properties (manager_kms, output_kms);
+          meta_output->suggested_x = output_kms->suggested_x;
+          meta_output->suggested_y = output_kms->suggested_y;
+          meta_output->hotplug_mode_update = output_kms->hotplug_mode_update;
+          
           edid = read_output_edid (manager_kms, meta_output);
           meta_output_parse_edid (meta_output, edid);
           g_bytes_unref (edid);
@@ -577,6 +689,8 @@ meta_monitor_manager_kms_read_current (MetaMonitorManager *manager)
           meta_output->connector_type = (MetaConnectorType) connector->connector_type;
 
           meta_output->scale = get_output_scale (manager, meta_output);
+
+          output_get_tile_info (manager_kms, meta_output);
 
           /* FIXME: backlight is a very driver specific thing unfortunately,
              every DDX does its own thing, and the dumb KMS API does not include it.
@@ -723,8 +837,9 @@ meta_monitor_manager_kms_set_power_save_mode (MetaMonitorManager *manager,
 
       if (output_kms->dpms_prop_id != 0)
         {
-          int ok = drmModeConnectorSetProperty(manager_kms->fd, meta_output->winsys_id,
-                                               output_kms->dpms_prop_id, state);
+          int ok = drmModeObjectSetProperty (manager_kms->fd, meta_output->winsys_id,
+                                             DRM_MODE_OBJECT_CONNECTOR,
+                                             output_kms->dpms_prop_id, state);
 
           if (ok < 0)
             meta_warning ("Failed to set power save mode for output %s: %s\n",
@@ -749,12 +864,55 @@ crtc_free (CoglKmsCrtc *crtc)
 }
 
 static void
+set_underscan (MetaMonitorManagerKms *manager_kms,
+               MetaOutput *output)
+{
+  if (!output->crtc)
+    return;
+
+  MetaCRTC *crtc = output->crtc;
+  MetaCRTCKms *crtc_kms = crtc->driver_private;
+  if (!crtc_kms->underscan_prop_id)
+    return;
+
+  if (output->is_underscanning)
+    {
+      drmModeObjectSetProperty (manager_kms->fd, crtc->crtc_id,
+                                DRM_MODE_OBJECT_CRTC,
+                                crtc_kms->underscan_prop_id, (uint64_t) 1);
+
+      if (crtc_kms->underscan_hborder_prop_id)
+        {
+          uint64_t value = crtc->current_mode->width * 0.05;
+          drmModeObjectSetProperty (manager_kms->fd, crtc->crtc_id,
+                                    DRM_MODE_OBJECT_CRTC,
+                                    crtc_kms->underscan_hborder_prop_id, value);
+        }
+      if (crtc_kms->underscan_vborder_prop_id)
+        {
+          uint64_t value = crtc->current_mode->height * 0.05;
+          drmModeObjectSetProperty (manager_kms->fd, crtc->crtc_id,
+                                    DRM_MODE_OBJECT_CRTC,
+                                    crtc_kms->underscan_vborder_prop_id, value);
+        }
+
+    }
+  else
+    {
+      drmModeObjectSetProperty (manager_kms->fd, crtc->crtc_id,
+                                DRM_MODE_OBJECT_CRTC,
+                                crtc_kms->underscan_prop_id, (uint64_t) 0);
+    }
+}
+
+static void
 meta_monitor_manager_kms_apply_configuration (MetaMonitorManager *manager,
                                               MetaCRTCInfo       **crtcs,
                                               unsigned int         n_crtcs,
                                               MetaOutputInfo     **outputs,
                                               unsigned int         n_outputs)
 {
+  MetaMonitorManagerKms *manager_kms = META_MONITOR_MANAGER_KMS (manager);
   ClutterBackend *backend;
   CoglContext *cogl_context;
   CoglDisplay *cogl_display;
@@ -900,6 +1058,9 @@ meta_monitor_manager_kms_apply_configuration (MetaMonitorManager *manager,
 
       output->is_primary = output_info->is_primary;
       output->is_presentation = output_info->is_presentation;
+      output->is_underscanning = output_info->is_underscanning;
+
+      set_underscan (manager_kms, output);
     }
 
   /* Disable outputs not mentioned in the list */

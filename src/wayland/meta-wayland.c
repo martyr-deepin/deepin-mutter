@@ -144,7 +144,7 @@ wl_compositor_create_region (struct wl_client *client,
   meta_wayland_region_create (compositor, client, resource, id);
 }
 
-const static struct wl_compositor_interface meta_wayland_wl_compositor_interface = {
+static const struct wl_compositor_interface meta_wayland_wl_compositor_interface = {
   wl_compositor_create_surface,
   wl_compositor_create_region
 };
@@ -207,6 +207,28 @@ meta_wayland_compositor_handle_event (MetaWaylandCompositor *compositor,
   return meta_wayland_seat_handle_event (compositor->seat, event);
 }
 
+/* meta_wayland_compositor_update_key_state:
+ * @compositor: the #MetaWaylandCompositor
+ * @key_vector: bit vector of key states
+ * @key_vector_len: length of @key_vector
+ * @offset: the key for the first evdev keycode is found at this offset in @key_vector
+ *
+ * This function is used to resynchronize the key state that Mutter
+ * is tracking with the actual keyboard state. This is useful, for example,
+ * to handle changes in key state when a nested compositor doesn't
+ * have focus. We need to fix up the XKB modifier tracking and deliver
+ * any modifier changes to clients.
+ */
+void
+meta_wayland_compositor_update_key_state (MetaWaylandCompositor *compositor,
+                                          char                  *key_vector,
+                                          int                    key_vector_len,
+                                          int                    offset)
+{
+  meta_wayland_keyboard_update_key_state (&compositor->seat->keyboard,
+                                          key_vector, key_vector_len, offset);
+}
+
 void
 meta_wayland_compositor_destroy_frame_callbacks (MetaWaylandCompositor *compositor,
                                                  MetaWaylandSurface    *surface)
@@ -249,6 +271,8 @@ set_gnome_env (const char *name,
       g_error_free (error);
     }
 }
+
+static void meta_wayland_log_func (const char *, va_list) G_GNUC_PRINTF (1, 0);
 
 static void
 meta_wayland_log_func (const char *fmt,
@@ -310,6 +334,7 @@ meta_wayland_init (void)
   meta_wayland_outputs_init (compositor);
   meta_wayland_data_device_manager_init (compositor);
   meta_wayland_shell_init (compositor);
+  meta_wayland_pointer_gestures_init (compositor);
   meta_wayland_seat_init (compositor);
 
   compositor->display_name = wl_display_add_socket_auto (compositor->wayland_display);

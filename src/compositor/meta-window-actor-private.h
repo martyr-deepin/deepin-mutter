@@ -8,6 +8,7 @@
 #include <X11/extensions/Xdamage.h>
 #include <meta/compositor-mutter.h>
 #include "meta-surface-actor.h"
+#include "meta-plugin-manager.h"
 
 MetaWindowActor *meta_window_actor_new (MetaWindow *window);
 
@@ -18,12 +19,10 @@ void meta_window_actor_show (MetaWindowActor *self,
 void meta_window_actor_hide (MetaWindowActor *self,
                              MetaCompEffect   effect);
 
-void meta_window_actor_maximize   (MetaWindowActor *self,
-                                   MetaRectangle   *old_rect,
-                                   MetaRectangle   *new_rect);
-void meta_window_actor_unmaximize (MetaWindowActor *self,
-                                   MetaRectangle   *old_rect,
-                                   MetaRectangle   *new_rect);
+void meta_window_actor_size_change   (MetaWindowActor *self,
+                                      MetaSizeChange   which_change,
+                                      MetaRectangle   *old_frame_rect,
+                                      MetaRectangle   *old_buffer_rect);
 
 void meta_window_actor_process_x11_damage (MetaWindowActor    *self,
                                            XDamageNotifyEvent *event);
@@ -55,8 +54,8 @@ void     meta_window_actor_sync_updates_frozen (MetaWindowActor *self);
 void     meta_window_actor_queue_frame_drawn   (MetaWindowActor *self,
                                                 gboolean         no_delay_frame);
 
-void meta_window_actor_effect_completed (MetaWindowActor *actor,
-                                         gulong           event);
+void meta_window_actor_effect_completed (MetaWindowActor  *actor,
+                                         MetaPluginEffect  event);
 
 MetaSurfaceActor *meta_window_actor_get_surface (MetaWindowActor *self);
 void meta_window_actor_update_surface (MetaWindowActor *self);

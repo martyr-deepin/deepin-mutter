@@ -37,12 +37,14 @@
 #include <unistd.h>
 
 #include <systemd/sd-login.h>
+#include <gudev/gudev.h>
 
 #include "dbus-utils.h"
 #include "meta-dbus-login1.h"
 
 #include "backends/meta-backend-private.h"
 #include "meta-cursor-renderer-native.h"
+#include "meta-idle-monitor-native.h"
 
 struct _MetaLauncher
 {
@@ -52,12 +54,27 @@ struct _MetaLauncher
   gboolean session_active;
 };
 
+static void
+report_error_and_die (const char *prefix,
+                      GError *error)
+{
+  /* if a function returns due to g_return_val_if_fail,
+   * then the error may not be set */
+  if (error)
+    g_error ("%s: %s", prefix, error->message);
+  else
+    g_error ("%s", prefix);
+
+  /* the error is not freed, but it is ok as g_error aborts the process */
+}
+
 static Login1Session *
 get_session_proxy (GCancellable *cancellable)
 {
   char *proxy_path;
   char *session_id;
   Login1Session *session_proxy;
+  GError *error = NULL;
 
   if (sd_pid_get_session (getpid (), &session_id) < 0)
     return NULL;
@@ -68,7 +85,10 @@ get_session_proxy (GCancellable *cancellable)
                                                          G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
                                                          "org.freedesktop.login1",
                                                          proxy_path,
-                                                         cancellable, NULL);
+                                                         cancellable, &error);
+  if (!session_proxy)
+    report_error_and_die ("Failed getting session proxy", error);
+
   free (proxy_path);
 
   return session_proxy;
@@ -77,22 +97,27 @@ get_session_proxy (GCancellable *cancellable)
 static Login1Seat *
 get_seat_proxy (GCancellable *cancellable)
 {
-  return login1_seat_proxy_new_for_bus_sync (G_BUS_TYPE_SYSTEM,
-                                             G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-                                             "org.freedesktop.login1",
-                                             "/org/freedesktop/login1/seat/self",
-                                             cancellable, NULL);
+  GError *error = NULL;
+  Login1Seat *seat = login1_seat_proxy_new_for_bus_sync (G_BUS_TYPE_SYSTEM,
+                                                         G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
+                                                         "org.freedesktop.login1",
+                                                         "/org/freedesktop/login1/seat/self",
+                                                         cancellable, &error);
+  if (!seat)
+    report_error_and_die ("Could not get seat proxy", error);
+
+  return seat;
 }
 
 static void
 session_unpause (void)
 {
-  ClutterBackend *backend;
+  ClutterBackend *clutter_backend;
   CoglContext *cogl_context;
   CoglDisplay *cogl_display;
 
-  backend = clutter_get_default_backend ();
-  cogl_context = clutter_backend_get_cogl_context (backend);
+  clutter_backend = clutter_get_default_backend ();
+  cogl_context = clutter_backend_get_cogl_context (clutter_backend);
   cogl_display = cogl_context_get_display (cogl_context);
   cogl_kms_display_queue_modes_reset (cogl_display);
 
@@ -110,6 +135,7 @@ session_unpause (void)
 
     clutter_actor_queue_redraw (stage);
     meta_cursor_renderer_native_force_update (META_CURSOR_RENDERER_NATIVE (renderer));
+    meta_idle_monitor_native_reset_idletime (meta_idle_monitor_get_core ());
   }
 }
 
@@ -128,9 +154,8 @@ take_device (Login1Session *session_proxy,
              GCancellable  *cancellable,
              GError       **error)
 {
-  gboolean ret = FALSE;
-  GVariant *fd_variant = NULL;
-  GUnixFDList *fd_list = NULL;
+  g_autoptr (GVariant) fd_variant = NULL;
+  g_autoptr (GUnixFDList) fd_list = NULL;
   int fd = -1;
 
   if (!login1_session_call_take_device_sync (session_proxy,
@@ -142,21 +167,14 @@ take_device (Login1Session *session_proxy,
                                              &fd_list,
                                              cancellable,
                                              error))
-    goto out;
+    return FALSE;
 
   fd = g_unix_fd_list_get (fd_list, g_variant_get_handle (fd_variant), error);
   if (fd == -1)
-    goto out;
+    return FALSE;
 
   *out_fd = fd;
-  ret = TRUE;
-
- out:
-  if (fd_variant)
-    g_variant_unref (fd_variant);
-  if (fd_list)
-    g_object_unref (fd_list);
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -164,22 +182,16 @@ get_device_info_from_path (const char *path,
                            int        *out_major,
                            int        *out_minor)
 {
-  gboolean ret = FALSE;
   int r;
   struct stat st;
 
   r = stat (path, &st);
-  if (r < 0)
-    goto out;
-  if (!S_ISCHR (st.st_mode))
-    goto out;
+  if (r < 0 || !S_ISCHR (st.st_mode))
+    return FALSE;
 
   *out_major = major (st.st_rdev);
   *out_minor = minor (st.st_rdev);
-  ret = TRUE;
-
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -187,22 +199,16 @@ get_device_info_from_fd (int  fd,
                          int *out_major,
                          int *out_minor)
 {
-  gboolean ret = FALSE;
   int r;
   struct stat st;
 
   r = fstat (fd, &st);
-  if (r < 0)
-    goto out;
-  if (!S_ISCHR (st.st_mode))
-    goto out;
+  if (r < 0 || !S_ISCHR (st.st_mode))
+    return FALSE;
 
   *out_major = major (st.st_rdev);
   *out_minor = minor (st.st_rdev);
-  ret = TRUE;
-
- out:
-  return ret;
+  return TRUE;
 }
 
 static int
@@ -241,7 +247,7 @@ on_evdev_device_close (int      fd,
   if (!get_device_info_from_fd (fd, &major, &minor))
     {
       g_warning ("Could not get device info for fd %d: %m", fd);
-      return;
+      goto out;
     }
 
   if (!login1_session_call_release_device_sync (self->session_proxy,
@@ -250,6 +256,9 @@ on_evdev_device_close (int      fd,
     {
       g_warning ("Could not release device %d,%d: %s", major, minor, error->message);
     }
+
+out:
+  close (fd);
 }
 
 static void
@@ -277,31 +286,115 @@ on_active_changed (Login1Session *session,
   sync_active (self);
 }
 
-static gboolean
+static gchar *
+get_primary_gpu_path (const gchar *seat_name)
+{
+  const gchar *subsystems[] = {"drm", NULL};
+  gchar *path = NULL;
+  GList *devices, *tmp;
+
+  GUdevClient *gudev_client = g_udev_client_new (subsystems);
+  GUdevEnumerator *enumerator = g_udev_enumerator_new (gudev_client);
+
+  g_udev_enumerator_add_match_name (enumerator, "card*");
+  g_udev_enumerator_add_match_tag (enumerator, "seat");
+
+  devices = g_udev_enumerator_execute (enumerator);
+  if (!devices)
+    goto out;
+
+  for (tmp = devices; tmp != NULL; tmp = tmp->next)
+    {
+      GUdevDevice *pci_device;
+      GUdevDevice *dev = tmp->data;
+      gint boot_vga;
+      const gchar *device_seat;
+
+      /* filter out devices that are not character device, like card0-VGA-1 */
+      if (g_udev_device_get_device_type (dev) != G_UDEV_DEVICE_TYPE_CHAR)
+        continue;
+
+      device_seat = g_udev_device_get_property (dev, "ID_SEAT");
+      if (!device_seat)
+        {
+          /* when ID_SEAT is not set, it means seat0 */
+          device_seat = "seat0";
+        }
+      else if (g_strcmp0 (device_seat, "seat0") != 0)
+        {
+          /* if the device has been explicitly assigned other seat
+           * than seat0, it is probably the right device to use */
+          path = g_strdup (g_udev_device_get_device_file (dev));
+          break;
+        }
+
+      /* skip devices that do not belong to our seat */
+      if (g_strcmp0 (seat_name, device_seat))
+        continue;
+
+      pci_device = g_udev_device_get_parent_with_subsystem (dev, "pci", NULL);
+      if (!pci_device)
+          continue;
+
+      /* get value of boot_vga attribute or 0 if the device has no boot_vga */
+      boot_vga = g_udev_device_get_sysfs_attr_as_int (pci_device, "boot_vga");
+      g_object_unref (pci_device);
+
+      if (boot_vga == 1)
+        {
+          /* found the boot_vga device */
+          path = g_strdup (g_udev_device_get_device_file (dev));
+          break;
+        }
+    }
+
+  g_list_free_full (devices, g_object_unref);
+
+out:
+  g_object_unref (enumerator);
+  g_object_unref (gudev_client);
+
+  return path;
+}
+
+static void
 get_kms_fd (Login1Session *session_proxy,
+            const gchar *seat_id,
             int *fd_out)
 {
   int major, minor;
   int fd;
+  gchar *path;
   GError *error = NULL;
 
-  /* XXX -- use udev to find the DRM master device */
-  if (!get_device_info_from_path ("/dev/dri/card0", &major, &minor))
-    {
-      g_warning ("Could not stat /dev/dri/card0: %m");
-      return FALSE;
-    }
+  path = get_primary_gpu_path (seat_id);
+  if (!path)
+    g_error ("could not find drm kms device");
+
+  if (!get_device_info_from_path (path, &major, &minor))
+    g_error ("Could not stat %s: %m", path);
+
+  g_free (path);
 
   if (!take_device (session_proxy, major, minor, &fd, NULL, &error))
-    {
-      g_warning ("Could not open DRM device: %s\n", error->message);
-      g_error_free (error);
-      return FALSE;
-    }
+    report_error_and_die ("Could not open DRM device", error);
 
   *fd_out = fd;
+}
 
-  return TRUE;
+static gchar *
+get_seat_id (void)
+{
+  char *session_id, *seat_id = NULL;
+
+  if (sd_pid_get_session (0, &session_id) < 0)
+    return NULL;
+
+  /* on error the seat_id will remain NULL */
+  sd_session_get_seat (session_id, &seat_id);
+  free (session_id);
+
+  return seat_id;
 }
 
 MetaLauncher *
@@ -309,22 +402,23 @@ meta_launcher_new (void)
 {
   MetaLauncher *self = NULL;
   Login1Session *session_proxy;
+  char *seat_id;
   GError *error = NULL;
   int kms_fd;
 
   session_proxy = get_session_proxy (NULL);
   if (!login1_session_call_take_control_sync (session_proxy, FALSE, NULL, &error))
-    {
-      g_warning ("Could not take control: %s", error->message);
-      g_error_free (error);
-      goto out;
-    }
+    report_error_and_die ("Could not take control", error);
 
-  if (!get_kms_fd (session_proxy, &kms_fd))
-    goto out;
+  seat_id = get_seat_id ();
+  if (!seat_id)
+    g_error ("Failed getting seat id");
+
+  get_kms_fd (session_proxy, seat_id, &kms_fd);
+  free (seat_id);
 
   self = g_slice_new0 (MetaLauncher);
-  self->session_proxy = g_object_ref (session_proxy);
+  self->session_proxy = session_proxy;
   self->seat_proxy = get_seat_proxy (NULL);
 
   self->session_active = TRUE;
@@ -335,9 +429,6 @@ meta_launcher_new (void)
                                       self);
 
   g_signal_connect (self->session_proxy, "notify::active", G_CALLBACK (on_active_changed), self);
-
-out:
-  g_object_unref (session_proxy);
 
   return self;
 }

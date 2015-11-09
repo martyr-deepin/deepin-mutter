@@ -39,12 +39,14 @@ deepin_mutter_built_sources = \
 	$(dbus_idle_built_sources)		\
 	$(dbus_display_config_built_sources)	\
 	$(dbus_login1_built_sources)		\
-	mutter-enum-types.h 			\
-	mutter-enum-types.c			\
+	meta/meta-enum-types.h			\
+	meta-enum-types.c			\
 	$(NULL)
 
 if HAVE_WAYLAND
 deepin_mutter_built_sources += \
+	pointer-gestures-protocol.c		\
+	pointer-gestures-server-protocol.h	\
 	gtk-shell-protocol.c			\
 	gtk-shell-server-protocol.h		\
 	xdg-shell-protocol.c			\
@@ -53,6 +55,7 @@ deepin_mutter_built_sources += \
 endif
 
 wayland_protocols =				\
+	wayland/protocol/pointer-gestures.xml	\
 	wayland/protocol/gtk-shell.xml		\
 	wayland/protocol/xdg-shell.xml		\
 	$(NULL)
@@ -65,7 +68,6 @@ libdeepin_mutter_la_SOURCES =				\
 	backends/meta-barrier-private.h		\
 	backends/meta-cursor.c			\
 	backends/meta-cursor.h			\
-	backends/meta-cursor-private.h		\
 	backends/meta-cursor-tracker.c		\
 	backends/meta-cursor-tracker-private.h	\
 	backends/meta-cursor-renderer.c		\
@@ -94,6 +96,8 @@ libdeepin_mutter_la_SOURCES =				\
 	backends/x11/meta-barrier-x11.h			\
 	backends/x11/meta-cursor-renderer-x11.c		\
 	backends/x11/meta-cursor-renderer-x11.h		\
+	backends/x11/nested/meta-cursor-renderer-x11-nested.c		\
+	backends/x11/nested/meta-cursor-renderer-x11-nested.h		\
 	backends/x11/meta-idle-monitor-xsync.c		\
 	backends/x11/meta-idle-monitor-xsync.h		\
 	backends/x11/meta-input-settings-x11.c		\
@@ -132,13 +136,14 @@ libdeepin_mutter_la_SOURCES =				\
 	compositor/meta-plugin-manager.c	\
 	compositor/meta-plugin-manager.h	\
 	compositor/meta-shadow-factory.c	\
-	compositor/meta-shadow-factory-private.h	\
 	compositor/meta-shaped-texture.c	\
 	compositor/meta-shaped-texture-private.h 	\
 	compositor/meta-surface-actor.c		\
 	compositor/meta-surface-actor.h		\
 	compositor/meta-surface-actor-x11.c	\
 	compositor/meta-surface-actor-x11.h	\
+	compositor/meta-sync-ring.c		\
+	compositor/meta-sync-ring.h		\
 	compositor/meta-texture-rectangle.c	\
 	compositor/meta-texture-rectangle.h	\
 	compositor/meta-texture-tower.c		\
@@ -148,7 +153,6 @@ libdeepin_mutter_la_SOURCES =				\
 	compositor/meta-window-group.c		\
 	compositor/meta-window-group.h		\
 	compositor/meta-window-shape.c		\
-	compositor/meta-window-shape.h		\
 	compositor/region-utils.c		\
 	compositor/region-utils.h		\
 	meta/compositor.h			\
@@ -159,6 +163,7 @@ libdeepin_mutter_la_SOURCES =				\
 	meta/meta-plugin.h			\
 	meta/meta-shadow-factory.h		\
 	meta/meta-window-actor.h		\
+	meta/meta-window-shape.h		\
 	meta/compositor-mutter.h 		\
 	core/constraints.c			\
 	core/constraints.h			\
@@ -210,10 +215,7 @@ libdeepin_mutter_la_SOURCES =				\
 	meta/theme.h				\
 	ui/theme-private.h			\
 	ui/ui.c					\
-	x11/iconcache.c				\
-	x11/iconcache.h				\
-	x11/async-getprop.c			\
-	x11/async-getprop.h			\
+	x11/atomnames.h				\
 	x11/events.c				\
 	x11/events.h				\
 	x11/group-private.h			\
@@ -221,6 +223,8 @@ libdeepin_mutter_la_SOURCES =				\
 	x11/group-props.h			\
 	x11/group.c				\
 	meta/group.h				\
+	x11/iconcache.c				\
+	x11/iconcache.h				\
 	x11/session.c				\
 	x11/session.h				\
 	x11/window-props.c			\
@@ -242,6 +246,8 @@ libdeepin_mutter_la_SOURCES +=				\
 	wayland/meta-wayland-private.h		\
 	wayland/meta-xwayland.c			\
 	wayland/meta-xwayland.h			\
+	wayland/meta-xwayland-selection.c	\
+	wayland/meta-xwayland-selection-private.h	\
 	wayland/meta-xwayland-private.h		\
 	wayland/meta-wayland-buffer.c      	\
 	wayland/meta-wayland-buffer.h      	\
@@ -249,6 +255,13 @@ libdeepin_mutter_la_SOURCES +=				\
 	wayland/meta-wayland-region.h      	\
 	wayland/meta-wayland-data-device.c      \
 	wayland/meta-wayland-data-device.h      \
+	wayland/meta-wayland-data-device-private.h	\
+	wayland/meta-wayland-pointer-gestures.c	\
+	wayland/meta-wayland-pointer-gestures.h	\
+	wayland/meta-wayland-pointer-gesture-swipe.c	\
+	wayland/meta-wayland-pointer-gesture-swipe.h	\
+	wayland/meta-wayland-pointer-gesture-pinch.c	\
+	wayland/meta-wayland-pointer-gesture-pinch.h	\
 	wayland/meta-wayland-keyboard.c		\
 	wayland/meta-wayland-keyboard.h		\
 	wayland/meta-wayland-pointer.c		\
@@ -265,8 +278,8 @@ libdeepin_mutter_la_SOURCES +=				\
 	wayland/meta-wayland-versions.h		\
 	wayland/meta-wayland-outputs.c		\
 	wayland/meta-wayland-outputs.h		\
-	wayland/window-wayland.c		\
-	wayland/window-wayland.h		\
+	wayland/meta-window-wayland.c		\
+	wayland/meta-window-wayland.h		\
 	$(NULL)
 endif
 
@@ -322,6 +335,7 @@ libdeepin_mutterinclude_headers =			\
 	meta/meta-shaped-texture.h		\
 	meta/meta-shadow-factory.h		\
 	meta/meta-window-actor.h		\
+	meta/meta-window-shape.h		\
 	meta/prefs.h				\
 	meta/screen.h				\
 	meta/theme.h				\
@@ -332,22 +346,18 @@ libdeepin_mutterinclude_headers =			\
 	$(NULL)
 
 libdeepin_mutterinclude_built_headers =		\
-	meta/meta-version.h
+	meta/meta-version.h			\
+	meta/meta-enum-types.h			\
+	$(NULL)
 
 libdeepin_mutterinclude_base_headers =			\
 	$(libdeepin_mutterinclude_headers)		\
 	$(libdeepin_mutterinclude_built_headers)
 
-# Excluded from scanning for introspection but installed
-# atomnames.h: macros cause problems for scanning process
-libdeepin_mutterinclude_extra_headers =		\
-	meta/atomnames.h
-
 libdeepin_mutterincludedir = $(includedir)/deepin-mutter/meta
 
 libdeepin_mutterinclude_HEADERS =			\
-	$(libdeepin_mutterinclude_headers)		\
-	$(libdeepin_mutterinclude_extra_headers)
+	$(libdeepin_mutterinclude_headers)
 
 nodist_libdeepin_mutterinclude_HEADERS =		\
 	$(libdeepin_mutterinclude_built_headers)
@@ -390,7 +400,6 @@ Meta-$(api_version).gir: libdeepin-mutter.la
 @META_GIR@_CFLAGS = $(AM_CPPFLAGS)
 @META_GIR@_LIBS = libdeepin-mutter.la
 @META_GIR@_FILES =				\
-	mutter-enum-types.h			\
 	$(libdeepin_mutterinclude_base_headers)	\
 	$(filter %.c,$(libdeepin_mutter_la_SOURCES) $(nodist_libdeepin_mutter_la_SOURCES))
 @META_GIR@_SCANNERFLAGS = --warn-all --warn-error
@@ -413,8 +422,8 @@ pkgconfig_DATA = libmutter.pc
 EXTRA_DIST +=					\
 	$(wayland_protocols)			\
 	libmutter.pc.in				\
-	mutter-enum-types.h.in			\
-	mutter-enum-types.c.in			\
+	meta-enum-types.h.in			\
+	meta-enum-types.c.in			\
 	org.freedesktop.login1.xml		\
 	org.gnome.Mutter.DisplayConfig.xml	\
 	org.gnome.Mutter.IdleMonitor.xml	\
@@ -424,26 +433,26 @@ BUILT_SOURCES =					\
 	$(deepin_mutter_built_sources)			\
 	$(libdeepin_mutterinclude_built_headers)
 
-MUTTER_STAMP_FILES = stamp-mutter-enum-types.h
+MUTTER_STAMP_FILES = stamp-meta-enum-types.h
 CLEANFILES += $(MUTTER_STAMP_FILES)
 
-mutter-enum-types.h: stamp-mutter-enum-types.h Makefile
+meta/meta-enum-types.h: stamp-meta-enum-types.h Makefile
 	@true
-stamp-mutter-enum-types.h: $(libdeepin_mutterinclude_base_headers) mutter-enum-types.h.in
+stamp-meta-enum-types.h: $(libdeepin_mutterinclude_headers) meta-enum-types.h.in
 	$(AM_V_GEN) ( cd $(srcdir) && \
 	  $(GLIB_MKENUMS) \
-	    --template mutter-enum-types.h.in \
+	    --template meta-enum-types.h.in \
 	  $(libdeepin_mutterinclude_base_headers) ) >> xgen-teth && \
-	(cmp -s xgen-teth mutter-enum-types.h || cp xgen-teth mutter-enum-types.h) && \
+	(cmp -s xgen-teth meta/meta-enum-types.h || cp xgen-teth meta/meta-enum-types.h) && \
 	rm -f xgen-teth && \
 	echo timestamp > $(@F)
 
-mutter-enum-types.c: stamp-mutter-enum-types.h mutter-enum-types.c.in
+meta-enum-types.c: stamp-meta-enum-types.h meta-enum-types.c.in
 	  $(AM_V_GEN) ( cd $(srcdir) && \
 	  $(GLIB_MKENUMS) \
-	    --template mutter-enum-types.c.in \
+	    --template meta-enum-types.c.in \
 	  $(libdeepin_mutterinclude_base_headers) ) >> xgen-tetc && \
-	cp xgen-tetc mutter-enum-types.c && \
+	cp xgen-tetc meta-enum-types.c && \
 	rm -f xgen-tetc
 
 dbus_display_config_built_sources = meta-dbus-display-config.c meta-dbus-display-config.h

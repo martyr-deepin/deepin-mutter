@@ -26,8 +26,9 @@
 #include <math.h>
 #include <string.h>
 
+#include <meta/meta-shadow-factory.h>
+
 #include "cogl-utils.h"
-#include "meta-shadow-factory-private.h"
 #include "region-utils.h"
 
 /* This file implements blurring the shape of a window to produce a
@@ -1048,3 +1049,6 @@ meta_shadow_factory_get_params (MetaShadowFactory *factory,
   if (params)
     *params = *stored_params;
 }
+
+G_DEFINE_BOXED_TYPE (MetaShadow, meta_shadow,
+                     meta_shadow_ref, meta_shadow_unref)

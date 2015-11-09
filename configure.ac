@@ -1,7 +1,7 @@
 AC_PREREQ(2.62)
 
 m4_define([mutter_major_version], [3])
-m4_define([mutter_minor_version], [16])
+m4_define([mutter_minor_version], [18])
 m4_define([mutter_micro_version], [1])
 
 m4_define([mutter_version],
@@ -55,19 +55,6 @@ PKG_PROG_PKG_CONFIG([0.21])
 # Sets GLIB_GENMARSHAL and GLIB_MKENUMS
 AM_PATH_GLIB_2_0()
 
-#### Integer sizes
-
-AC_CHECK_SIZEOF(char)
-AC_CHECK_SIZEOF(short)
-AC_CHECK_SIZEOF(long)
-AC_CHECK_SIZEOF(int)
-AC_CHECK_SIZEOF(void *)
-AC_CHECK_SIZEOF(long long)
-AC_CHECK_SIZEOF(__int64)
-
-## byte order
-AC_C_BIGENDIAN
-
 CANBERRA_GTK=libcanberra-gtk3
 CANBERRA_GTK_VERSION=0.26
 
@@ -79,7 +66,7 @@ MUTTER_PC_MODULES="
    pango >= 1.2.0
    cairo >= 1.10.0
    gsettings-desktop-schemas >= 3.15.92
-   $CLUTTER_PACKAGE >= 1.21.3
+   $CLUTTER_PACKAGE >= 1.23.4
    cogl-1.0 >= 1.17.1
    upower-glib >= 0.99.0
    gnome-desktop-3.0
@@ -287,6 +274,8 @@ AC_CHECK_LIB(Xrandr, XRRUpdateConfiguration,
 
 if test "x$found_randr" = "xyes"; then
    AC_DEFINE(HAVE_RANDR, , [Have the Xrandr extension library])
+   PKG_CHECK_EXISTS([xrandr >= 1.5.0],
+                 AC_DEFINE([HAVE_XRANDR15],[1],[Define if you have support for XRandR 1.5 or greater]))
 fi
 
 MUTTER_LIBS="$MUTTER_LIBS $RANDR_LIBS $X_LIBS $X_PRE_LIBS -lX11 $X_EXTRA_LIBS -lm"
@@ -333,7 +322,10 @@ if test "x$enable_debug" = "xyes"; then
 	CFLAGS="$CFLAGS -g -O"
 fi
 
-GTK_DOC_CHECK([1.15], [--flavour no-tmpl])
+AC_CHECK_DECL([GL_EXT_x11_sync_object],
+              [],
+              [AC_MSG_ERROR([GL_EXT_x11_sync_object definition not found, please update your GL headers])],
+              [#include <GL/glx.h>])
 
 #### Warnings (last since -Werror can disturb other tests)
 
@@ -406,8 +398,6 @@ Makefile
 data/Makefile
 doc/Makefile
 doc/man/Makefile
-doc/reference/Makefile
-doc/reference/meta-docs.sgml
 src/Makefile
 src/libmutter.pc
 src/compositor/plugins/Makefile

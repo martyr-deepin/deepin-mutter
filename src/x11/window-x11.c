@@ -1283,7 +1283,7 @@ meta_window_x11_update_struts (MetaWindow *window)
   GSList *old_struts;
   GSList *new_struts;
   GSList *old_iter, *new_iter;
-  gulong *struts = NULL;
+  uint32_t *struts = NULL;
   int nitems;
   gboolean changed;
 
@@ -1346,7 +1346,7 @@ meta_window_x11_update_struts (MetaWindow *window)
               new_struts = g_slist_prepend (new_struts, temp);
             }
 
-          meta_verbose ("_NET_WM_STRUT_PARTIAL struts %lu %lu %lu %lu for "
+          meta_verbose ("_NET_WM_STRUT_PARTIAL struts %u %u %u %u for "
                         "window %s\n",
                         struts[0], struts[1], struts[2], struts[3],
                         window->desc);
@@ -1405,7 +1405,7 @@ meta_window_x11_update_struts (MetaWindow *window)
               new_struts = g_slist_prepend (new_struts, temp);
             }
 
-          meta_verbose ("_NET_WM_STRUT struts %lu %lu %lu %lu for window %s\n",
+          meta_verbose ("_NET_WM_STRUT struts %u %u %u %u for window %s\n",
                         struts[0], struts[1], struts[2], struts[3],
                         window->desc);
         }
@@ -1472,6 +1472,13 @@ meta_window_x11_update_icon (MetaWindow       *window,
 }
 
 static void
+meta_window_x11_update_main_monitor (MetaWindow *window)
+{
+  window->monitor = meta_screen_calculate_monitor_for_window (window->screen,
+                                                              window);
+}
+
+static void
 meta_window_x11_main_monitor_changed (MetaWindow *window,
                                       const MetaMonitorInfo *old)
 {
@@ -1495,6 +1502,7 @@ meta_window_x11_class_init (MetaWindowX11Class *klass)
   window_class->update_struts = meta_window_x11_update_struts;
   window_class->get_default_skip_hints = meta_window_x11_get_default_skip_hints;
   window_class->update_icon = meta_window_x11_update_icon;
+  window_class->update_main_monitor = meta_window_x11_update_main_monitor;
   window_class->main_monitor_changed = meta_window_x11_main_monitor_changed;
 }
 
@@ -2239,19 +2247,11 @@ meta_window_x11_client_message (MetaWindow *window,
                                             space);
 
       if (workspace)
-        {
-          if (window->on_all_workspaces_requested)
-            meta_window_unstick (window);
-          meta_window_change_workspace (window, workspace);
-        }
+        meta_window_change_workspace (window, workspace);
       else if (space == (int) 0xFFFFFFFF)
-        {
-          meta_window_stick (window);
-        }
+        meta_window_stick (window);
       else
-        {
-          meta_verbose ("No such workspace %d for screen\n", space);
-        }
+        meta_verbose ("No such workspace %d for screen\n", space);
 
       meta_verbose ("Window %s now on_all_workspaces = %d\n",
                     window->desc, window->on_all_workspaces);
@@ -2774,7 +2774,7 @@ maybe_filter_xwindow (MetaDisplay       *display,
        */
       if (!must_be_viewable || attrs->map_state == IsViewable)
         {
-          gulong old_state;
+          uint32_t old_state;
 
           if (!meta_prop_get_cardinal_with_atom_type (display, xwindow,
                                                       display->atom_WM_STATE,
@@ -2910,7 +2910,7 @@ meta_window_x11_new (MetaDisplay       *display,
   if (must_be_viewable && attrs.map_state != IsViewable)
     {
       /* Only manage if WM_STATE is IconicState or NormalState */
-      gulong state;
+      uint32_t state;
 
       /* WM_STATE isn't a cardinal, it's type WM_STATE, but is an int */
       if (!(meta_prop_get_cardinal_with_atom_type (display, xwindow,

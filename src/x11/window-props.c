@@ -428,10 +428,10 @@ reload_net_wm_pid (MetaWindow    *window,
 {
   if (value->type != META_PROP_VALUE_INVALID)
     {
-      gulong cardinal = (int) value->v.cardinal;
+      uint32_t cardinal = (int) value->v.cardinal;
 
       if (cardinal <= 0)
-        meta_warning ("Application set a bogus _NET_WM_PID %lu\n",
+        meta_warning ("Application set a bogus _NET_WM_PID %u\n",
                       cardinal);
       else
         {
@@ -449,7 +449,7 @@ reload_net_wm_user_time (MetaWindow    *window,
 {
   if (value->type != META_PROP_VALUE_INVALID)
     {
-      gulong cardinal = value->v.cardinal;
+      uint32_t cardinal = value->v.cardinal;
       meta_window_set_user_time (window, cardinal);
     }
 }
@@ -670,7 +670,7 @@ reload_opaque_region (MetaWindow    *window,
 
   if (value->type != META_PROP_VALUE_INVALID)
     {
-      gulong *region = value->v.cardinal_list.cardinals;
+      uint32_t *region = value->v.cardinal_list.cardinals;
       int nitems = value->v.cardinal_list.n_cardinals;
 
       cairo_rectangle_int_t *rects;
@@ -810,7 +810,10 @@ reload_net_wm_state (MetaWindow    *window,
       else if (value->v.atom_list.atoms[i] == window->display->atom__NET_WM_STATE_SKIP_PAGER)
         priv->wm_state_skip_pager = TRUE;
       else if (value->v.atom_list.atoms[i] == window->display->atom__NET_WM_STATE_FULLSCREEN)
-        window->fullscreen_after_placement = TRUE;
+        {
+          window->fullscreen = TRUE;
+          g_object_notify (G_OBJECT (window), "fullscreen");
+        }
       else if (value->v.atom_list.atoms[i] == window->display->atom__NET_WM_STATE_ABOVE)
         window->wm_state_above = TRUE;
       else if (value->v.atom_list.atoms[i] == window->display->atom__NET_WM_STATE_BELOW)
@@ -862,7 +865,7 @@ reload_mwm_hints (MetaWindow    *window,
 
   if (hints->flags & MWM_HINTS_DECORATIONS)
     {
-      meta_verbose ("Window %s sets MWM_HINTS_DECORATIONS 0x%lx\n",
+      meta_verbose ("Window %s sets MWM_HINTS_DECORATIONS 0x%x\n",
           window->desc, hints->decorations);
 
       if (hints->decorations == 0)
@@ -878,7 +881,7 @@ reload_mwm_hints (MetaWindow    *window,
     {
       gboolean toggle_value;
 
-      meta_verbose ("Window %s sets MWM_HINTS_FUNCTIONS 0x%lx\n",
+      meta_verbose ("Window %s sets MWM_HINTS_FUNCTIONS 0x%x\n",
                     window->desc, hints->functions);
 
       /* If _ALL is specified, then other flags indicate what to turn off;

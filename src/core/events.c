@@ -40,6 +40,13 @@
 #endif
 #include "meta-surface-actor.h"
 
+#define IS_GESTURE_EVENT(e) ((e)->type == CLUTTER_TOUCHPAD_SWIPE || \
+                             (e)->type == CLUTTER_TOUCHPAD_PINCH || \
+                             (e)->type == CLUTTER_TOUCH_BEGIN || \
+                             (e)->type == CLUTTER_TOUCH_UPDATE || \
+                             (e)->type == CLUTTER_TOUCH_END || \
+                             (e)->type == CLUTTER_TOUCH_CANCEL)
+
 static MetaWindow *
 get_window_for_event (MetaDisplay        *display,
                       const ClutterEvent *event)
@@ -91,6 +98,15 @@ handle_idletime_for_event (const ClutterEvent *event)
 
       device = clutter_event_get_device (event);
       if (device == NULL)
+        return;
+
+      if (event->any.flags & CLUTTER_EVENT_FLAG_SYNTHETIC ||
+          event->type == CLUTTER_ENTER ||
+          event->type == CLUTTER_LEAVE ||
+          event->type == CLUTTER_STAGE_STATE ||
+          event->type == CLUTTER_DESTROY_NOTIFY ||
+          event->type == CLUTTER_CLIENT_MESSAGE ||
+          event->type == CLUTTER_DELETE)
         return;
 
       device_id = clutter_input_device_get_device_id (device);
@@ -190,8 +206,9 @@ meta_display_handle_event (MetaDisplay        *display,
 
   if (meta_is_wayland_compositor () && event->type == CLUTTER_MOTION)
     {
-      MetaCursorTracker *tracker = meta_cursor_tracker_get_for_screen (NULL);
-      meta_cursor_tracker_update_position (tracker, event->motion.x, event->motion.y);
+      meta_cursor_tracker_update_position (meta_cursor_tracker_get_for_screen (NULL),
+                                           event->motion.x, event->motion.y);
+      display->monitor_cache_invalidated = TRUE;
     }
 
   handle_idletime_for_event (event);
@@ -255,15 +272,18 @@ meta_display_handle_event (MetaDisplay        *display,
 
   if (window)
     {
-      if (!clutter_event_get_event_sequence (event))
-        {
-          /* Swallow all non-touch events on windows that come our way.
-           * Touch events that reach here aren't yet in an accepted state,
-           * so Clutter must see them to maybe trigger gestures into
-           * recognition.
-           */
-          bypass_clutter = TRUE;
-        }
+      /* Events that are likely to trigger compositor gestures should
+       * be known to clutter so they can propagate along the hierarchy.
+       * Gesture-wise, there's two groups of events we should be getting
+       * here:
+       * - CLUTTER_TOUCH_* with a touch sequence that's not yet accepted
+       *   by the gesture tracker, these might trigger gesture actions
+       *   into recognition. Already accepted touch sequences are handled
+       *   directly by meta_gesture_tracker_handle_event().
+       * - CLUTTER_TOUCHPAD_* events over windows. These can likewise
+       *   trigger ::captured-event handlers along the way.
+       */
+      bypass_clutter = !IS_GESTURE_EVENT (event);
 
       meta_window_handle_ungrabbed_event (window, event);
 
