@@ -1543,6 +1543,18 @@ handle_enter_notify_event (MetaUIFrame *frame,
 {
   MetaFrameControl control;
 
+  /* HACK: bypass the problem when deepin-wm is used,
+   * some weird enter/leave events come out of nowhere 
+   * during the grab operation for buttons.
+   */
+  MetaDisplay* display = frame->meta_window->display;
+  if (display->grab_op != META_GRAB_OP_NONE 
+          && display->grab_window == frame->meta_window) 
+    {
+      frame->maybe_ignore_leave_notify = TRUE;
+      return TRUE;
+    }
+
   frame->maybe_ignore_leave_notify = FALSE;
 
   control = get_control (frame, event->x, event->y);
