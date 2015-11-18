@@ -676,9 +676,6 @@ maybe_leave_show_desktop_mode (MetaWindow *window)
   if (!window->screen->active_workspace->showing_desktop)
     return;
 
-  if (window->override_redirect) 
-    return;
-
   /* If the window is a transient for the dock or desktop, don't
    * leave show desktop mode when the window opens. That's
    * so you can e.g. hide all windows, manipulate a file on
@@ -1202,8 +1199,12 @@ _meta_window_shared_new (MetaDisplay         *display,
    */
   meta_stack_tracker_queue_sync_stack (window->screen->stack_tracker);
 
-  /* disable show desktop mode unless we're a desktop component */
-  maybe_leave_show_desktop_mode (window);
+  if (!window->override_redirect)
+    {
+        meta_verbose ("%s: maybe_leave_show_desktop_mode\n", __func__);
+      /* disable show desktop mode unless we're a desktop component */
+      maybe_leave_show_desktop_mode (window);
+    }
 
   meta_window_queue (window, META_QUEUE_CALC_SHOWING);
   /* See bug 303284; a transient of the given window can already exist, in which
@@ -1538,6 +1539,11 @@ meta_window_showing_on_its_workspace (MetaWindow *window)
       showing = FALSE;
     }
 
+  if (window->override_redirect) 
+    {
+      meta_verbose ("%s: override_redirect window, force set showing = true\n", __func__);
+      showing = TRUE;
+    }
   /* 3. See if an ancestor is minimized (note that
    *    ancestor's "mapped" field may not be up to date
    *    since it's being computed in this same idle queue)
@@ -3389,6 +3395,8 @@ meta_window_activate_full (MetaWindow     *window,
     timestamp = meta_display_get_current_time_roundtrip (window->display);
 
   meta_window_set_user_time (window, timestamp);
+
+  meta_verbose ("%s: maybe_leave_show_desktop_mode\n", __func__);
 
   /* disable show desktop mode unless we're a desktop component */
   maybe_leave_show_desktop_mode (window);
