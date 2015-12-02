@@ -24,6 +24,8 @@
 
 #include "config.h"
 
+#include <stdlib.h>
+
 #include <meta/meta-backend.h>
 #include "meta-backend-private.h"
 #include "meta-input-settings-private.h"
@@ -626,7 +628,10 @@ meta_clutter_init (void)
   meta_create_backend ();
 
   if (clutter_init (NULL, NULL) != CLUTTER_INIT_SUCCESS)
-    g_error ("Unable to initialize Clutter.\n");
+    {
+      g_warning ("Unable to initialize Clutter.\n");
+      exit (1);
+    }
 
   /*
    * XXX: We cannot handle high dpi scaling yet, so fix the scale to 1

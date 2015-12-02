@@ -637,6 +637,70 @@ output_get_connector_type (MetaMonitorManagerXrandr *manager_xrandr,
   return META_CONNECTOR_TYPE_Unknown;
 }
 
+static void
+output_get_modes (MetaMonitorManager *manager,
+                  MetaOutput         *meta_output,
+                  XRROutputInfo      *output)
+{
+  guint j, k;
+  guint n_actual_modes;
+
+  meta_output->modes = g_new0 (MetaMonitorMode *, output->nmode);
+
+  n_actual_modes = 0;
+  for (j = 0; j < (guint)output->nmode; j++)
+    {
+      for (k = 0; k < manager->n_modes; k++)
+        {
+          if (output->modes[j] == (XID)manager->modes[k].mode_id)
+            {
+              meta_output->modes[n_actual_modes] = &manager->modes[k];
+              n_actual_modes += 1;
+              break;
+            }
+        }
+    }
+  meta_output->n_modes = n_actual_modes;
+  if (n_actual_modes > 0)
+    meta_output->preferred_mode = meta_output->modes[0];
+}
+
+static void
+output_get_crtcs (MetaMonitorManager *manager,
+                  MetaOutput         *meta_output,
+                  XRROutputInfo      *output)
+{
+  guint j, k;
+  guint n_actual_crtcs;
+
+  meta_output->possible_crtcs = g_new0 (MetaCRTC *, output->ncrtc);
+
+  n_actual_crtcs = 0;
+  for (j = 0; j < (unsigned)output->ncrtc; j++)
+    {
+      for (k = 0; k < manager->n_crtcs; k++)
+        {
+          if ((XID)manager->crtcs[k].crtc_id == output->crtcs[j])
+            {
+              meta_output->possible_crtcs[n_actual_crtcs] = &manager->crtcs[k];
+              n_actual_crtcs += 1;
+              break;
+            }
+        }
+    }
+  meta_output->n_possible_crtcs = n_actual_crtcs;
+
+  meta_output->crtc = NULL;
+  for (j = 0; j < manager->n_crtcs; j++)
+    {
+      if ((XID)manager->crtcs[j].crtc_id == output->crtc)
+        {
+          meta_output->crtc = &manager->crtcs[j];
+          break;
+        }
+    }
+}
+
 static char *
 get_xmode_name (XRRModeInfo *xmode)
 {
@@ -773,6 +837,8 @@ meta_monitor_manager_xrandr_read_current (MetaMonitorManager *manager)
       MetaOutput *meta_output;
 
       output = XRRGetOutputInfo (manager_xrandr->xdisplay, resources, resources->outputs[i]);
+      if (!output)
+        continue;
 
       meta_output = &manager->outputs[n_actual_outputs];
 
@@ -796,44 +862,8 @@ meta_monitor_manager_xrandr_read_current (MetaMonitorManager *manager)
           meta_output->connector_type = output_get_connector_type (manager_xrandr, meta_output);
 
 	  output_get_tile_info (manager_xrandr, meta_output);
-	  meta_output->n_modes = output->nmode;
-	  meta_output->modes = g_new0 (MetaMonitorMode *, meta_output->n_modes);
-	  for (j = 0; j < meta_output->n_modes; j++)
-	    {
-	      for (k = 0; k < manager->n_modes; k++)
-		{
-		  if (output->modes[j] == (XID)manager->modes[k].mode_id)
-		    {
-		      meta_output->modes[j] = &manager->modes[k];
-		      break;
-		    }
-		}
-	    }
-	  meta_output->preferred_mode = meta_output->modes[0];
-
-	  meta_output->n_possible_crtcs = output->ncrtc;
-	  meta_output->possible_crtcs = g_new0 (MetaCRTC *, meta_output->n_possible_crtcs);
-	  for (j = 0; j < (unsigned)output->ncrtc; j++)
-	    {
-	      for (k = 0; k < manager->n_crtcs; k++)
-		{
-		  if ((XID)manager->crtcs[k].crtc_id == output->crtcs[j])
-		    {
-		      meta_output->possible_crtcs[j] = &manager->crtcs[k];
-		      break;
-		    }
-		}
-	    }
-
-	  meta_output->crtc = NULL;
-	  for (j = 0; j < manager->n_crtcs; j++)
-	    {
-	      if ((XID)manager->crtcs[j].crtc_id == output->crtc)
-		{
-		  meta_output->crtc = &manager->crtcs[j];
-		  break;
-		}
-	    }
+	  output_get_modes (manager, meta_output, output);
+          output_get_crtcs (manager, meta_output, output);
 
 	  meta_output->n_possible_clones = output->nclone;
 	  meta_output->possible_clones = g_new0 (MetaOutput *, meta_output->n_possible_clones);
@@ -857,7 +887,10 @@ meta_monitor_manager_xrandr_read_current (MetaMonitorManager *manager)
 	  else
 	    meta_output->backlight = -1;
 
-	  n_actual_outputs++;
+          if (meta_output->n_modes == 0 || meta_output->n_possible_crtcs == 0)
+            meta_monitor_manager_clear_output (meta_output);
+          else
+            n_actual_outputs++;
 	}
 
       XRRFreeOutputInfo (output);
