@@ -680,6 +680,12 @@ output_get_crtcs (MetaMonitorManager *manager,
     {
       for (k = 0; k < manager->n_crtcs; k++)
         {
+          /* for unknown reason, current crtc may has no valid mode.
+           * if this happens, we leave this output as turned off
+           **/
+          if (manager->crtcs[k].current_mode == NULL) 
+            continue;
+
           if ((XID)manager->crtcs[k].crtc_id == output->crtcs[j])
             {
               meta_output->possible_crtcs[n_actual_crtcs] = &manager->crtcs[k];

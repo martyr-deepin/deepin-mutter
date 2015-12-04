@@ -188,6 +188,10 @@ static gboolean constrain_partially_onscreen (MetaWindow         *window,
                                               ConstraintInfo     *info,
                                               ConstraintPriority  priority,
                                               gboolean            check_only);
+static gboolean constrain_keep_at_edge       (MetaWindow         *window,
+                                              ConstraintInfo     *info,
+                                              ConstraintPriority  priority,
+                                              gboolean            check_only);
 
 static void setup_constraint_info        (ConstraintInfo      *info,
                                           MetaWindow          *window,
@@ -222,6 +226,7 @@ static const Constraint all_constraints[] = {
   {constrain_fully_onscreen,     "constrain_fully_onscreen"},
   {constrain_titlebar_visible,   "constrain_titlebar_visible"},
   {constrain_partially_onscreen, "constrain_partially_onscreen"},
+  {constrain_keep_at_edge,       "constrain_keep_at_edge"},
   {NULL,                         NULL}
 };
 
@@ -683,6 +688,49 @@ constrain_modal_dialog (MetaWindow         *window,
                                                      info->usable_screen_region,
                                                      info,
                                                      check_only);
+}
+
+static gboolean
+constrain_keep_at_edge (MetaWindow         *window,
+                        ConstraintInfo     *info,
+                        ConstraintPriority  priority,
+                        gboolean            check_only)
+{
+  MetaRectangle target_rect;
+  GSList        *all_struts;
+  GSList        *strut_iter;
+
+  all_struts = window->struts;
+  if (!all_struts) {
+    return TRUE;
+  }
+
+  target_rect = info->current;
+
+  for (strut_iter = all_struts; strut_iter; strut_iter = strut_iter->next)
+    {
+      MetaStrut *strut = (MetaStrut*) strut_iter->data;
+
+      if (strut->side == META_SIDE_LEFT)
+        {
+          target_rect.x = 0;
+        }
+      else if (strut->side == META_SIDE_RIGHT)
+        {
+          target_rect.x = info->entire_monitor.width - strut->rect.width;
+        }
+      else if (strut->side == META_SIDE_TOP)
+        {
+          target_rect.y = 0;
+        }
+      else if (strut->side == META_SIDE_BOTTOM)
+        {
+          target_rect.y = info->entire_monitor.height - strut->rect.height;
+        }
+    }
+
+  info->current = target_rect;
+  return TRUE;
 }
 
 static gboolean

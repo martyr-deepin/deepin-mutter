@@ -96,6 +96,8 @@ construct_tile_monitor (MetaMonitorManager *manager,
         return;
     }
 
+  meta_verbose ("%s: build tiling monitor\n", __func__);
+
   /* didn't find it */
   info.number = monitor_infos->len;
   info.tile_group_id = tile_group_id;
@@ -1392,6 +1394,9 @@ meta_monitor_manager_rebuild_derived (MetaMonitorManager *manager)
   old_n_monitor_infos = manager->n_monitor_infos;
 
   if (manager->in_init)
+    return;
+
+  if (manager->n_outputs == 0) 
     return;
 
   make_logical_config (manager);

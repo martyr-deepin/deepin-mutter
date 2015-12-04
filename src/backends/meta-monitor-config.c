@@ -1112,6 +1112,32 @@ find_primary_output (MetaOutput *outputs,
   return best;
 }
 
+static gboolean
+init_config_from_current_mode (MetaOutputConfig *config,
+                                 MetaOutput *output)
+{
+  MetaMonitorMode* current_mode;
+
+  current_mode = NULL;
+  if (output->crtc) 
+    current_mode = output->crtc->current_mode;
+
+  if (!current_mode)
+    return FALSE;
+
+  config->enabled = TRUE;
+  config->rect.x = 0;
+  config->rect.y = 0;
+  config->rect.width = current_mode->width;
+  config->rect.height = current_mode->height;
+  config->refresh_rate = current_mode->refresh_rate;
+  config->transform = META_MONITOR_TRANSFORM_NORMAL;
+  config->is_primary = FALSE;
+  config->is_presentation = FALSE;
+
+  return TRUE;
+}
+
 static void
 init_config_from_preferred_mode (MetaOutputConfig *config,
                                  MetaOutput *output)
@@ -1384,8 +1410,11 @@ make_default_config (MetaMonitorConfig *self,
      nothing else to do */
   if (n_outputs == 1)
     {
-      init_config_from_preferred_mode (&ret->outputs[0], &outputs[0]);
-      ret->outputs[0].is_primary = TRUE;
+      if (!init_config_from_current_mode(&ret->outputs[0], &outputs[0])) 
+        {
+          init_config_from_preferred_mode (&ret->outputs[0], &outputs[0]);
+          ret->outputs[0].is_primary = TRUE;
+        }
       goto check_limits;
     }
 
