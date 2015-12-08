@@ -4590,7 +4590,21 @@ meta_window_raise (MetaWindow  *window)
    * the child windows appropriately.
    */
   if (window->screen->stack == ancestor->screen->stack)
-    meta_stack_raise (window->screen->stack, ancestor);
+    {
+      meta_stack_raise (window->screen->stack, ancestor);
+      MetaWindow* target = meta_stack_get_above (window->screen->stack,
+              window, TRUE);
+      if (target != NULL && target->transient_for == window)
+        {
+           if (target->type == META_WINDOW_MODAL_DIALOG)
+            {
+              meta_verbose ("unable to operate\n");
+              /*meta_window_set_demands_attention (target);*/
+              g_signal_emit_by_name (window->display, "window-demands-attention",
+                      window);
+            }
+        }
+    }
   else
     {
       meta_warning (
