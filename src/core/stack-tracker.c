@@ -235,6 +235,7 @@ stack_dump (MetaStackTracker *tracker,
 static void
 meta_stack_tracker_dump (MetaStackTracker *tracker)
 {
+#if 0
   GList *l;
 
   meta_topic (META_DEBUG_STACK, "MetaStackTracker state (screen=%d)\n", tracker->screen->number);
@@ -255,6 +256,7 @@ meta_stack_tracker_dump (MetaStackTracker *tracker)
       stack_dump (tracker, tracker->predicted_stack);
     }
   meta_pop_no_msg_prefix ();
+#endif
 }
 
 static void

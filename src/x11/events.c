@@ -1667,7 +1667,7 @@ meta_display_handle_xevent (MetaDisplay *display,
   gboolean bypass_compositor = FALSE, bypass_gtk = FALSE;
   XIEvent *input_event;
 
-#if 0
+#if 1
   meta_spew_event_print (display, event);
 #endif
 
