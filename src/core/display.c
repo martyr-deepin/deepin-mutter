@@ -125,6 +125,7 @@ enum
   SHOW_RESTART_MESSAGE,
   RESTART,
   SHOW_RESIZE_POPUP,
+  UNABLE_TO_OPERATE,
   LAST_SIGNAL
 };
 
@@ -341,6 +342,15 @@ meta_display_class_init (MetaDisplayClass *klass)
                   NULL, NULL,
                   G_TYPE_BOOLEAN, 4,
                   G_TYPE_BOOLEAN, META_TYPE_RECTANGLE, G_TYPE_INT, G_TYPE_INT);
+
+  display_signals[UNABLE_TO_OPERATE] =
+    g_signal_new ("unable-to-operate",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE, 1,
+                  META_TYPE_WINDOW);
 
   g_object_class_install_property (object_class,
                                    PROP_FOCUS_WINDOW,

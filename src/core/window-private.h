@@ -290,7 +290,7 @@ struct _MetaWindow
   guint wm_state_above : 1;
   guint wm_state_below : 1;
 
-  /* EWHH demands attention flag */
+  /* EWMH demands attention flag */
   guint wm_state_demands_attention : 1;
 
   /* TRUE iff window == window->display->focus_window */
