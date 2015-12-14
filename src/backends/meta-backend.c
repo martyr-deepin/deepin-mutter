@@ -311,7 +311,7 @@ meta_backend_real_post_init (MetaBackend *backend)
 
   priv->input_settings = meta_input_settings_create ();
 
-  center_pointer (backend);
+  /*center_pointer (backend);*/
 }
 
 static MetaCursorRenderer *
