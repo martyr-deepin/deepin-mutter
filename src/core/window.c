@@ -3383,12 +3383,23 @@ meta_window_activate_full (MetaWindow     *window,
   if (timestamp != 0 &&
       XSERVER_TIME_IS_BEFORE (timestamp, window->display->last_user_time))
     {
+      /* this comment comes from openbox:
+       * we can not trust the timestamp from applications.
+         e.g. chromium passes a very old timestamp.  openbox thinks
+         the window will get focus and calls XSetInputFocus with the
+         (old) timestamp, which doesn't end up moving focus at all.
+         but the window is raised, not hilited, etc, as if it was
+         really going to get focus.
+
+         so do not use this timestamp in data.l[1], as this would
+         be used in XSetInputFocus.
+         */
       meta_topic (META_DEBUG_FOCUS,
                   "last_user_time (%u) is more recent; ignoring "
-                  " _NET_ACTIVE_WINDOW message.\n",
+                  " _NET_ACTIVE_WINDOW timestamp.\n",
                   window->display->last_user_time);
-      meta_window_set_demands_attention(window);
-      return;
+      /*meta_window_set_demands_attention(window);*/
+      timestamp = 0;
     }
 
   if (timestamp == 0)
