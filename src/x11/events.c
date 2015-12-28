@@ -684,7 +684,7 @@ meta_spew_event_print (MetaDisplay *display,
     return;
 
   event_str = meta_spew_event (display, event);
-  g_print ("%s\n", event_str);
+  meta_topic (META_DEBUG_EVENTS, "%s\n", event_str);
   g_free (event_str);
 }
 
