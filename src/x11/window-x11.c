@@ -1118,7 +1118,9 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
     }
 
   if (client_rect.x != priv->client_rect.x ||
-      client_rect.y != priv->client_rect.y)
+      client_rect.y != priv->client_rect.y ||
+      unconstrained_rect.x != constrained_rect.x ||
+      unconstrained_rect.y != constrained_rect.y)
     {
       need_move_client = TRUE;
       priv->client_rect.x = client_rect.x;
