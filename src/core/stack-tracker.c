@@ -1042,6 +1042,46 @@ meta_stack_tracker_lower (MetaStackTracker *tracker,
   meta_stack_tracker_raise_above (tracker, window, None);
 }
 
+static void
+meta_stack_tracker_restack_override_redirected (MetaStackTracker *tracker,
+                                    const guint64    *managed,
+                                    int               n_managed)
+{
+  guint64 *windows;
+  int n_windows;
+  int old_pos;
+
+  if (n_managed == 0)
+    return;
+
+  /* keep OR windows above all normal window, and keep their relative positions intact. */
+  meta_stack_tracker_get_stack (tracker, &windows, &n_windows);
+  Window bottom = managed[n_managed - 1];
+  old_pos = n_windows - 1;
+  for (old_pos = n_windows - 1; old_pos >= 0; old_pos--)
+    {
+      MetaWindow *old_window = meta_display_lookup_stack_id (tracker->screen->display, windows[old_pos]);
+      if (windows[old_pos] == bottom && !old_window->unmanaging)
+        break;
+    }
+
+  old_pos--; /* move to next which belows first managed window */
+  if (old_pos < 0)
+    {
+      return;
+    }
+
+  for (; old_pos >= 0; old_pos--)
+    {
+      MetaWindow *old_window = meta_display_lookup_stack_id (tracker->screen->display, windows[old_pos]);
+      if (old_window && old_window->override_redirect && !old_window->unmanaging)
+        {
+          meta_stack_tracker_raise_above (tracker, windows[old_pos], bottom);
+          meta_stack_tracker_get_stack (tracker, &windows, &n_windows);
+        }
+    }
+}
+
 void
 meta_stack_tracker_restack_managed (MetaStackTracker *tracker,
                                     const guint64    *managed,
@@ -1115,6 +1155,8 @@ meta_stack_tracker_restack_managed (MetaStackTracker *tracker,
       meta_stack_tracker_lower_below (tracker, managed[new_pos], managed[new_pos - 1]);
       new_pos--;
     }
+
+  meta_stack_tracker_restack_override_redirected (tracker, managed, n_managed);
 }
 
 void
