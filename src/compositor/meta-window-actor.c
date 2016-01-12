@@ -1330,6 +1330,8 @@ meta_window_actor_sync_actor_geometry (MetaWindowActor *self,
   if (meta_window_actor_effect_in_progress (self))
     return;
 
+  meta_verbose ("%s: %d,%d, %d,%d\n", __func__, window_rect.x, window_rect.y,
+          window_rect.width, window_rect.height);
   clutter_actor_set_position (CLUTTER_ACTOR (self),
                               window_rect.x, window_rect.y);
   clutter_actor_set_size (CLUTTER_ACTOR (self),
@@ -1366,6 +1368,7 @@ meta_window_actor_show (MetaWindowActor   *self,
   if (compositor->switch_workspace_in_progress ||
       !start_simple_effect (self, event))
     {
+        meta_verbose ("%s: ", __func__);
       clutter_actor_show (CLUTTER_ACTOR (self));
     }
 }
@@ -1449,6 +1452,10 @@ meta_window_actor_new (MetaWindow *window)
     priv->first_frame_state = INITIALLY_FROZEN;
   else
     priv->first_frame_state = DRAWING_FIRST_FRAME;
+
+  meta_verbose ("%s: first_frame_state %s, exted_sync_req_ctr: %d\n",
+          __func__, is_frozen(self) ? "frozen": "draw",
+          priv->window->extended_sync_request_counter);
 
   /* If a window doesn't start off with updates frozen, we should
    * we should send a _NET_WM_FRAME_DRAWN immediately after the first drawn.
@@ -2211,6 +2218,7 @@ meta_window_actor_set_updates_frozen (MetaWindowActor *self,
 
   updates_frozen = updates_frozen != FALSE;
 
+  meta_verbose ("%s: updates_frozen %d\n", __func__, updates_frozen);
   if (priv->updates_frozen != updates_frozen)
     {
       priv->updates_frozen = updates_frozen;

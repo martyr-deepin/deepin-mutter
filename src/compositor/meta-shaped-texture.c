@@ -27,6 +27,7 @@
 
 #include <config.h>
 
+#include <meta/util.h>
 #include <meta/meta-shaped-texture.h>
 #include "meta-shaped-texture-private.h"
 
@@ -308,6 +309,7 @@ set_cogl_texture (MetaShapedTexture *stex,
       g_signal_emit (stex, signals[SIZE_CHANGED], 0);
     }
 
+  meta_verbose ("%s: %d, %d\n", __func__, width, height);
   /* NB: We don't queue a redraw of the actor here because we don't
    * know how much of the buffer has changed with respect to the
    * previous buffer. We only queue a redraw in response to surface
@@ -701,6 +703,7 @@ meta_shaped_texture_update_area (MetaShapedTexture *stex,
   if (priv->texture == NULL)
     return FALSE;
 
+  meta_verbose ("%s: %d,%d,%d,%d\n", __func__, x, y, width, height);
   meta_texture_tower_update_area (priv->paint_tower, x, y, width, height);
 
   unobscured_region = effective_unobscured_region (stex);

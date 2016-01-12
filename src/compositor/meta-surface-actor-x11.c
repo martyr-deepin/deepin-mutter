@@ -173,6 +173,8 @@ update_pixmap (MetaSurfaceActorX11 *self)
           return;
         }
 
+      meta_verbose ("%s: xwin 0x%x(%s), pixmap id 0x%x\n", __func__, 
+              xwindow, priv->window? priv->window->desc: NULL, new_pixmap);
       set_pixmap (self, new_pixmap);
     }
 }
@@ -210,6 +212,8 @@ meta_surface_actor_x11_process_damage (MetaSurfaceActor *actor,
         priv->does_full_damage = TRUE;
     }
 
+  meta_verbose ("%s: visible %d, region %d,%d,%d,%d\n", __func__, is_visible(self),
+          x, y, width, height);
   if (!is_visible (self))
     return;
 
@@ -315,6 +319,8 @@ sync_unredirected (MetaSurfaceActorX11 *self)
 
   meta_error_trap_push (display);
 
+  meta_verbose ("%s: win %s, unredirected: %d\n", __func__,
+          meta_window_get_description (priv->window), priv->unredirected);
   if (priv->unredirected)
     {
       detach_pixmap (self);

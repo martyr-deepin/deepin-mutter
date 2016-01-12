@@ -1065,6 +1065,18 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
   size_dx = constrained_rect.x - window->rect.width;
   size_dy = constrained_rect.y - window->rect.height;
 
+  meta_topic (META_DEBUG_GEOMETRY,
+              "%s %d,%d, unconstrained %d,%d, %d,%d, "
+              "constrained %d,%d %d,%d"
+              "client_rect: %d,%d %d,%d\n",
+              window->desc, window->rect.x, window->rect.y,
+              unconstrained_rect.x, unconstrained_rect.y,
+              unconstrained_rect.width, unconstrained_rect.height,
+              constrained_rect.x, constrained_rect.y,
+              constrained_rect.width, constrained_rect.height,
+              priv->client_rect.x, priv->client_rect.y,
+              priv->client_rect.width, priv->client_rect.height);
+
   window->rect = constrained_rect;
 
   if (window->frame)
@@ -1179,6 +1191,11 @@ meta_window_x11_move_resize_internal (MetaWindow                *window,
       ((window->size_hints.flags & PPosition) ||
        (window->size_hints.flags & USPosition)))
     need_configure_notify = TRUE;
+
+  meta_verbose ("%s: need_move_frame %d, need_move_client %d, "
+                "need_resize_frame %d, need_resize_client %d\n", __func__,
+                need_move_frame, need_move_client, need_resize_frame,
+                need_resize_client);
 
   /* The rest of this function syncs our new size/pos with X as
    * efficiently as possible

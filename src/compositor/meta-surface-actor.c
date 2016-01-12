@@ -10,6 +10,7 @@
  */
 
 #include <config.h>
+#include <meta/errors.h>
 
 #include "meta-surface-actor.h"
 
@@ -255,6 +256,7 @@ meta_surface_actor_process_damage (MetaSurfaceActor *self,
 {
   MetaSurfaceActorPrivate *priv = self->priv;
 
+  meta_verbose ("%s: is_frozen %d\n", __func__, is_frozen(self));
   if (is_frozen (self))
     {
       /* The window is frozen due to an effect in progress: we ignore damage

@@ -550,6 +550,7 @@ meta_compositor_unmanage (MetaCompositor *compositor)
        * before giving up the window manager selection or the next
        * window manager won't be able to redirect subwindows */
       XCompositeUnredirectSubwindows (xdisplay, xroot, CompositeRedirectManual);
+      meta_verbose ("%s\n", __func__);
     }
 }
 
@@ -739,6 +740,8 @@ meta_compositor_process_event (MetaCompositor *compositor,
           window = meta_display_lookup_x_window (compositor->display, xwin);
         }
 
+      meta_verbose ("%s: xwin 0x%x metawin %p (%s)\n", __func__,
+              ((XDamageNotifyEvent *) event)->drawable, window, window ? window->desc:NULL);
       if (window)
         process_damage (compositor, (XDamageNotifyEvent *) event, window);
     }
