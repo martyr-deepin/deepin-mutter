@@ -543,12 +543,9 @@ meta_window_x11_manage (MetaWindow *window)
    * window hints, as that's what the ICCCM says to do.
    */
 
-  if (window->override_redirect)
-    {
-      priv->client_rect = window->rect;
-      window->buffer_rect = window->rect;
-    }
-  else
+  priv->client_rect = window->rect;
+  window->buffer_rect = window->rect;
+  if (!window->override_redirect)
     {
       MetaRectangle rect;
       MetaMoveResizeFlags flags;
