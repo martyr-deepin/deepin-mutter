@@ -478,6 +478,12 @@ reload_net_wm_user_time_window (MetaWindow    *window,
       window->user_time_window = value->v.xwindow;
       if (window->user_time_window != None)
         {
+          if (meta_display_lookup_x_window (window->display, window->user_time_window) != NULL)
+            {
+              window->user_time_window = None;
+              return;
+            }
+
           /* Kind of a hack; display.c:event_callback() ignores events
            * for unknown windows.  We make window->user_time_window
            * known by registering it with window (despite the fact
