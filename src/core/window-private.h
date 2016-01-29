@@ -380,6 +380,7 @@ struct _MetaWindow
    * is withdrawing the window.
    */
   int unmaps_pending;
+  guint last_unmap_serial;
 
   /* See docs for meta_window_get_stable_sequence() */
   guint32 stable_sequence;

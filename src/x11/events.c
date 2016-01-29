@@ -1321,7 +1321,7 @@ handle_other_xevent (MetaDisplay *display,
                   meta_window_unmanage (window, timestamp);
                   window = NULL;
                 }
-              else
+              else if (window->last_unmap_serial != event->xany.serial)
                 {
                   window->unmaps_pending -= 1;
                   meta_topic (META_DEBUG_WINDOW_STATE,
@@ -1329,6 +1329,8 @@ handle_other_xevent (MetaDisplay *display,
                               window->unmaps_pending);
                 }
             }
+          if (window)
+            window->last_unmap_serial = event->xany.serial;
         }
       break;
     case MapNotify:
