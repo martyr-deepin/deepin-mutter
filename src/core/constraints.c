@@ -699,13 +699,18 @@ constrain_keep_at_edge (MetaWindow         *window,
   MetaRectangle target_rect;
   GSList        *all_struts;
   GSList        *strut_iter;
+  MetaRectangle screen_rect;
 
   all_struts = window->struts;
   if (!all_struts) {
     return TRUE;
   }
 
+  screen_rect = window->screen->rect;
   target_rect = info->current;
+
+  if (check_only)
+    return FALSE;
 
   for (strut_iter = all_struts; strut_iter; strut_iter = strut_iter->next)
     {
@@ -717,7 +722,7 @@ constrain_keep_at_edge (MetaWindow         *window,
         }
       else if (strut->side == META_SIDE_RIGHT)
         {
-          target_rect.x = info->entire_monitor.width - strut->rect.width;
+          target_rect.x = screen_rect.width - strut->rect.width - info->entire_monitor.x;
         }
       else if (strut->side == META_SIDE_TOP)
         {
@@ -725,7 +730,7 @@ constrain_keep_at_edge (MetaWindow         *window,
         }
       else if (strut->side == META_SIDE_BOTTOM)
         {
-          target_rect.y = info->entire_monitor.height - strut->rect.height;
+          target_rect.y = screen_rect.height - strut->rect.height - info->entire_monitor.y;
         }
     }
 
