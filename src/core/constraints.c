@@ -94,6 +94,7 @@ typedef enum
   PRIORITY_MINIMUM = 0, /* Dummy value used for loop start = min(all priorities) */
   PRIORITY_ASPECT_RATIO = 0,
   PRIORITY_ENTIRELY_VISIBLE_ON_SINGLE_MONITOR = 0,
+  PRIORITY_KEEP_AT_EDGE = 0,
   PRIORITY_ENTIRELY_VISIBLE_ON_WORKAREA = 1,
   PRIORITY_SIZE_HINTS_INCREMENTS = 1,
   PRIORITY_MAXIMIZATION = 2,
@@ -701,6 +702,9 @@ constrain_keep_at_edge (MetaWindow         *window,
   GSList        *strut_iter;
   MetaRectangle screen_rect;
 
+  if (priority > PRIORITY_KEEP_AT_EDGE)
+    return TRUE;
+
   all_struts = window->struts;
   if (!all_struts) {
     return TRUE;
@@ -708,9 +712,6 @@ constrain_keep_at_edge (MetaWindow         *window,
 
   screen_rect = window->screen->rect;
   target_rect = info->current;
-
-  if (check_only)
-    return FALSE;
 
   for (strut_iter = all_struts; strut_iter; strut_iter = strut_iter->next)
     {
