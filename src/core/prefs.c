@@ -144,6 +144,10 @@ static void shell_shows_app_menu_changed (GtkSettings *settings,
 static void update_cursor_size_from_gtk (GtkSettings *settings,
                                          GParamSpec *pspec,
                                          gpointer data);
+
+static void update_cursor_theme_from_gtk (GtkSettings *settings,
+                                         GParamSpec *pspec,
+                                         gpointer data);
 static void update_cursor_size (void);
 
 static void queue_changed (MetaPreference  pref);
@@ -981,8 +985,12 @@ meta_prefs_init (void)
                     G_CALLBACK (shell_shows_app_menu_changed), NULL);
 
   if (!meta_is_wayland_compositor ())
-    g_signal_connect (gtk_settings_get_default (), "notify::gtk-cursor-theme-size",
-                      G_CALLBACK (update_cursor_size_from_gtk), NULL);
+    {
+      g_signal_connect (gtk_settings_get_default (), "notify::gtk-cursor-theme-size",
+                        G_CALLBACK (update_cursor_size_from_gtk), NULL);
+      g_signal_connect (gtk_settings_get_default (), "notify::gtk-cursor-theme-name",
+                        G_CALLBACK (update_cursor_theme_from_gtk), NULL);
+    }
 
   settings = g_settings_new (SCHEMA_INPUT_SOURCES);
   g_signal_connect (settings, "changed::" KEY_XKB_OPTIONS,
@@ -1280,6 +1288,30 @@ update_cursor_size_from_gtk (GtkSettings *settings,
     {
       cursor_size = xsettings_cursor_size;
       queue_changed (META_PREF_CURSOR_SIZE);
+    }
+}
+
+static void
+update_cursor_theme_from_gtk (GtkSettings *settings,
+                             GParamSpec *pspec,
+                             gpointer data)
+{
+  GdkScreen *screen = gdk_screen_get_default ();
+  GValue value = G_VALUE_INIT;
+  char* xsettings_cursor_theme = NULL;
+
+  g_value_init (&value, G_TYPE_STRING);
+  if (gdk_screen_get_setting (screen, "gtk-cursor-theme-name", &value))
+    {
+      xsettings_cursor_theme = g_strdup (g_value_get_int (&value));
+    }
+
+  if (g_strcmp0(xsettings_cursor_theme, cursor_theme) != 0)
+    {
+      if (cursor_theme)
+        g_free (cursor_theme);
+      cursor_theme = xsettings_cursor_theme;
+      queue_changed (META_PREF_CURSOR_THEME);
     }
 }
 
