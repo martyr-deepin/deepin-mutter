@@ -854,6 +854,7 @@ _meta_window_shared_new (MetaDisplay         *display,
   meta_window_update_desc (window);
 
   window->override_redirect = attrs->override_redirect;
+  window->deepin_override = FALSE;
 
   /* avoid tons of stack updates */
   meta_stack_freeze (window->screen->stack);
@@ -3703,7 +3704,8 @@ meta_window_move_resize_internal (MetaWindow          *window,
     g_assert_not_reached ();
 
   constrained_rect = unconstrained_rect;
-  if (flags & (META_MOVE_RESIZE_MOVE_ACTION | META_MOVE_RESIZE_RESIZE_ACTION))
+  if ((flags & (META_MOVE_RESIZE_MOVE_ACTION | META_MOVE_RESIZE_RESIZE_ACTION)) &&
+        !window->deepin_override)
     {
       MetaRectangle old_rect;
       meta_window_get_frame_rect (window, &old_rect);

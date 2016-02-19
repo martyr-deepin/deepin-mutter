@@ -147,6 +147,10 @@ struct _MetaWindow
 
   /* Whether this is an override redirect window or not */
   guint override_redirect : 1;
+  /* deepin specialized flag to make a normal window bypass some controls
+   * of wm. e.g constraints 
+   */
+  guint deepin_override: 1;
 
   /* Whether we're maximized */
   guint maximized_horizontally : 1;

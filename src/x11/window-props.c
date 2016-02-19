@@ -1717,6 +1717,26 @@ reload_gtk_hide_titlebar_when_maximized (MetaWindow    *window,
 }
 
 static void
+reload_deepin_override (MetaWindow    *window,
+                        MetaPropValue *value,
+                        gboolean       initial)
+{
+  gboolean requested_value = FALSE;
+  gboolean current_value = window->deepin_override;
+
+  if (value->type != META_PROP_VALUE_INVALID)
+    {
+      requested_value = ((int) value->v.cardinal == 1);
+      meta_verbose ("Request to set deepin_override for window %s.\n", window->desc);
+    }
+
+  if (requested_value == current_value)
+    return;
+
+  window->deepin_override = requested_value;
+}
+
+static void
 reload_bypass_compositor (MetaWindow    *window,
                           MetaPropValue *value,
                           gboolean       initial)
@@ -1839,6 +1859,7 @@ meta_display_init_window_prop_hooks (MetaDisplay *display)
     { display->atom__GTK_APP_MENU_OBJECT_PATH,         META_PROP_VALUE_UTF8,         reload_gtk_app_menu_object_path,         LOAD_INIT },
     { display->atom__GTK_MENUBAR_OBJECT_PATH,          META_PROP_VALUE_UTF8,         reload_gtk_menubar_object_path,          LOAD_INIT },
     { display->atom__GTK_FRAME_EXTENTS,                META_PROP_VALUE_CARDINAL_LIST,reload_gtk_frame_extents,                LOAD_INIT },
+    { display->atom__DEEPIN_OVERRIDE,                  META_PROP_VALUE_CARDINAL,     reload_deepin_override,                  LOAD_INIT },
     { display->atom__NET_WM_USER_TIME_WINDOW, META_PROP_VALUE_WINDOW, reload_net_wm_user_time_window, LOAD_INIT },
     { display->atom__NET_WM_ICON,      META_PROP_VALUE_INVALID,  reload_net_wm_icon,  NONE },
     { display->atom__KWM_WIN_ICON,     META_PROP_VALUE_INVALID,  reload_kwm_win_icon, NONE },
