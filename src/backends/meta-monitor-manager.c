@@ -285,9 +285,12 @@ make_logical_config (MetaMonitorManager *manager)
   manager->n_monitor_infos = monitor_infos->len;
   manager->monitor_infos = (void*)g_array_free (monitor_infos, FALSE);
 
+  // disable it for deepin 
+#if 0
   if (manager_class->add_monitor)
     for (i = 0; i < manager->n_monitor_infos; i++)
       manager_class->add_monitor (manager, &manager->monitor_infos[i]);
+#endif
 }
 
 static void
@@ -329,6 +332,8 @@ meta_monitor_manager_constructed (GObject *object)
 
   meta_monitor_manager_read_current_config (manager);
 
+  // disable it for deepin 
+#if 0
   if (!meta_monitor_config_apply_stored (manager->config, manager))
     meta_monitor_config_make_default (manager->config, manager);
 
@@ -341,6 +346,7 @@ meta_monitor_manager_constructed (GObject *object)
   */
   if (META_IS_MONITOR_MANAGER_XRANDR (manager))
     meta_monitor_manager_read_current_config (manager);
+#endif
 
   make_logical_config (manager);
   initialize_dbus_interface (manager);
