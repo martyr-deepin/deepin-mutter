@@ -1602,6 +1602,12 @@ implement_showing (MetaWindow *window,
     sync_client_window_mapped (window);
 }
 
+void
+meta_window_set_showing (MetaWindow *window, gboolean val)
+{
+    implement_showing (window, val);
+}
+
 static void
 meta_window_calc_showing (MetaWindow  *window)
 {
