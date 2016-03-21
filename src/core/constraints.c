@@ -1287,7 +1287,7 @@ constrain_to_single_monitor (MetaWindow         *window,
       window->type == META_WINDOW_DOCK      ||
       window->screen->n_monitor_infos == 1  ||
       !window->require_on_single_monitor    ||
-      !window->frame                        ||
+      !(window->frame || meta_window_is_client_decorated(window)) ||
       info->is_user_action)
     return TRUE;
 
