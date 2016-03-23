@@ -127,8 +127,10 @@ libdeepin_mutter_la_SOURCES =				\
 	compositor/cogl-utils.h			\
 	compositor/compositor.c			\
 	compositor/compositor-private.h		\
+	compositor/meta-blur-effect.c		\
 	compositor/meta-background.c		\
 	compositor/meta-background-private.h	\
+	compositor/meta-blurred-background-actor.c	\
 	compositor/meta-background-actor.c	\
 	compositor/meta-background-actor-private.h	\
 	compositor/meta-background-image.c	\
@@ -165,7 +167,9 @@ libdeepin_mutter_la_SOURCES =				\
 	compositor/region-utils.c		\
 	compositor/region-utils.h		\
 	meta/compositor.h			\
+	meta/meta-blur-effect.h			\
 	meta/meta-background.h			\
+	meta/meta-blurred-background-actor.h		\
 	meta/meta-background-actor.h		\
 	meta/meta-background-image.h		\
 	meta/meta-background-group.h		\
@@ -341,7 +345,9 @@ libdeepin_mutterinclude_headers =			\
 	meta/keybindings.h			\
 	meta/main.h				\
 	meta/meta-backend.h			\
+	meta/meta-blur-effect.h			\
 	meta/meta-background.h			\
+	meta/meta-blurred-background-actor.h	\
 	meta/meta-background-actor.h		\
 	meta/meta-background-image.h		\
 	meta/meta-background-group.h		\
