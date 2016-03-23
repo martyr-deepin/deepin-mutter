@@ -263,8 +263,11 @@ meta_monitor_config_init (MetaMonitorConfig *self)
   self->up_client = up_client_new ();
   self->lid_is_closed = up_client_get_lid_is_closed (self->up_client);
 
+  // disable it to correspond with dde control center
+#if 0
   g_signal_connect_object (self->up_client, "notify::lid-is-closed",
                            G_CALLBACK (power_client_changed_cb), self, 0);
+#endif
 }
 
 static void
