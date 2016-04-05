@@ -2130,6 +2130,9 @@ window_state_on_map (MetaWindow *window,
 static gboolean
 windows_overlap (const MetaWindow *w1, const MetaWindow *w2)
 {
+  if (w1->minimized || w1->hidden || w2->minimized || w2->hidden)
+    return FALSE;
+
   MetaRectangle w1rect, w2rect;
   meta_window_get_frame_rect (w1, &w1rect);
   meta_window_get_frame_rect (w2, &w2rect);
@@ -2215,6 +2218,7 @@ meta_window_show (MetaWindow *window)
   gboolean place_on_top_on_map;
   gboolean needs_stacking_adjustment;
   MetaWindow *focus_window;
+  gboolean will_be_covered;
   gboolean notify_demands_attention = FALSE;
 
   meta_topic (META_DEBUG_WINDOW_STATE,
@@ -2225,6 +2229,7 @@ meta_window_show (MetaWindow *window)
   did_show = FALSE;
   window_state_on_map (window, &takes_focus_on_map, &place_on_top_on_map);
   needs_stacking_adjustment = FALSE;
+  will_be_covered = window_would_be_covered (window);
 
   meta_topic (META_DEBUG_WINDOW_STATE,
               "Window %s %s focus on map, and %s place on top on map.\n",
@@ -2245,7 +2250,7 @@ meta_window_show (MetaWindow *window)
 
   if ( focus_window != NULL && window->showing_for_first_time &&
       ( (!place_on_top_on_map && !takes_focus_on_map) ||
-      window_would_be_covered (window) )
+      will_be_covered )
     ) {
       if (meta_window_is_ancestor_of_transient (focus_window, window))
         {
@@ -2323,9 +2328,9 @@ meta_window_show (MetaWindow *window)
        * in the stack when it doesn't overlap it confusingly places
        * that new window below a lot of other windows.
        */
-      if (overlap ||
+      if (!will_be_covered && (overlap ||
           (meta_prefs_get_focus_mode () == G_DESKTOP_FOCUS_MODE_CLICK &&
-           meta_prefs_get_raise_on_click ()))
+           meta_prefs_get_raise_on_click ())))
         meta_window_stack_just_below (window, focus_window);
 
       /* If the window will be obscured by the focus window, then the
@@ -2337,7 +2342,7 @@ meta_window_show (MetaWindow *window)
        * a recalculation of overlap, and a call to set_net_wm_state()
        * which we are going to call ourselves here a few lines down.
        */
-      if (overlap)
+      if (overlap || will_be_covered)
         {
           if (!window->wm_state_demands_attention)
             {
