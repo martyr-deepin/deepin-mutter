@@ -1517,9 +1517,12 @@ meta_monitor_manager_xrandr_class_init (MetaMonitorManagerXrandrClass *klass)
   manager_class->change_backlight = meta_monitor_manager_xrandr_change_backlight;
   manager_class->get_crtc_gamma = meta_monitor_manager_xrandr_get_crtc_gamma;
   manager_class->set_crtc_gamma = meta_monitor_manager_xrandr_set_crtc_gamma;
+  // disable them since we delegate job to dde-daemon
+#if 0
 #ifdef HAVE_XRANDR15
   manager_class->add_monitor = meta_monitor_manager_xrandr_add_monitor;
   manager_class->delete_monitor = meta_monitor_manager_xrandr_delete_monitor;
+#endif
 #endif
 }
 
