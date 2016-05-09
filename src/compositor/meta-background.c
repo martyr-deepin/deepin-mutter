@@ -928,7 +928,8 @@ meta_background_set_blend (MetaBackground          *self,
   priv->style = style;
 
   free_wallpaper_texture (self);
-  mark_changed (self);
+  if (file2)
+    mark_changed (self);
 }
 
 void
