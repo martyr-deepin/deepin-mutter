@@ -652,10 +652,35 @@ reload_wm_name (MetaWindow    *window,
     }
 }
 
+static gboolean
+is_run_on_livecd ()
+{
+  GError * error = NULL;
+  gchar* data = NULL;
+  gsize len = 0;
+  gboolean ret = FALSE;
+
+  if (!g_file_get_contents ("/proc/cmdline", &data, &len, &error)) 
+    {
+      meta_warning ("%s\n", error->message);
+      g_error_free (error);
+      return ret;
+    }
+
+  ret = (g_strstr_len (data, len, "boot=casper") != NULL);
+  g_free (data);
+
+  return ret;
+}
+
 static void
 meta_window_set_opaque_region (MetaWindow     *window,
                                cairo_region_t *region)
 {
+  //FIXME: workaround for loongson now, need to remove later
+  if (is_run_on_livecd ())
+    return;
+
   if (cairo_region_equal (window->opaque_region, region))
     return;
 
