@@ -1332,7 +1332,7 @@ handle_other_xevent (MetaDisplay *display,
               window->frame == NULL)
             meta_display_end_grab_op (display, timestamp);
 
-          if (!frame_was_receiver)
+          if (!frame_was_receiver && window->last_unmap_serial != event->xany.serial)
             {
               if (window->unmaps_pending == 0)
                 {
@@ -1345,7 +1345,7 @@ handle_other_xevent (MetaDisplay *display,
                   meta_window_unmanage (window, timestamp);
                   window = NULL;
                 }
-              else if (window->last_unmap_serial != event->xany.serial)
+              else
                 {
                   window->unmaps_pending -= 1;
                   meta_topic (META_DEBUG_WINDOW_STATE,
