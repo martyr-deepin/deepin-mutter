@@ -790,7 +790,7 @@ reload_mutter_hints (MetaWindow    *window,
 
 static inline gboolean _seems_to_be_qqwindow(MetaWindow* window)
 {
-    return (window->res_name && g_ascii_strncasecmp(window->res_name, "qq.exe", 2) == 0);
+    return (window->res_name && g_ascii_strncasecmp(window->res_name, "qq.exe", 6) == 0);
 }
 
 static void
