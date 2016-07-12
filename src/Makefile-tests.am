@@ -33,7 +33,7 @@ mutter_test_runner_SOURCES = tests/test-runner.c
 mutter_test_runner_LDADD = $(MUTTER_LIBS) libdeepin-mutter.la
 
 mutter_test_unit_tests_SOURCES = tests/unit-tests.c
-mutter_test_unit_tests_LDADD = $(MUTTER_LIBS) libmutter.la
+mutter_test_unit_tests_LDADD = $(MUTTER_LIBS) libdeepin-mutter.la
 
 .PHONY: run-tests run-test-runner-tests run-unit-tests
 

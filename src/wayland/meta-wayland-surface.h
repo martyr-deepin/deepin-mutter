@@ -158,7 +158,7 @@ struct _MetaWaylandSurface
   int scale;
   int32_t offset_x, offset_y;
   GList *subsurfaces;
-  GHashTable *outputs;
+  GHashTable *outputs_to_destroy_notify_id;
 
   /* Buffer reference state. */
   struct {

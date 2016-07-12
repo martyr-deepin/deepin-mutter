@@ -186,17 +186,6 @@ rect_for_function (MetaFrameGeometry *fgeom,
         return &fgeom->close_rect;
       else
         return NULL;
-    case META_BUTTON_FUNCTION_STICK:
-    case META_BUTTON_FUNCTION_SHADE:
-    case META_BUTTON_FUNCTION_ABOVE:
-    case META_BUTTON_FUNCTION_UNSTICK:
-    case META_BUTTON_FUNCTION_UNSHADE:
-    case META_BUTTON_FUNCTION_UNABOVE:
-      /* Fringe buttons that used to be supported by theme versions >v1;
-       * if we want to support them again, we need to return the
-       * correspondings rects here
-       */
-      return NULL;
 
     case META_BUTTON_FUNCTION_LAST:
       return NULL;
@@ -511,22 +500,10 @@ meta_frame_layout_calc_geometry (MetaFrameLayout        *layout,
         }
 
       /* Otherwise we need to shave out a button. Shave
-       * above, stick, shade, min, max, close, then menu (menu is most useful);
+       * min, max, close, then menu (menu is most useful);
        * prefer the default button locations.
        */
-      if (strip_button (left_func_rects, &n_left, &fgeom->above_rect))
-        continue;
-      else if (strip_button (right_func_rects, &n_right, &fgeom->above_rect))
-        continue;
-      else if (strip_button (left_func_rects, &n_left, &fgeom->stick_rect))
-        continue;
-      else if (strip_button (right_func_rects, &n_right, &fgeom->stick_rect))
-        continue;
-      else if (strip_button (left_func_rects, &n_left, &fgeom->shade_rect))
-        continue;
-      else if (strip_button (right_func_rects, &n_right, &fgeom->shade_rect))
-        continue;
-      else if (strip_button (left_func_rects, &n_left, &fgeom->min_rect))
+      if (strip_button (left_func_rects, &n_left, &fgeom->min_rect))
         continue;
       else if (strip_button (right_func_rects, &n_right, &fgeom->min_rect))
         continue;
@@ -699,30 +676,6 @@ get_button_rect (MetaButtonType           type,
     {
     case META_BUTTON_TYPE_CLOSE:
       *rect = fgeom->close_rect.visible;
-      break;
-
-    case META_BUTTON_TYPE_SHADE:
-      *rect = fgeom->shade_rect.visible;
-      break;
-
-    case META_BUTTON_TYPE_UNSHADE:
-      *rect = fgeom->unshade_rect.visible;
-      break;
-
-    case META_BUTTON_TYPE_ABOVE:
-      *rect = fgeom->above_rect.visible;
-      break;
-
-    case META_BUTTON_TYPE_UNABOVE:
-      *rect = fgeom->unabove_rect.visible;
-      break;
-
-    case META_BUTTON_TYPE_STICK:
-      *rect = fgeom->stick_rect.visible;
-      break;
-
-    case META_BUTTON_TYPE_UNSTICK:
-      *rect = fgeom->unstick_rect.visible;
       break;
 
     case META_BUTTON_TYPE_MAXIMIZE:
@@ -948,6 +901,7 @@ meta_frame_layout_draw_with_style (MetaFrameLayout         *layout,
       cairo_restore (cr);
       if (button_class)
         gtk_style_context_remove_class (style, button_class);
+      gtk_style_context_set_state (style, state);
     }
 }
 
@@ -1083,7 +1037,6 @@ create_style_context (GType            widget_type,
 
   return style;
 }
-
 
 MetaStyleInfo *
 meta_theme_create_style_info (GdkScreen   *screen,

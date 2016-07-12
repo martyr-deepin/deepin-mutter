@@ -260,11 +260,12 @@ meta_wayland_keyboard_broadcast_key (MetaWaylandKeyboard *keyboard,
     {
       struct wl_client *client = wl_resource_get_client (keyboard->focus_surface->resource);
       struct wl_display *display = wl_client_get_display (client);
-      uint32_t serial = wl_display_next_serial (display);
+
+      keyboard->key_serial = wl_display_next_serial (display);
 
       wl_resource_for_each (resource, l)
         {
-          wl_keyboard_send_key (resource, serial, time, key, state);
+          wl_keyboard_send_key (resource, keyboard->key_serial, time, key, state);
         }
     }
 
@@ -494,6 +495,7 @@ meta_wayland_keyboard_init (MetaWaylandKeyboard *keyboard,
   keyboard->focus_surface_listener.notify = keyboard_handle_focus_surface_destroy;
 
   keyboard->xkb_info.keymap_fd = -1;
+
   keyboard->default_grab.interface = &default_keyboard_grab_interface;
   keyboard->default_grab.keyboard = keyboard;
   keyboard->grab = &keyboard->default_grab;
@@ -786,6 +788,13 @@ meta_wayland_keyboard_create_new_resource (MetaWaylandKeyboard *keyboard,
     {
       wl_list_insert (&keyboard->resource_list, wl_resource_get_link (cr));
     }
+}
+
+gboolean
+meta_wayland_keyboard_can_popup (MetaWaylandKeyboard *keyboard,
+                                 uint32_t             serial)
+{
+  return keyboard->key_serial == serial;
 }
 
 void

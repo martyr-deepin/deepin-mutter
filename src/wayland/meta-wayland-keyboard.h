@@ -82,6 +82,7 @@ struct _MetaWaylandKeyboard
   MetaWaylandSurface *focus_surface;
   struct wl_listener focus_surface_listener;
   uint32_t focus_serial;
+  uint32_t key_serial;
 
   MetaWaylandXkbInfo xkb_info;
   enum xkb_state_component mods_changed;
@@ -116,6 +117,9 @@ void meta_wayland_keyboard_create_new_resource (MetaWaylandKeyboard *keyboard,
                                                 struct wl_client    *client,
                                                 struct wl_resource  *seat_resource,
                                                 uint32_t id);
+
+gboolean meta_wayland_keyboard_can_popup (MetaWaylandKeyboard *keyboard,
+                                          uint32_t             serial);
 
 void meta_wayland_keyboard_start_grab (MetaWaylandKeyboard     *keyboard,
                                        MetaWaylandKeyboardGrab *grab);
