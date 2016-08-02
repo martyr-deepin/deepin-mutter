@@ -1468,8 +1468,8 @@ meta_monitor_manager_xrandr_init (MetaMonitorManagerXrandr *manager_xrandr)
       XRRSelectInput (manager_xrandr->xdisplay,
 		      DefaultRootWindow (manager_xrandr->xdisplay),
 		      RRScreenChangeNotifyMask
-		      | RRCrtcChangeNotifyMask
-		      | RROutputPropertyNotifyMask);
+              | RRCrtcChangeNotifyMask
+              | RROutputChangeNotifyMask);
 
       manager_xrandr->has_randr15 = FALSE;
       XRRQueryVersion (manager_xrandr->xdisplay, &major_version,
@@ -1520,6 +1520,17 @@ meta_monitor_manager_xrandr_class_init (MetaMonitorManagerXrandrClass *klass)
 #endif
 }
 
+static
+gboolean idle_check_randr_configuration(MetaMonitorManager* manager)
+{
+  if (manager->n_outputs == 0) {
+    meta_monitor_manager_read_current_config (manager);
+    meta_verbose ("found 0 outputs from current config, recheck after 1 second\n");
+    return G_SOURCE_CONTINUE;
+  }
+  return G_SOURCE_REMOVE;
+}
+
 gboolean
 meta_monitor_manager_xrandr_handle_xevent (MetaMonitorManagerXrandr *manager_xrandr,
 					   XEvent                   *event)
@@ -1533,8 +1544,13 @@ meta_monitor_manager_xrandr_handle_xevent (MetaMonitorManagerXrandr *manager_xra
   XRRUpdateConfiguration (event);
 
   meta_monitor_manager_read_current_config (manager);
+  if (manager->n_outputs == 0) {
+    meta_verbose ("found 0 outputs from current config, set up an idle rechecker\n");
+    g_timeout_add(1000, idle_check_randr_configuration, manager);
+  }
 
   hotplug = manager_xrandr->resources->timestamp < manager_xrandr->resources->configTimestamp;
+  meta_verbose ("monitor hotplug = %d\n", hotplug);
   if (hotplug)
     {
       /* This is a hotplug event, so go ahead and build a new configuration. */
