@@ -35,6 +35,7 @@ enum
     PROP_MONITOR,
     PROP_BACKGROUND,
     PROP_RADIUS,
+    PROP_ROUNDS,
 };
 
 typedef enum {
@@ -80,7 +81,7 @@ static void build_gaussian_blur_kernel(int* pradius, float* offset, float* weigh
     radius += (radius + 1) % 2;
     int sz = (radius+2)*2-1;
     int N = sz-1;
-    float sigma = 1.0f;
+    float sigma = 1.5f;
 
     float sum = powf(2, N);
     weight[radius+1] = 1.0;
@@ -109,12 +110,6 @@ static void build_gaussian_blur_kernel(int* pradius, float* offset, float* weigh
 #endif
 }
 
-void (*meta_gen_mipmap)(GLenum      target);
-void (*meta_tex_parameteri)(GLenum      target,
-        GLenum      pname, GLint   param);
-void (*meta_bind_texture)( GLenum      target,
-            GLuint      texture);
-
 struct _MetaBlurredBackgroundActorPrivate
 {
     MetaScreen *screen;
@@ -125,6 +120,7 @@ struct _MetaBlurredBackgroundActorPrivate
     gboolean blurred;
     int radius;
     float kernel[41];
+    int rounds;
 
     ChangedFlags changed;
     CoglPipeline *pl_passthrough;
@@ -320,6 +316,14 @@ static void create_texture (MetaBlurredBackgroundActor* self)
             width, height, -1., 1.);
 }
 
+static int get_time()
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+
+    return tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
 static void preblur_texture(MetaBlurredBackgroundActor* self)
 {
     MetaBlurredBackgroundActorPrivate *priv = self->priv;
@@ -330,21 +334,34 @@ static void preblur_texture(MetaBlurredBackgroundActor* self)
     uniform_no = cogl_pipeline_get_uniform_location(priv->pipeline, "resolution");
     cogl_pipeline_set_uniform_float(priv->pipeline, uniform_no, 2, 1, resolution);
 
-    cogl_framebuffer_draw_textured_rectangle (priv->fb, priv->pipeline, 
-            0.0f, 0.0f, priv->fb_width, priv->fb_height,
-            0.0f, 0.0f, 1.00f, 1.00f);
 
-    // round 2
     uniform_no = cogl_pipeline_get_uniform_location (priv->pipeline2, "kernel");
     cogl_pipeline_set_uniform_float (priv->pipeline2, uniform_no, 1, 41, priv->kernel);
 
     uniform_no = cogl_pipeline_get_uniform_location(priv->pipeline2, "resolution");
     cogl_pipeline_set_uniform_float(priv->pipeline2, uniform_no, 2, 1, resolution);
 
-    cogl_framebuffer_draw_textured_rectangle (
-            priv->fb2, priv->pipeline2,
-            0.0f, 0.0f, priv->fb_width, priv->fb_height,
-            0.0f, 0.0f, 1.00f, 1.00f);
+    int start = get_time();
+    for (int i = 0; i < priv->rounds; i++) {
+        CoglTexture* tex1 = i == 0 ? priv->texture : priv->fbTex2;
+        cogl_pipeline_set_layer_texture (priv->pipeline, 0, tex1);
+
+        cogl_framebuffer_draw_textured_rectangle (priv->fb, priv->pipeline, 
+                0.0f, 0.0f, priv->fb_width, priv->fb_height,
+                0.0f, 0.0f, 1.00f, 1.00f);
+
+        if (i > 0) cogl_framebuffer_finish(priv->fb);
+
+
+        cogl_pipeline_set_layer_texture (priv->pipeline2, 0, priv->fbTex);
+        cogl_framebuffer_draw_textured_rectangle (
+                priv->fb2, priv->pipeline2,
+                0.0f, 0.0f, priv->fb_width, priv->fb_height,
+                0.0f, 0.0f, 1.00f, 1.00f);
+
+        if (i > 0) cogl_framebuffer_finish(priv->fb2);
+    }
+    meta_verbose ("preblur rendering time: %d\n", get_time() - start);
 
     cogl_object_unref (priv->fbTex);
     cogl_object_unref (priv->fb);
@@ -454,6 +471,10 @@ static void meta_blurred_background_actor_set_property (GObject      *object,
             meta_blurred_background_actor_set_radius (self,
                     g_value_get_int (value));
             break;
+        case PROP_ROUNDS:
+            meta_blurred_background_actor_set_rounds (self,
+                    g_value_get_int (value));
+            break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
             break;
@@ -480,6 +501,9 @@ static void meta_blurred_background_actor_get_property (GObject      *object,
             break;
         case PROP_RADIUS:
             g_value_set_int (value, priv->radius);
+            break;
+        case PROP_ROUNDS:
+            g_value_set_int (value, priv->rounds);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -546,6 +570,18 @@ meta_blurred_background_actor_class_init (MetaBlurredBackgroundActorClass *klass
     g_object_class_install_property (object_class,
             PROP_RADIUS,
             param_spec);
+
+    param_spec = g_param_spec_int ("rounds",
+                "blur rounds",
+                "blur rounds",
+                1,
+                100,
+                4,
+                G_PARAM_READWRITE);
+
+    g_object_class_install_property (object_class,
+            PROP_ROUNDS,
+            param_spec);
 }
 
 static void meta_blurred_background_actor_init (MetaBlurredBackgroundActor *self)
@@ -557,6 +593,7 @@ static void meta_blurred_background_actor_init (MetaBlurredBackgroundActor *self
             MetaBlurredBackgroundActorPrivate);
 
     priv->radius = 0; // means no blur
+    priv->rounds = 1;
 }
 
 ClutterActor * meta_blurred_background_actor_new (MetaScreen *screen,
@@ -657,6 +694,25 @@ void meta_blurred_background_actor_set_radius (MetaBlurredBackgroundActor *self,
             build_gaussian_blur_kernel(&radius, &priv->kernel[1], &priv->kernel[21]);
             priv->radius = radius;
             priv->kernel[0] = radius;
+        }
+
+        invalidate_pipeline (self, CHANGED_EFFECTS);
+        clutter_actor_queue_redraw (CLUTTER_ACTOR (self));
+    }
+}
+
+
+void meta_blurred_background_actor_set_rounds (MetaBlurredBackgroundActor *self, int rounds)
+{
+    MetaBlurredBackgroundActorPrivate *priv = self->priv;
+
+    g_return_if_fail (META_IS_BLURRED_BACKGROUND_ACTOR (self));
+    g_return_if_fail (rounds >= 1 && rounds <= 100);
+
+    if (priv->rounds != rounds) {
+        priv->rounds = rounds;
+        if (rounds > 0) {
+            priv->rounds = rounds;
         }
 
         invalidate_pipeline (self, CHANGED_EFFECTS);

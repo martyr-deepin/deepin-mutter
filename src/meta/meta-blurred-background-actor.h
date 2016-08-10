@@ -60,5 +60,7 @@ void meta_blurred_background_actor_set_background  (MetaBlurredBackgroundActor *
 /* radius should be odd now, if == 0, means disable */
 void meta_blurred_background_actor_set_radius (MetaBlurredBackgroundActor *self,
                                          int               radius);
+void meta_blurred_background_actor_set_rounds (MetaBlurredBackgroundActor *self,
+                                         int rounds);
 
 #endif /* META_BLURRED_BACKGROUND_ACTOR_H */
