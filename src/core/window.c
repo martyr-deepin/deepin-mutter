@@ -6059,6 +6059,8 @@ meta_window_handle_mouse_grab_op_event  (MetaWindow         *window,
 
     case CLUTTER_BUTTON_RELEASE:
       if (event->button.button == 1 ||
+          (meta_grab_op_is_mouse (window->display->grab_op) &&
+           window->display->grab_button == (int) event->button.button) ||
           event->button.button == (unsigned int) meta_prefs_get_mouse_button_resize ())
         end_grab_op (window, event);
 
