@@ -85,6 +85,7 @@ enum
   WORKSPACE_ADDED,
   WORKSPACE_REMOVED,
   WORKSPACE_SWITCHED,
+  WORKSPACE_REORDERED,
   WINDOW_ENTERED_MONITOR,
   WINDOW_LEFT_MONITOR,
   STARTUP_SEQUENCE_CHANGED,
@@ -197,6 +198,17 @@ meta_screen_class_init (MetaScreenClass *klass)
                   G_TYPE_INT,
                   G_TYPE_INT,
                   META_TYPE_MOTION_DIRECTION);
+
+  screen_signals[WORKSPACE_REORDERED] =
+    g_signal_new ("workspace-reordered",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE,
+                  2,
+                  G_TYPE_INT,
+                  G_TYPE_INT);
 
   screen_signals[WINDOW_ENTERED_MONITOR] =
     g_signal_new ("window-entered-monitor",
@@ -1008,6 +1020,53 @@ set_desktop_viewport_hint (MetaScreen *screen)
                    XA_CARDINAL,
                    32, PropModeReplace, (guchar*) data, 2);
   meta_error_trap_pop (screen->display);
+}
+
+void
+meta_screen_reorder_workspace (MetaScreen    *screen,
+        MetaWorkspace *workspace,
+        int            new_index,
+        guint32        timestamp)
+{
+  GList     *l;
+  int       index;
+  int       from, to;
+  int       active_index;
+
+  active_index = meta_screen_get_active_workspace_index (screen);
+  l = g_list_find (screen->workspaces, workspace);
+  if (!l)
+    return;
+
+  index = meta_workspace_index (workspace);
+  if (new_index == index) 
+    return;
+
+  if (new_index < index) {
+      from = new_index;
+      to = index;
+  } else {
+      from = index;
+      to = new_index;
+  }
+
+  screen->workspaces = g_list_remove_link (screen->workspaces, l);
+  screen->workspaces = g_list_insert (screen->workspaces, l->data, new_index);
+
+  if (active_index != meta_screen_get_active_workspace_index (screen))
+    {
+      meta_screen_set_active_workspace_hint (screen);
+    }
+
+  for (; from <= to; from++) 
+    {
+      MetaWorkspace *w = g_list_nth_data(screen->workspaces, from);
+      meta_workspace_index_changed (w);
+    }
+
+  meta_screen_queue_workarea_recalc (screen);
+
+  g_signal_emit (screen, screen_signals[WORKSPACE_REORDERED], 0, index, new_index);
 }
 
 void

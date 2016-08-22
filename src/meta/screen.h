@@ -62,6 +62,11 @@ MetaWorkspace *meta_screen_append_new_workspace (MetaScreen    *screen,
                                                  gboolean       activate,
                                                  guint32        timestamp);
 
+void meta_screen_reorder_workspace (MetaScreen    *screen,
+                                   MetaWorkspace *workspace,
+                                   int            new_index,
+                                   guint32        timestamp);
+
 int meta_screen_get_active_workspace_index (MetaScreen *screen);
 
 MetaWorkspace * meta_screen_get_active_workspace (MetaScreen *screen);
