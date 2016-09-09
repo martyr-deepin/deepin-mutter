@@ -1427,6 +1427,7 @@ meta_window_actor_new (MetaWindow *window)
   clutter_actor_add_child (window_group, CLUTTER_ACTOR (self));
 
   clutter_actor_hide (CLUTTER_ACTOR (self));
+  clutter_actor_set_name (CLUTTER_ACTOR (self), window->desc);
 
   /* Initial position in the stack is arbitrary; stacking will be synced
    * before we first paint.
