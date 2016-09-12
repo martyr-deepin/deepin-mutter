@@ -331,6 +331,7 @@ static void
 output_get_backlight_limits_xrandr (MetaMonitorManagerXrandr *manager_xrandr,
                                     MetaOutput               *output)
 {
+#if !defined(__mips__)
   Atom atom;
   xcb_connection_t *xcb_conn;
   g_autofree xcb_randr_query_output_property_reply_t *reply;
@@ -357,6 +358,7 @@ output_get_backlight_limits_xrandr (MetaMonitorManagerXrandr *manager_xrandr,
   int32_t *values = xcb_randr_query_output_property_valid_values (reply);
   output->backlight_min = values[0];
   output->backlight_max = values[1];
+#endif
 }
 
 static int
@@ -848,10 +850,11 @@ meta_monitor_manager_xrandr_read_current (MetaMonitorManager *manager)
 
 	  meta_output->winsys_id = resources->outputs[i];
 	  meta_output->name = g_strdup (output->name);
-
+#if !defined(__mips__)
           edid = read_output_edid (manager_xrandr, meta_output->winsys_id);
           meta_output_parse_edid (meta_output, edid);
           g_bytes_unref (edid);
+#endif
 
 	  meta_output->width_mm = output->mm_width;
 	  meta_output->height_mm = output->mm_height;
@@ -877,9 +880,11 @@ meta_monitor_manager_xrandr_read_current (MetaMonitorManager *manager)
 	    }
 
 	  meta_output->is_primary = ((XID)meta_output->winsys_id == primary_output);
+#if !defined(__mips__)
 	  meta_output->is_presentation = output_get_presentation_xrandr (manager_xrandr, meta_output);
 	  meta_output->is_underscanning = output_get_underscanning_xrandr (manager_xrandr, meta_output);
           meta_output->supports_underscanning = output_get_supports_underscanning_xrandr (manager_xrandr, meta_output);
+#endif
 	  output_get_backlight_limits_xrandr (manager_xrandr, meta_output);
 
 	  if (!(meta_output->backlight_min == 0 && meta_output->backlight_max == 0))
@@ -1253,13 +1258,13 @@ meta_monitor_manager_xrandr_apply_configuration (MetaMonitorManager *manager,
       MetaOutputInfo *output_info = outputs[i];
       MetaOutput *output = output_info->output;
 
+#if !defined(__alpha__) && !defined(__sw_64__) && !defined(__mips__)
       if (output_info->is_primary)
         {
           XRRSetOutputPrimary (manager_xrandr->xdisplay,
                                DefaultRootWindow (manager_xrandr->xdisplay),
                                (XID)output_info->output->winsys_id);
         }
-
       output_set_presentation_xrandr (manager_xrandr,
                                       output_info->output,
                                       output_info->is_presentation);
@@ -1269,6 +1274,7 @@ meta_monitor_manager_xrandr_apply_configuration (MetaMonitorManager *manager,
                                          output_info->output,
                                          output_info->is_underscanning);
 
+#endif
       output->is_primary = output_info->is_primary;
       output->is_presentation = output_info->is_presentation;
       output->is_underscanning = output_info->is_underscanning;
@@ -1298,6 +1304,7 @@ meta_monitor_manager_xrandr_change_backlight (MetaMonitorManager *manager,
 					      MetaOutput         *output,
 					      gint                value)
 {
+#if !defined(__mips__)
   MetaMonitorManagerXrandr *manager_xrandr = META_MONITOR_MANAGER_XRANDR (manager);
   Atom atom;
   xcb_void_cookie_t cookie;
@@ -1321,6 +1328,7 @@ meta_monitor_manager_xrandr_change_backlight (MetaMonitorManager *manager,
 
   /* We're not selecting for property notifies, so update the value immediately */
   output->backlight = normalize_backlight (output, hw_value);
+#endif
 }
 
 static void
@@ -1469,7 +1477,7 @@ meta_monitor_manager_xrandr_init (MetaMonitorManagerXrandr *manager_xrandr)
 		      DefaultRootWindow (manager_xrandr->xdisplay),
 		      RRScreenChangeNotifyMask
               | RRCrtcChangeNotifyMask
-              | RROutputChangeNotifyMask);
+              | RROutputPropertyNotifyMask);
 
       manager_xrandr->has_randr15 = FALSE;
       XRRQueryVersion (manager_xrandr->xdisplay, &major_version,
@@ -1520,37 +1528,23 @@ meta_monitor_manager_xrandr_class_init (MetaMonitorManagerXrandrClass *klass)
 #endif
 }
 
-static
-gboolean idle_check_randr_configuration(MetaMonitorManager* manager)
-{
-  if (manager->n_outputs == 0) {
-    meta_monitor_manager_read_current_config (manager);
-    meta_verbose ("found 0 outputs from current config, recheck after 1 second\n");
-    return G_SOURCE_CONTINUE;
-  }
-  return G_SOURCE_REMOVE;
-}
+static guint timeout_id = 0;
 
-gboolean
-meta_monitor_manager_xrandr_handle_xevent (MetaMonitorManagerXrandr *manager_xrandr,
-					   XEvent                   *event)
+static
+gboolean idle_check_randr_configuration(MetaMonitorManagerXrandr* manager_xrandr)
 {
   MetaMonitorManager *manager = META_MONITOR_MANAGER (manager_xrandr);
   gboolean hotplug;
 
-  if ((event->type - manager_xrandr->rr_event_base) != RRScreenChangeNotify)
-    return FALSE;
-
-  XRRUpdateConfiguration (event);
-
   meta_monitor_manager_read_current_config (manager);
   if (manager->n_outputs == 0) {
-    meta_verbose ("found 0 outputs from current config, set up an idle rechecker\n");
-    g_timeout_add(1000, idle_check_randr_configuration, manager);
+    meta_verbose ("id %d: found 0 outputs from current config, recheck after 1 second\n", timeout_id);
+    return G_SOURCE_REMOVE;
   }
 
   hotplug = manager_xrandr->resources->timestamp < manager_xrandr->resources->configTimestamp;
   meta_verbose ("monitor hotplug = %d\n", hotplug);
+
   if (hotplug)
     {
       /* This is a hotplug event, so go ahead and build a new configuration. */
@@ -1561,6 +1555,52 @@ meta_monitor_manager_xrandr_handle_xevent (MetaMonitorManagerXrandr *manager_xra
       /* Something else changed -- tell the world about it. */
       meta_monitor_manager_rebuild_derived (manager);
     }
+  timeout_id = 0;
+  return G_SOURCE_REMOVE;
+}
+
+gboolean
+meta_monitor_manager_xrandr_handle_xevent (MetaMonitorManagerXrandr *manager_xrandr,
+					   XEvent                   *event)
+{
+  MetaMonitorManager *manager = META_MONITOR_MANAGER (manager_xrandr);
+  gboolean hotplug = FALSE;
+
+  int type = (event->type - manager_xrandr->rr_event_base);
+
+  if ((event->type - manager_xrandr->rr_event_base) != RRScreenChangeNotify)
+    return FALSE;
+
+  XRRUpdateConfiguration (event);
+
+#if defined(__mips__)
+  if (timeout_id != 0) {
+     g_source_remove(timeout_id);
+    timeout_id = 0;
+  }
+
+  meta_verbose ("found 0 outputs from current config, set up an idle rechecker\n");
+  timeout_id = g_timeout_add(2000, idle_check_randr_configuration, manager_xrandr);
+
+  return TRUE;
+
+#else
+  meta_monitor_manager_read_current_config (manager);
+
+  hotplug = manager_xrandr->resources->timestamp < manager_xrandr->resources->configTimestamp;
+  meta_verbose ("monitor hotplug = %d\n", hotplug);
+
+  if (hotplug)
+    {
+      /* This is a hotplug event, so go ahead and build a new configuration. */
+      meta_monitor_manager_on_hotplug (manager);
+    }
+  else
+    {
+      /* Something else changed -- tell the world about it. */
+      meta_monitor_manager_rebuild_derived (manager);
+    }
+#endif
 
   return TRUE;
 }
