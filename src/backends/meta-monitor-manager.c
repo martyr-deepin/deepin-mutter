@@ -1493,11 +1493,13 @@ meta_monitor_manager_on_hotplug (MetaMonitorManager *manager)
    * applying our stored configuration, because it's likely the user just resizing
    * the window.
    */
+#if !defined(__mips__)
   if (!meta_monitor_manager_has_hotplug_mode_update (manager))
     {
       if (meta_monitor_config_apply_stored (manager->config, manager))
         applied_config = TRUE;
     }
+#endif
 
   /* If we haven't applied any configuration, apply the default configuration. */
   if (!applied_config)

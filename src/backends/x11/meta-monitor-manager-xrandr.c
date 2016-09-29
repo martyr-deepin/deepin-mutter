@@ -729,7 +729,11 @@ meta_monitor_manager_xrandr_read_current (MetaMonitorManager *manager)
     XRRFreeScreenResources (manager_xrandr->resources);
   manager_xrandr->resources = NULL;
 
+#if defined(__mips__)
+	dpms_capable = 0;
+#else
   dpms_capable = DPMSCapable (manager_xrandr->xdisplay);
+#endif
 
   if (dpms_capable &&
       DPMSInfo (manager_xrandr->xdisplay, &dpms_state, &dpms_enabled) &&
@@ -771,8 +775,13 @@ meta_monitor_manager_xrandr_read_current (MetaMonitorManager *manager)
   manager->screen_width = WidthOfScreen (screen);
   manager->screen_height = HeightOfScreen (screen);
 
+#if defined(__mips__)
+  resources = XRRGetScreenResources (manager_xrandr->xdisplay,
+			    DefaultRootWindow (manager_xrandr->xdisplay));
+#else
   resources = XRRGetScreenResourcesCurrent (manager_xrandr->xdisplay,
-					    DefaultRootWindow (manager_xrandr->xdisplay));
+			    DefaultRootWindow (manager_xrandr->xdisplay));
+#endif
   if (!resources)
     return;
 
@@ -1528,22 +1537,32 @@ meta_monitor_manager_xrandr_class_init (MetaMonitorManagerXrandrClass *klass)
 #endif
 }
 
-static guint timeout_id = 0;
-
-static
-gboolean idle_check_randr_configuration(MetaMonitorManagerXrandr* manager_xrandr)
+static void
+idle_check_randr_configuration(MetaMonitorManagerXrandr* manager_xrandr)
 {
   MetaMonitorManager *manager = META_MONITOR_MANAGER (manager_xrandr);
   gboolean hotplug;
 
-  meta_monitor_manager_read_current_config (manager);
+  int retry = 10;
+  while (retry-- > 0) {
+    meta_monitor_manager_read_current_config (manager);
+    meta_verbose ("xrandr read_current success\n");
+    if (manager->n_outputs == 0) {
+      meta_verbose ("found 0 outputs from current config, recheck after 1 second\n");
+      g_usleep(1000000);
+    } else { 
+      break;
+    }
+  }
   if (manager->n_outputs == 0) {
-    meta_verbose ("id %d: found 0 outputs from current config, recheck after 1 second\n", timeout_id);
-    return G_SOURCE_REMOVE;
+	meta_verbose ("still no ouputs\n");
+	return;
   }
 
   hotplug = manager_xrandr->resources->timestamp < manager_xrandr->resources->configTimestamp;
   meta_verbose ("monitor hotplug = %d\n", hotplug);
+  // force it as non hotplug for loongson
+  hotplug = 0;
 
   if (hotplug)
     {
@@ -1555,8 +1574,8 @@ gboolean idle_check_randr_configuration(MetaMonitorManagerXrandr* manager_xrandr
       /* Something else changed -- tell the world about it. */
       meta_monitor_manager_rebuild_derived (manager);
     }
-  timeout_id = 0;
-  return G_SOURCE_REMOVE;
+  meta_verbose ("xrandr reconfiguration done\n");
+  return;
 }
 
 gboolean
@@ -1571,17 +1590,15 @@ meta_monitor_manager_xrandr_handle_xevent (MetaMonitorManagerXrandr *manager_xra
   if ((event->type - manager_xrandr->rr_event_base) != RRScreenChangeNotify)
     return FALSE;
 
+#if defined(__mips__)
+  // wait for a period to consolidate for signal
+  g_usleep(1000000);
+#endif
+
   XRRUpdateConfiguration (event);
 
 #if defined(__mips__)
-  if (timeout_id != 0) {
-     g_source_remove(timeout_id);
-    timeout_id = 0;
-  }
-
-  meta_verbose ("found 0 outputs from current config, set up an idle rechecker\n");
-  timeout_id = g_timeout_add(2000, idle_check_randr_configuration, manager_xrandr);
-
+  idle_check_randr_configuration(manager_xrandr);
   return TRUE;
 
 #else
