@@ -1543,8 +1543,8 @@ idle_check_randr_configuration(MetaMonitorManagerXrandr* manager_xrandr)
   MetaMonitorManager *manager = META_MONITOR_MANAGER (manager_xrandr);
   gboolean hotplug;
 
-  int retry = 10;
-  while (retry-- > 0) {
+  // do check forever if there is no output at all
+  while (TRUE) {
     meta_monitor_manager_read_current_config (manager);
     meta_verbose ("xrandr read_current success\n");
     if (manager->n_outputs == 0) {
@@ -1556,13 +1556,11 @@ idle_check_randr_configuration(MetaMonitorManagerXrandr* manager_xrandr)
   }
   if (manager->n_outputs == 0) {
 	meta_verbose ("still no ouputs\n");
-	return;
+    hotplug = 1;
+  } else {
+    hotplug = manager_xrandr->resources->timestamp < manager_xrandr->resources->configTimestamp;
+    meta_verbose ("monitor hotplug = %d\n", hotplug);
   }
-
-  hotplug = manager_xrandr->resources->timestamp < manager_xrandr->resources->configTimestamp;
-  meta_verbose ("monitor hotplug = %d\n", hotplug);
-  // force it as non hotplug for loongson
-  hotplug = 0;
 
   if (hotplug)
     {
