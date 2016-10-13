@@ -791,11 +791,6 @@ reload_mutter_hints (MetaWindow    *window,
     }
 }
 
-static inline gboolean _seems_to_be_qqwindow(MetaWindow* window)
-{
-    return (window->res_name && g_ascii_strncasecmp(window->res_name, "qq.exe", 6) == 0);
-}
-
 static void
 reload_net_wm_state (MetaWindow    *window,
                      MetaPropValue *value,
@@ -863,12 +858,6 @@ reload_net_wm_state (MetaWindow    *window,
         window->on_all_workspaces_requested = TRUE;
 
       ++i;
-    }
-
-  if (window->wm_state_above && _seems_to_be_qqwindow(window)) 
-    {
-      meta_verbose ("bypass stay above request for %s\n", window->desc);
-      window->wm_state_above = FALSE;
     }
 
   meta_verbose ("Reloaded _NET_WM_STATE for %s\n",

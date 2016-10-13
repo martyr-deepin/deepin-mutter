@@ -3163,11 +3163,6 @@ meta_window_unmake_above (MetaWindow  *window)
   meta_window_raise (window);
 }
 
-static inline gboolean _seems_to_be_qqwindow(MetaWindow* window)
-{
-    return (window->res_name && g_ascii_strncasecmp(window->res_name, "qq.exe", 6) == 0);
-}
-
 static void
 meta_window_set_above (MetaWindow *window,
                        gboolean    new_value)
@@ -3175,12 +3170,6 @@ meta_window_set_above (MetaWindow *window,
   new_value = new_value != FALSE;
   if (new_value == window->wm_state_above)
     return;
-
-  if (_seems_to_be_qqwindow(window)) 
-    {
-      meta_verbose ("%s: ignore above request for qq windows\n", __func__);
-      return;
-    }
 
   window->wm_state_above = new_value;
   meta_window_update_layer (window);
