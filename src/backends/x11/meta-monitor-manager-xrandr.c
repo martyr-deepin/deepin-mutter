@@ -1559,7 +1559,8 @@ idle_check_randr_configuration(MetaMonitorManagerXrandr* manager_xrandr)
     hotplug = 1;
   } else {
     hotplug = manager_xrandr->resources->timestamp < manager_xrandr->resources->configTimestamp;
-    meta_verbose ("monitor hotplug = %d\n", hotplug);
+    meta_verbose ("monitor hotplug = %d, but force to 0\n", hotplug);
+    hotplug = 0;
   }
 
   if (hotplug)
