@@ -2203,7 +2203,10 @@ meta_display_ping_timeout (gpointer data)
   MetaWindow *window = ping_data->window;
   MetaDisplay *display = window->display;
 
+#if !defined(__mips__)
+  // disable aliveness checking
   meta_window_set_alive (window, FALSE);
+#endif
 
   ping_data->ping_timeout_id = 0;
 
@@ -2304,7 +2307,9 @@ meta_display_pong_for_serial (MetaDisplay    *display,
               ping_data->ping_timeout_id = 0;
             }
 
+#if !defined(__mips__)
           meta_window_set_alive (ping_data->window, TRUE);
+#endif
           ping_data_free (ping_data);
           break;
         }
