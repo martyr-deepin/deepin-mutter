@@ -120,7 +120,7 @@ struct _MetaBlurActorPrivate
 
     cairo_region_t *clip_region;
 
-    guint prepaint_id;
+    int queued_redraw;
 };
 
 static void cullable_iface_init (MetaCullableInterface *iface);
@@ -370,15 +370,24 @@ static gboolean prepare_texture(MetaBlurActor* self)
         /*cogl_pipeline_set_layer_wrap_mode (priv->pipeline, 0, wrap_mode);*/
     }
 
+    clutter_stage_ensure_current (clutter_actor_get_stage (self));
     cogl_texture_copy_sub_image (priv->texture, 0, 0, x, fh - y - height, width, height);
 #else
     // slow version, which works....
-    CoglPixelBuffer *pixbuf = cogl_pixel_buffer_new (ctx, width * height * 4, NULL);
-    CoglBitmap *source_bmp = cogl_bitmap_new_from_buffer (pixbuf,
-            COGL_PIXEL_FORMAT_RGBA_8888,
-            width, height,
-            0,
-            0);
+    static CoglPixelBuffer *pixbuf = NULL;
+    static CoglBitmap *source_bmp = NULL;
+
+    //FIXME: honor size change
+    
+    if (pixbuf == NULL)
+        pixbuf = cogl_pixel_buffer_new (ctx, width * height * 4, NULL);
+
+    if (source_bmp == NULL)
+        source_bmp = cogl_bitmap_new_from_buffer (pixbuf,
+                COGL_PIXEL_FORMAT_RGBA_8888,
+                width, height,
+                0,
+                0);
 
 #define COGL_READ_PIXELS_NO_FLIP (1L << 30)
 
@@ -396,8 +405,8 @@ static gboolean prepare_texture(MetaBlurActor* self)
     cogl_pipeline_set_layer_filters (priv->pipeline, 0,
             COGL_PIPELINE_FILTER_LINEAR_MIPMAP_LINEAR,
             COGL_PIPELINE_FILTER_LINEAR);
-    cogl_object_unref (source_bmp);
-    cogl_object_unref (pixbuf);
+    /*cogl_object_unref (source_bmp);*/
+    /*cogl_object_unref (pixbuf);*/
 #endif
 
     return TRUE;
@@ -456,6 +465,8 @@ static void meta_blur_actor_paint (ClutterActor *actor)
     MetaBlurActorPrivate *priv = self->priv;
     ClutterActorBox actor_box;
     cairo_rectangle_int_t bounding;
+
+    priv->queued_redraw = 0;
 
     if ((priv->clip_region && cairo_region_is_empty (priv->clip_region)))
         return;
@@ -589,6 +600,34 @@ meta_blur_actor_class_init (MetaBlurActorClass *klass)
             param_spec);
 }
 
+static void
+on_parent_queue_redraw (ClutterActor *actor,
+        ClutterActor *origin,
+        gpointer      user_data)
+{
+    MetaBlurActor *self = META_BLUR_ACTOR (user_data);
+    if (self->priv->queued_redraw) return;
+
+    self->priv->queued_redraw = 1;
+
+    clutter_actor_queue_redraw (CLUTTER_ACTOR (self));
+
+    g_signal_stop_emission_by_name (actor, "queue-redraw");
+
+}
+
+static void on_parent_changed (ClutterActor *actor,
+        ClutterActor *old_parent,
+        gpointer      user_data)
+{
+    if (old_parent != NULL) {
+        g_signal_handlers_disconnect_by_func (old_parent, on_parent_queue_redraw, actor);
+    }
+
+    ClutterActor *parent = clutter_actor_get_parent (actor);
+    g_signal_connect (parent, "queue-redraw", on_parent_queue_redraw, actor);
+}
+
 static void meta_blur_actor_init (MetaBlurActor *self)
 {
     MetaBlurActorPrivate *priv;
@@ -599,6 +638,8 @@ static void meta_blur_actor_init (MetaBlurActor *self)
 
     priv->radius = 0; // means no blur
     priv->rounds = 1;
+
+    g_signal_connect (G_OBJECT(self), "parent-set", on_parent_changed, NULL);
 }
 
 ClutterActor * meta_blur_actor_new (MetaScreen *screen)
