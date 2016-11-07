@@ -31,6 +31,7 @@
 #include "meta-monitor-manager-private.h"
 #include "meta-cullable.h"
 
+#include "meta/meta-blur-actor.h"
 #include "meta-surface-actor.h"
 #include "meta-surface-actor-x11.h"
 
@@ -51,6 +52,7 @@ struct _MetaWindowActorPrivate
   MetaCompositor *compositor;
 
   MetaSurfaceActor *surface;
+  MetaBlurActor *blur_background;
 
   /* MetaShadowFactory only caches shadows that are actually in use;
    * to avoid unnecessary recomputation we do two things: 1) we store
@@ -70,6 +72,8 @@ struct _MetaWindowActorPrivate
   cairo_region_t   *shape_region;
   /* The region we should clip to when painting the shadow */
   cairo_region_t   *shadow_clip;
+  /* right now, only one rectangle included */
+  cairo_region_t   *deepin_blur_region;
 
   /* Extracted size-invariant shape used for shadows */
   MetaWindowShape  *shadow_shape;
@@ -431,6 +435,34 @@ meta_window_actor_update_surface (MetaWindowActor *self)
   set_surface (self, surface_actor);
 }
 
+void
+meta_window_actor_update_blur_background (MetaWindowActor *self)
+{
+  MetaWindowActorPrivate *priv = self->priv;
+  MetaWindow *window = priv->window;
+
+  if (window->deepin_blur_region == NULL) 
+    {
+      if (priv->blur_background) 
+        {
+          clutter_actor_remove_child (CLUTTER_ACTOR (self), CLUTTER_ACTOR (priv->blur_background));
+          priv->blur_background = NULL;
+        }
+    }
+  else 
+    {
+      if (!priv->blur_background) 
+        {
+          priv->blur_background = meta_blur_actor_new (window->screen);
+          meta_blur_actor_set_radius (priv->blur_background, 13);
+          clutter_actor_insert_child_below (CLUTTER_ACTOR (self), CLUTTER_ACTOR (priv->blur_background), NULL);
+        }
+
+      meta_window_actor_update_blur_region (self);
+    }
+
+}
+
 static void
 meta_window_actor_constructed (GObject *object)
 {
@@ -441,6 +473,8 @@ meta_window_actor_constructed (GObject *object)
   priv->compositor = window->display->compositor;
 
   meta_window_actor_update_surface (self);
+
+  meta_window_actor_update_blur_background (self);
 
   meta_window_actor_update_opacity (self);
 
@@ -469,6 +503,8 @@ meta_window_actor_dispose (GObject *object)
 
   g_clear_pointer (&priv->shape_region, cairo_region_destroy);
   g_clear_pointer (&priv->shadow_clip, cairo_region_destroy);
+  if (priv->deepin_blur_region)
+    g_clear_pointer (&priv->deepin_blur_region, cairo_region_destroy);
 
   g_clear_pointer (&priv->shadow_class, g_free);
   g_clear_pointer (&priv->focused_shadow, meta_shadow_unref);
@@ -480,6 +516,12 @@ meta_window_actor_dispose (GObject *object)
   g_clear_object (&priv->window);
 
   set_surface (self, NULL);
+
+  if (priv->blur_background)
+    {
+      clutter_actor_remove_child (CLUTTER_ACTOR (self), CLUTTER_ACTOR (priv->blur_background));
+      priv->blur_background = NULL;
+    }
 
   G_OBJECT_CLASS (meta_window_actor_parent_class)->dispose (object);
 }
@@ -1883,6 +1925,7 @@ check_needs_reshape (MetaWindowActor *self)
     {
       meta_window_actor_update_input_region (self);
       meta_window_actor_update_opaque_region (self);
+      /*meta_window_actor_update_blur_region (self);*/
     }
 
   priv->needs_reshape = FALSE;
@@ -1899,6 +1942,47 @@ meta_window_actor_update_shape (MetaWindowActor *self)
     return;
 
   clutter_actor_queue_redraw (CLUTTER_ACTOR (priv->surface));
+}
+
+void
+meta_window_actor_update_blur_region (MetaWindowActor *self)
+{
+  MetaWindowActorPrivate *priv = self->priv;
+
+  cairo_region_t *blur_region;
+  gboolean argb32 = is_argb32 (self);
+
+  if (argb32 && priv->window->deepin_blur_region != NULL)
+    {
+      cairo_rectangle_int_t client_area;
+      meta_window_get_client_area_rect (priv->window, &client_area);
+
+      blur_region = cairo_region_copy (priv->window->deepin_blur_region);
+      cairo_region_translate (blur_region, client_area.x, client_area.y);
+      if (priv->shape_region)
+          cairo_region_intersect (blur_region, priv->shape_region);
+    }
+  else
+    blur_region = NULL;
+
+  if (cairo_region_equal (blur_region, priv->deepin_blur_region)) 
+    return;
+
+  if (priv->deepin_blur_region) 
+    g_clear_pointer(&priv->deepin_blur_region, cairo_region_destroy);
+
+  priv->deepin_blur_region = blur_region;
+
+  cairo_rectangle_int_t rect;
+  cairo_region_get_extents (priv->deepin_blur_region, &rect);
+
+  clutter_actor_set_position (priv->blur_background, rect.x, rect.y);
+  clutter_actor_set_size (priv->blur_background, rect.width, rect.height);
+
+  if (is_frozen (self))
+    return;
+
+  clutter_actor_queue_redraw (CLUTTER_ACTOR (priv->blur_background));
 }
 
 static void

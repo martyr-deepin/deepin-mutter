@@ -47,6 +47,7 @@ void     meta_window_actor_sync_actor_geometry (MetaWindowActor *self,
                                                 gboolean         did_placement);
 void     meta_window_actor_sync_visibility     (MetaWindowActor *self);
 void     meta_window_actor_update_shape        (MetaWindowActor *self);
+void     meta_window_actor_update_blur_region  (MetaWindowActor *self);
 void     meta_window_actor_update_opacity      (MetaWindowActor *self);
 void     meta_window_actor_mapped              (MetaWindowActor *self);
 void     meta_window_actor_unmapped            (MetaWindowActor *self);
@@ -59,5 +60,6 @@ void meta_window_actor_effect_completed (MetaWindowActor  *actor,
 
 MetaSurfaceActor *meta_window_actor_get_surface (MetaWindowActor *self);
 void meta_window_actor_update_surface (MetaWindowActor *self);
+void meta_window_actor_update_blur_background (MetaWindowActor *self);
 
 #endif /* META_WINDOW_ACTOR_PRIVATE_H */

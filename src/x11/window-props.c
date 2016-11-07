@@ -1780,6 +1780,74 @@ reload_deepin_override (MetaWindow    *window,
 }
 
 static void
+meta_window_set_blur_region (MetaWindow     *window,
+                               cairo_region_t *region)
+{
+  if (cairo_region_equal (window->deepin_blur_region, region))
+    return;
+
+  g_clear_pointer (&window->deepin_blur_region, cairo_region_destroy);
+
+  if (region != NULL)
+    window->deepin_blur_region = cairo_region_reference (region);
+
+  meta_compositor_window_blur_changed (window->display->compositor, window);
+}
+
+static void
+reload_deepin_blur_region (MetaWindow    *window,
+                           MetaPropValue *value,
+                           gboolean       initial)
+{
+  cairo_region_t *blur_region = NULL;
+
+  if (value->type != META_PROP_VALUE_INVALID)
+    {
+      uint32_t *region = value->v.cardinal_list.cardinals;
+      int nitems = value->v.cardinal_list.n_cardinals;
+
+      cairo_rectangle_int_t *rects;
+      int i, rect_index, nrects;
+
+      if (nitems % 4 != 0)
+        {
+          meta_verbose ("_NET_WM_DEEPIN_BLUR_REGION does not have a list of 4-tuples.");
+          goto out;
+        }
+
+      /* empty region */
+      if (nitems == 0)
+        goto out;
+
+      nrects = nitems / 4;
+
+      rects = g_new (cairo_rectangle_int_t, nrects);
+
+      rect_index = 0;
+      i = 0;
+      while (i < nitems)
+        {
+          cairo_rectangle_int_t *rect = &rects[rect_index];
+
+          rect->x = region[i++];
+          rect->y = region[i++];
+          rect->width = region[i++];
+          rect->height = region[i++];
+
+          rect_index++;
+        }
+
+      blur_region = cairo_region_create_rectangles (rects, nrects);
+
+      g_free (rects);
+    }
+
+ out:
+  meta_window_set_blur_region (window, blur_region);
+  cairo_region_destroy (blur_region);
+}
+
+static void
 reload_bypass_compositor (MetaWindow    *window,
                           MetaPropValue *value,
                           gboolean       initial)
@@ -1903,6 +1971,7 @@ meta_display_init_window_prop_hooks (MetaDisplay *display)
     { display->atom__GTK_MENUBAR_OBJECT_PATH,          META_PROP_VALUE_UTF8,         reload_gtk_menubar_object_path,          LOAD_INIT },
     { display->atom__GTK_FRAME_EXTENTS,                META_PROP_VALUE_CARDINAL_LIST,reload_gtk_frame_extents,                LOAD_INIT },
     { display->atom__DEEPIN_OVERRIDE,                  META_PROP_VALUE_CARDINAL,     reload_deepin_override,                  LOAD_INIT },
+    { display->atom__NET_WM_DEEPIN_BLUR_REGION,     META_PROP_VALUE_CARDINAL_LIST, reload_deepin_blur_region, LOAD_INIT | INCLUDE_OR },
     { display->atom__NET_WM_USER_TIME_WINDOW, META_PROP_VALUE_WINDOW, reload_net_wm_user_time_window, LOAD_INIT },
     { display->atom__NET_WM_ICON,      META_PROP_VALUE_INVALID,  reload_net_wm_icon,  NONE },
     { display->atom__KWM_WIN_ICON,     META_PROP_VALUE_INVALID,  reload_kwm_win_icon, NONE },

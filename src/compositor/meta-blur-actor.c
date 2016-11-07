@@ -217,11 +217,11 @@ static void create_texture (MetaBlurActor* self)
 
     clutter_actor_get_size (self, &width, &height);
 
-    width = MAX(width, 1.0);
-    height = MAX(height, 1.0);
-
     width *= scale;
     height *= scale;
+
+    width = MAX(width, 1.0);
+    height = MAX(height, 1.0);
 
     if (priv->fbTex2) {
         cogl_object_unref (priv->fbTex2);
@@ -625,7 +625,8 @@ static void on_parent_changed (ClutterActor *actor,
     }
 
     ClutterActor *parent = clutter_actor_get_parent (actor);
-    g_signal_connect (parent, "queue-redraw", on_parent_queue_redraw, actor);
+    if (parent != NULL)
+      g_signal_connect (parent, "queue-redraw", on_parent_queue_redraw, actor);
 }
 
 static void meta_blur_actor_init (MetaBlurActor *self)

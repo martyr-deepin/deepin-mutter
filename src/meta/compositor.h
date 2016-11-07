@@ -69,6 +69,8 @@ void meta_compositor_unmanage (MetaCompositor *compositor);
 
 void meta_compositor_window_shape_changed (MetaCompositor *compositor,
                                            MetaWindow     *window);
+void meta_compositor_window_blur_changed (MetaCompositor *compositor,
+                                           MetaWindow     *window);
 void meta_compositor_window_opacity_changed (MetaCompositor *compositor,
                                              MetaWindow     *window);
 void meta_compositor_window_surface_changed (MetaCompositor *compositor,

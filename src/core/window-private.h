@@ -358,6 +358,9 @@ struct _MetaWindow
   /* if non-NULL, the opaque region _NET_WM_OPAQUE_REGION */
   cairo_region_t *opaque_region;
 
+  /* if non-NULL, the background blur region _NET_WM_DEEPIN_BLUR_REGION */
+  cairo_region_t *deepin_blur_region;
+
   /* the input shape region for picking */
   cairo_region_t *input_region;
 
