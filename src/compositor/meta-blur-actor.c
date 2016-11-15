@@ -220,16 +220,26 @@ static void create_texture (MetaBlurActor* self)
     width *= scale;
     height *= scale;
 
-    width = MAX(width, 1.0);
-    height = MAX(height, 1.0);
+    width = roundf(MAX(width, 1.0));
+    height = roundf(MAX(height, 1.0));
+
+    if (priv->fb_width == width && priv->fb_height == height) {
+        return;
+    }
 
     if (priv->fbTex2) {
         cogl_object_unref (priv->fbTex2);
+        cogl_object_unref (priv->fbTex);
+        cogl_object_unref (priv->fb);
+        cogl_object_unref (priv->fb2);
         priv->fbTex2 = NULL;
+        priv->fbTex = NULL;
+        priv->fb = NULL;
+        priv->fb2 = NULL;
     }
 
-    priv->fb_width = roundf(width);
-    priv->fb_height = roundf(height);
+    priv->fb_width = width;
+    priv->fb_height = height;
     meta_verbose ("%s: recreate fbTex (%f, %f)\n", __func__, width, height);
 
     priv->fbTex = cogl_texture_2d_new_with_size(ctx, priv->fb_width, priv->fb_height);
@@ -265,14 +275,6 @@ static void create_texture (MetaBlurActor* self)
             width, height, -1., 1.);
 }
 
-static int get_time()
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-
-    return tv.tv_sec * 1000 + tv.tv_usec / 1000;
-}
-
 static void preblur_texture(MetaBlurActor* self)
 {
     MetaBlurActorPrivate *priv = self->priv;
@@ -290,7 +292,6 @@ static void preblur_texture(MetaBlurActor* self)
     uniform_no = cogl_pipeline_get_uniform_location(priv->pipeline2, "resolution");
     cogl_pipeline_set_uniform_float(priv->pipeline2, uniform_no, 2, 1, resolution);
 
-    int start = get_time();
     for (int i = 0; i < priv->rounds; i++) {
         CoglTexture* tex1 = i == 0 ? priv->texture : priv->fbTex2;
         cogl_pipeline_set_layer_texture (priv->pipeline, 0, tex1);
@@ -310,14 +311,6 @@ static void preblur_texture(MetaBlurActor* self)
 
         if (i > 0) cogl_framebuffer_finish(priv->fb2);
     }
-    /*meta_verbose ("preblur rendering time: %d\n", get_time() - start);*/
-
-    cogl_object_unref (priv->fbTex);
-    cogl_object_unref (priv->fb);
-    cogl_object_unref (priv->fb2);
-    priv->fbTex = NULL;
-    priv->fb = NULL;
-    priv->fb2 = NULL;
 }
 
 static void flip_image_data (guchar *data, int width, int height, int stride) {
@@ -477,6 +470,9 @@ static void meta_blur_actor_paint (ClutterActor *actor)
     bounding.width = actor_box.x2 - actor_box.x1;
     bounding.height = actor_box.y2 - actor_box.y1;
 
+    cogl_framebuffer_push_rectangle_clip (cogl_get_draw_framebuffer (),
+            bounding.x, bounding.y, bounding.width, bounding.height);
+
     guint8 opacity;
     opacity = clutter_actor_get_paint_opacity (CLUTTER_ACTOR (self));
     cogl_pipeline_set_color4ub (priv->pl_passthrough,
@@ -493,6 +489,8 @@ static void meta_blur_actor_paint (ClutterActor *actor)
             cogl_get_draw_framebuffer (), priv->pl_passthrough,
             bounding.x, bounding.y, bounding.width, bounding.height,
             0.0f, 0.0f, 1.00f, 1.00f);
+
+  cogl_framebuffer_pop_clip (cogl_get_draw_framebuffer ());
 
   CLUTTER_ACTOR_CLASS (meta_blur_actor_parent_class)->paint (actor);
 }
