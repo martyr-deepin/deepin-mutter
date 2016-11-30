@@ -29,6 +29,11 @@
 #include <meta/meta-blur-actor.h>
 #include "meta-cullable.h"
 
+static void _stage_add_always_redraw_actor(ClutterStage *stage, ClutterActor *actor)
+    __attribute__((weakref("clutter_stage_add_always_redraw_actor")));
+static void _stage_remove_always_redraw_actor(ClutterStage *stage, ClutterActor *actor)
+    __attribute__((weakref("clutter_stage_remove_always_redraw_actor")));
+
 enum
 {
     PROP_META_SCREEN = 1,
@@ -168,6 +173,8 @@ static void meta_blur_actor_dispose (GObject *object)
         priv->pipeline2 = NULL;
     }
 
+    if (_stage_remove_always_redraw_actor)
+        _stage_remove_always_redraw_actor (meta_get_stage_for_screen (priv->screen), self);
     G_OBJECT_CLASS (meta_blur_actor_parent_class)->dispose (object);
 }
 
@@ -301,7 +308,6 @@ static void preblur_texture(MetaBlurActor* self)
                 0.0f, 0.0f, 1.00f, 1.00f);
 
         if (i > 0) cogl_framebuffer_finish(priv->fb);
-
 
         cogl_pipeline_set_layer_texture (priv->pipeline2, 0, priv->fbTex);
         cogl_framebuffer_draw_textured_rectangle (
@@ -598,8 +604,7 @@ meta_blur_actor_class_init (MetaBlurActorClass *klass)
             param_spec);
 }
 
-static void
-on_parent_queue_redraw (ClutterActor *actor,
+static void on_parent_queue_redraw (ClutterActor *actor,
         ClutterActor *origin,
         gpointer      user_data)
 {
@@ -624,8 +629,9 @@ static void on_parent_changed (ClutterActor *actor,
 
     ClutterActor *parent = clutter_actor_get_parent (actor);
     if (parent != NULL)
-      g_signal_connect (parent, "queue-redraw", on_parent_queue_redraw, actor);
+        g_signal_connect (parent, "queue-redraw", on_parent_queue_redraw, actor);
 }
+
 
 static void meta_blur_actor_init (MetaBlurActor *self)
 {
@@ -638,7 +644,10 @@ static void meta_blur_actor_init (MetaBlurActor *self)
     priv->radius = 0; // means no blur
     priv->rounds = 1;
 
-    g_signal_connect (G_OBJECT(self), "parent-set", on_parent_changed, NULL);
+    // if clutter is not patched, use this hack instead
+    if (_stage_add_always_redraw_actor == NULL) {
+        g_signal_connect (G_OBJECT(self), "parent-set", on_parent_changed, NULL);
+    }
 }
 
 ClutterActor * meta_blur_actor_new (MetaScreen *screen)
@@ -650,6 +659,9 @@ ClutterActor * meta_blur_actor_new (MetaScreen *screen)
             NULL);
 
     make_pipeline (self);
+
+    if (_stage_add_always_redraw_actor)
+        _stage_add_always_redraw_actor (meta_get_stage_for_screen (screen), self);
     return CLUTTER_ACTOR (self);
 }
 
