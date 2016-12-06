@@ -454,7 +454,7 @@ meta_window_actor_update_blur_background (MetaWindowActor *self)
       if (!priv->blur_background) 
         {
           priv->blur_background = meta_blur_actor_new (window->screen);
-          meta_blur_actor_set_radius (priv->blur_background, 13);
+          meta_blur_actor_set_radius (priv->blur_background, 25);
           clutter_actor_insert_child_below (CLUTTER_ACTOR (self), CLUTTER_ACTOR (priv->blur_background), NULL);
         }
 

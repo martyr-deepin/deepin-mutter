@@ -48,35 +48,13 @@ typedef enum {
 } ChangedFlags;
 
 static const char* gaussian_blur_global_definition =
-"#ifdef GL_ARB_shader_texture_lod\n"
-"#define texpick texture2DLod\n"
-"#else\n"
-"#define texpick texture2D\n"
-"#endif\n";
+"#define texpick texture2D\n";
 
-// kernel[0] = radius, kernel[1-20] = offset, kernel[21-40] = weight
+#define VERTICAL   1
+#define HORIZONTAL 2
+
 static const char* gaussian_blur_glsl_declarations =
-"uniform float kernel[41];"
 "uniform vec2 resolution;";
-
-static const char* vs_code = 
-"float lod = 0.0;"
-"vec2 tc = cogl_tex_coord.st;"
-"cogl_texel = texpick(cogl_sampler, tc, lod) * kernel[21];"
-"for (int i = 1; i < kernel[0]; i++) {"
-    "cogl_texel += texpick(cogl_sampler, tc - vec2(0.0, kernel[1+i]/resolution.y), lod) * kernel[21+i];"
-    "cogl_texel += texpick(cogl_sampler, tc + vec2(0.0, kernel[1+i]/resolution.y), lod) * kernel[21+i];"
-"}";
-
-static const char* vs_code_h =
-"float lod = 0.0;"
-"vec2 tc = vec2(cogl_tex_coord.s, 1.0 - cogl_tex_coord.t);"
-"cogl_texel = texpick(cogl_sampler, tc, lod) * kernel[21];"
-"for (int i = 1; i < kernel[0]; i++) {"
-    "cogl_texel += texpick(cogl_sampler, tc + vec2(kernel[1+i]/resolution.x, 0.0), lod) * kernel[21+i];"
-    "cogl_texel += texpick(cogl_sampler, tc - vec2(kernel[1+i]/resolution.x, 0.0), lod) * kernel[21+i];"
-"}";
-
 
 static void build_gaussian_blur_kernel(int* pradius, float* offset, float* weight)
 {
@@ -99,6 +77,60 @@ static void build_gaussian_blur_kernel(int* pradius, float* offset, float* weigh
     }
 
     *pradius = radius;
+
+    radius = (radius+1)/2;
+    for (int i = 1; i < radius; i++) {
+        float w = weight[i*2] + weight[i*2-1];
+        float off = (offset[i*2] * weight[i*2] + offset[i*2-1] * weight[i*2-1]) / w;
+        offset[i] = off;
+        weight[i] = w;
+    }
+    *pradius = radius;
+}
+
+static char *build_shader(int direction, int radius, float* offsets, float *weight)
+{
+    char* ret = (char*)malloc(10000);
+    if (!ret) {
+        return NULL;
+    }
+
+    char *p = ret;
+
+    if (direction == VERTICAL) {
+        int sz = sprintf(p, "vec2 tc = cogl_tex_coord.st;\n"
+                "cogl_texel = texpick(cogl_sampler, tc) * %f;\n",
+                weight[0]);
+        p += sz;
+
+        for (int i = 1; i < radius; i++) {
+            sz = sprintf(p, 
+                    "cogl_texel += texpick(cogl_sampler, tc - vec2(0.0, %f/resolution.y)) * %f; \n"
+                    "cogl_texel += texpick(cogl_sampler, tc + vec2(0.0, %f/resolution.y)) * %f; \n",
+                    offsets[i], weight[i],
+                    offsets[i], weight[i]);
+            p += sz;
+        }
+    } else {
+
+        int sz = sprintf(p,
+                "vec2 tc = vec2(cogl_tex_coord.s, 1.0 - cogl_tex_coord.t); \n"
+                "cogl_texel = texpick(cogl_sampler, tc) * %f;\n",
+                weight[0]);
+        p += sz;
+
+        for (int i = 1; i < radius; i++) {
+            sz = sprintf(p, 
+                    "cogl_texel += texpick(cogl_sampler, tc - vec2(%f/resolution.x, 0.0)) * %f; \n"
+                    "cogl_texel += texpick(cogl_sampler, tc + vec2(%f/resolution.x, 0.0)) * %f; \n",
+                    offsets[i], weight[i],
+                    offsets[i], weight[i]);
+            p += sz;
+        }
+    }
+    
+    /*fprintf(stderr, "[%s]\n", ret);*/
+    return ret;
 }
 
 struct _MetaBlurActorPrivate
@@ -107,10 +139,11 @@ struct _MetaBlurActorPrivate
 
     gboolean blurred;
     int radius;
-    float kernel[41];
+    float kernel[101];
     int rounds;
 
     ChangedFlags changed;
+    CoglPipeline *template;
     CoglPipeline *pl_passthrough;
 
     CoglPipeline *pipeline;
@@ -181,56 +214,42 @@ static void meta_blur_actor_dispose (GObject *object)
 static void make_pipeline (MetaBlurActor* self)
 {
     MetaBlurActorPrivate* priv = self->priv;
-    static CoglPipeline *template = NULL;
-
-    if (template == NULL) {
+    if (priv->template == NULL) {
         /* Cogl automatically caches pipelines with no eviction policy,
          * so we need to prevent identical pipelines from getting cached
          * separately, by reusing the same shader snippets.
          */
-        template = COGL_PIPELINE (meta_create_texture_pipeline (NULL));
+        priv->template = COGL_PIPELINE (meta_create_texture_pipeline (NULL));
         CoglSnippet* snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_FRAGMENT_GLOBALS,
                 gaussian_blur_global_definition, NULL);
-        cogl_pipeline_add_snippet (template, snippet);
+        cogl_pipeline_add_snippet (priv->template, snippet);
         cogl_object_unref (snippet);
     }
 
-    priv->pl_passthrough = cogl_pipeline_copy (template);
+    priv->pl_passthrough = cogl_pipeline_copy (priv->template);
 
-    priv->pipeline = cogl_pipeline_copy (template);
-
-    CoglSnippet* snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_TEXTURE_LOOKUP,
-            gaussian_blur_glsl_declarations, NULL);
-    cogl_snippet_set_replace (snippet, vs_code);
-    cogl_pipeline_add_layer_snippet (priv->pipeline, 0, snippet);
-    cogl_object_unref (snippet);
-
-    priv->pipeline2 = cogl_pipeline_copy (template);
-
-    snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_TEXTURE_LOOKUP,
-            gaussian_blur_glsl_declarations, NULL);
-    cogl_snippet_set_replace (snippet, vs_code_h);
-    cogl_pipeline_add_layer_snippet (priv->pipeline2, 0, snippet);
-    cogl_object_unref (snippet);
 }
 
-static float scale = 0.25f;
 static void create_texture (MetaBlurActor* self)
 {
     MetaBlurActorPrivate* priv = self->priv;
-    gfloat width, height;
+    float width, height;
+    int scale = 2;
 
     CoglContext *ctx = clutter_backend_get_cogl_context(clutter_get_default_backend());
 
     clutter_actor_get_size (self, &width, &height);
 
-    width *= scale;
-    height *= scale;
+    int fb_width = width;
+    int fb_height = height;
 
-    width = roundf(MAX(width, 1.0));
-    height = roundf(MAX(height, 1.0));
+    fb_width >>= scale;
+    fb_height >>= scale;
 
-    if (priv->fb_width == width && priv->fb_height == height) {
+    fb_width = (MAX(fb_width, 1));
+    fb_height = (MAX(fb_height, 1));
+
+    if (priv->fb_width == fb_width && priv->fb_height == fb_height) {
         return;
     }
 
@@ -245,9 +264,9 @@ static void create_texture (MetaBlurActor* self)
         priv->fb2 = NULL;
     }
 
-    priv->fb_width = width;
-    priv->fb_height = height;
-    meta_verbose ("%s: recreate fbTex (%f, %f)\n", __func__, width, height);
+    priv->fb_width = fb_width;
+    priv->fb_height = fb_height;
+    /*meta_verbose ("%s: recreate fbTex (%f, %f)\n", __func__, width, height);*/
 
     priv->fbTex = cogl_texture_2d_new_with_size(ctx, priv->fb_width, priv->fb_height);
     cogl_texture_set_components(priv->fbTex, COGL_TEXTURE_COMPONENTS_RGBA);
@@ -264,7 +283,7 @@ static void create_texture (MetaBlurActor* self)
     }
 
     cogl_framebuffer_orthographic(priv->fb, 0, 0,
-            width, height, -1., 1.);
+            priv->fb_width, priv->fb_height, -1., 1.);
 
     priv->fbTex2 = cogl_texture_2d_new_with_size(ctx, priv->fb_width, priv->fb_height);
     cogl_texture_set_components(priv->fbTex2, COGL_TEXTURE_COMPONENTS_RGBA);
@@ -279,22 +298,16 @@ static void create_texture (MetaBlurActor* self)
     }
 
     cogl_framebuffer_orthographic(priv->fb2, 0, 0,
-            width, height, -1., 1.);
+            priv->fb_width, priv->fb_height, -1., 1.);
 }
 
 static void preblur_texture(MetaBlurActor* self)
 {
     MetaBlurActorPrivate *priv = self->priv;
-    int uniform_no = cogl_pipeline_get_uniform_location (priv->pipeline, "kernel");
-    cogl_pipeline_set_uniform_float (priv->pipeline, uniform_no, 1, 41, priv->kernel);
 
     float resolution[2] = {priv->fb_width, priv->fb_height};
-    uniform_no = cogl_pipeline_get_uniform_location(priv->pipeline, "resolution");
+    int uniform_no = cogl_pipeline_get_uniform_location(priv->pipeline, "resolution");
     cogl_pipeline_set_uniform_float(priv->pipeline, uniform_no, 2, 1, resolution);
-
-
-    uniform_no = cogl_pipeline_get_uniform_location (priv->pipeline2, "kernel");
-    cogl_pipeline_set_uniform_float (priv->pipeline2, uniform_no, 1, 41, priv->kernel);
 
     uniform_no = cogl_pipeline_get_uniform_location(priv->pipeline2, "resolution");
     cogl_pipeline_set_uniform_float(priv->pipeline2, uniform_no, 2, 1, resolution);
@@ -583,7 +596,7 @@ meta_blur_actor_class_init (MetaBlurActorClass *klass)
                 "blur radius",
                 "blur radius",
                 0,
-                19,
+                49,
                 5,
                 G_PARAM_READWRITE);
 
@@ -690,14 +703,45 @@ void meta_blur_actor_set_radius (MetaBlurActor *self, int radius)
     MetaBlurActorPrivate *priv = self->priv;
 
     g_return_if_fail (META_IS_BLUR_ACTOR (self));
-    g_return_if_fail (radius >= 0 && radius <= 19);
+    g_return_if_fail (radius >= 0 && radius <= 49);
 
     if (priv->radius != radius) {
         priv->radius = radius;
         if (radius > 0) {
-            build_gaussian_blur_kernel(&radius, &priv->kernel[1], &priv->kernel[21]);
+            build_gaussian_blur_kernel(&radius, &priv->kernel[1], &priv->kernel[51]);
             priv->radius = radius;
             priv->kernel[0] = radius;
+
+            char *vs = build_shader(VERTICAL, radius, &priv->kernel[1], &priv->kernel[51]);
+
+            if (priv->pipeline) {
+                g_clear_pointer (&priv->pipeline, cogl_object_unref);
+            }
+            priv->pipeline = cogl_pipeline_copy (priv->template);
+
+            CoglSnippet* snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_TEXTURE_LOOKUP,
+                    gaussian_blur_glsl_declarations, NULL);
+            cogl_snippet_set_replace (snippet, vs);
+            cogl_pipeline_add_layer_snippet (priv->pipeline, 0, snippet);
+            cogl_object_unref (snippet);
+
+            free(vs);
+
+
+            char *hs = build_shader(HORIZONTAL, radius, &priv->kernel[1], &priv->kernel[51]);
+
+            if (priv->pipeline2) {
+                g_clear_pointer (&priv->pipeline2, cogl_object_unref);
+            }
+            priv->pipeline2 = cogl_pipeline_copy (priv->template);
+
+            snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_TEXTURE_LOOKUP,
+                    gaussian_blur_glsl_declarations, NULL);
+            cogl_snippet_set_replace (snippet, hs);
+            cogl_pipeline_add_layer_snippet (priv->pipeline2, 0, snippet);
+            cogl_object_unref (snippet);
+
+            free(hs);
         }
 
         invalidate_pipeline (self, CHANGED_EFFECTS);
