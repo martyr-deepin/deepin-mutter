@@ -1,0 +1,15 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+	./autogen.sh --prefix=/usr \
+		--libexecdir=/usr/lib/deepin-mutter \
+		--sysconfdir=/etc \
+		--disable-gtk-doc \
+		--disable-schemas-compile \
+		--enable-wayland \
+		--enable-native-backend \
+		--enable-compile-warnings=minimum
+
