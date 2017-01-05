@@ -18,6 +18,8 @@
 #include <config.h>
 
 #include <math.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/time.h>
 #include <GL/gl.h>
 #include <clutter/clutter.h>
@@ -26,6 +28,7 @@
 #include "clutter-utils.h"
 #include <meta/errors.h>
 #include <meta/screen.h>
+#include <meta/compositor-mutter.h>
 #include <meta/meta-blur-actor.h>
 #include "meta-cullable.h"
 
