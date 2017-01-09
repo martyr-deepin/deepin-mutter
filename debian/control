@@ -47,7 +47,8 @@ Build-Depends: cdbs (>= 0.4.90),
                libpam0g-dev,
                libwayland-dev (>= 1.5.90) [linux-any],
                xkb-data,
-               zenity
+               zenity,
+               gnome-common
 Standards-Version: 3.9.6
 Vcs-Browser: https://gitcafe.com/Deepin/deepin-mutter
 
