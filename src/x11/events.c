@@ -846,6 +846,7 @@ handle_input_xevent (MetaDisplay  *display,
     {
     case XI_Enter:
     case XI_Leave:
+    case XI_Motion:
     case XI_FocusIn:
     case XI_FocusOut:
       break;
@@ -1741,6 +1742,32 @@ meta_display_handle_xevent (MetaDisplay *display,
   modified = event_get_modified_window (display, event);
 
   input_event = get_input_event (display, event);
+
+    {
+      int i;
+      MetaScreenCorner corners[] = {
+          META_SCREEN_TOPLEFT,
+          META_SCREEN_TOPRIGHT,
+          META_SCREEN_BOTTOMLEFT,
+          META_SCREEN_BOTTOMRIGHT,
+      };
+
+      for (i = 0; i < 4; i++) 
+       {
+         if (event->xany.window == display->screen->corner_windows[i]) 
+           {
+             if (event->xany.type == EnterNotify) {
+               meta_screen_enter_corner (display->screen, corners[i]);
+             } else if (event->xany.type == LeaveNotify) {
+               /*meta_screen_leave_corner (display->screen, META_SCREEN_TOPLEFT);*/
+             }
+
+             bypass_gtk = bypass_compositor = TRUE;
+             goto out;
+           }
+       }
+    }
+
 
   if (event->type == UnmapNotify)
     {

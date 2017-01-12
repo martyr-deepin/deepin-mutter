@@ -106,6 +106,10 @@ struct _MetaScreen
    * this allows us to provide live previews of unmapped windows */
   Window guard_window;
 
+  /* Windows used to support hot-zone functionality.
+   */
+  Window corner_windows[4];
+
   Window composite_overlay_window;
 };
 
@@ -211,6 +215,8 @@ void     meta_screen_workspace_switched (MetaScreen         *screen,
 void meta_screen_set_active_workspace_hint (MetaScreen *screen);
 
 void meta_screen_create_guard_window (MetaScreen *screen);
+
+void meta_screen_create_corner_window (MetaScreen *screen);
 
 gboolean meta_screen_handle_xevent (MetaScreen *screen,
                                     XEvent     *xevent);

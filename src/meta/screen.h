@@ -133,4 +133,8 @@ void meta_screen_override_workspace_layout (MetaScreen      *screen,
 void          meta_screen_set_cursor          (MetaScreen                 *screen,
                                                MetaCursor                  cursor);
 
+void          meta_screen_enter_corner        (MetaScreen                 *screen,
+                                               MetaScreenCorner            corner);
+void          meta_screen_leave_corner        (MetaScreen                 *screen,
+                                               MetaScreenCorner            corner);
 #endif

@@ -921,6 +921,7 @@ meta_display_open (void)
   enable_compositor (display);
 
   meta_screen_create_guard_window (screen);
+  meta_screen_create_corner_window (screen);
 
   /* Set up touch support */
   display->gesture_tracker = meta_gesture_tracker_new ();

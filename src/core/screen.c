@@ -86,6 +86,8 @@ enum
   WORKSPACE_REMOVED,
   WORKSPACE_SWITCHED,
   WORKSPACE_REORDERED,
+  CORNER_ENTERED,
+  CORNER_LEAVED,
   WINDOW_ENTERED_MONITOR,
   WINDOW_LEFT_MONITOR,
   STARTUP_SEQUENCE_CHANGED,
@@ -261,6 +263,26 @@ meta_screen_class_init (MetaScreenClass *klass)
                   0,
                   NULL, NULL, NULL,
 		  G_TYPE_NONE, 0);
+
+  screen_signals[CORNER_ENTERED] =
+    g_signal_new ("corner-entered",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE,
+                  1,
+                  G_TYPE_INT);
+
+  screen_signals[CORNER_LEAVED] =
+    g_signal_new ("corner-leaved",
+                  G_TYPE_FROM_CLASS (klass),
+                  G_SIGNAL_RUN_LAST,
+                  0,
+                  NULL, NULL, NULL,
+                  G_TYPE_NONE,
+                  1,
+                  G_TYPE_INT);
 
   g_object_class_install_property (object_class,
                                    PROP_N_WORKSPACES,
@@ -504,6 +526,92 @@ create_guard_window (Display *xdisplay, MetaScreen *screen)
   return guard_window;
 }
 
+#define CORNER_SIZE 32
+
+static Window
+create_screen_corner_window (Display *xdisplay, MetaScreen *screen, MetaScreenCorner corner)
+{
+  XSetWindowAttributes attributes;
+  Window edge_window;
+  gulong create_serial;
+  int x = 0, y = 0, w = CORNER_SIZE, h = CORNER_SIZE;
+
+  attributes.event_mask = PointerMotionMask | EnterWindowMask | LeaveWindowMask;
+  attributes.override_redirect = True;
+
+  switch (corner) {
+      case META_SCREEN_TOPLEFT:
+          x = y = 0;
+          break;
+      case META_SCREEN_TOPRIGHT:
+          x = screen->rect.width - CORNER_SIZE; y = 0; break;
+      case META_SCREEN_BOTTOMLEFT:
+          x = 0;
+          y = screen->rect.height - CORNER_SIZE; 
+          break;
+      case META_SCREEN_BOTTOMRIGHT:
+          x = screen->rect.width - CORNER_SIZE;
+          y = screen->rect.height - CORNER_SIZE;
+          break;
+  }
+
+  /* We have to call record_add() after we have the new window ID,
+   * so save the serial for the CreateWindow request until then */
+  create_serial = XNextRequest(xdisplay);
+  edge_window =
+    XCreateWindow (xdisplay,
+		   screen->xroot,
+           //FIXME: topleft now
+		   x, /* x */
+		   y, /* y */
+		   w,
+		   h,
+		   0, /* border width */
+		   0, /* depth */
+		   InputOnly, /* class */
+		   CopyFromParent, /* visual */
+		   CWEventMask|CWOverrideRedirect,
+		   &attributes);
+
+  XStoreName (xdisplay, edge_window, "mutter topleft corner window");
+
+  {
+    MetaBackendX11 *backend = META_BACKEND_X11 (meta_get_backend ());
+    Display *backend_xdisplay = meta_backend_x11_get_xdisplay (backend);
+    unsigned char mask_bits[XIMaskLen (XI_LASTEVENT)] = { 0 };
+    XIEventMask mask = { XIAllMasterDevices, sizeof (mask_bits), mask_bits };
+
+    XISetMask (mask.mask, XI_Enter);
+    XISetMask (mask.mask, XI_Leave);
+    XISetMask (mask.mask, XI_Motion);
+
+    /* Sync on the connection we created the window on to
+     * make sure it's created before we select on it on the
+     * backend connection. */
+    XSync (xdisplay, False);
+
+    XISelectEvents (backend_xdisplay, edge_window, &mask, 1);
+  }
+
+  meta_stack_tracker_record_add (screen->stack_tracker,
+                                 edge_window,
+                                 create_serial);
+
+  {
+      XWindowChanges changes;
+
+      meta_error_trap_push (screen->display);
+
+      changes.stack_mode = Above;
+      XConfigureWindow (xdisplay, edge_window, CWStackMode, &changes);
+
+      meta_error_trap_pop (screen->display);
+  }
+
+  XMapWindow (xdisplay, edge_window);
+  return edge_window;
+}
+
 static Window
 take_manager_selection (MetaDisplay *display,
                         Window       xroot,
@@ -685,6 +793,10 @@ meta_screen_new (MetaDisplay *display,
   screen->vertical_workspaces = FALSE;
   screen->starting_corner = META_SCREEN_TOPLEFT;
   screen->guard_window = None;
+  screen->corner_windows[0] = None;
+  screen->corner_windows[1] = None;
+  screen->corner_windows[2] = None;
+  screen->corner_windows[3] = None;
 
   /* If we're a Wayland compositor, then we don't grab the COW, since it
    * will map it. */
@@ -832,6 +944,24 @@ meta_screen_create_guard_window (MetaScreen *screen)
 {
   if (screen->guard_window == None)
     screen->guard_window = create_guard_window (screen->display->xdisplay, screen);
+}
+
+void
+meta_screen_create_corner_window (MetaScreen *screen)
+{
+  int i;
+  MetaScreenCorner corners[] = {
+      META_SCREEN_TOPLEFT,
+      META_SCREEN_TOPRIGHT,
+      META_SCREEN_BOTTOMLEFT,
+      META_SCREEN_BOTTOMRIGHT,
+  };
+
+  for (i = 0; i < 4; i++) 
+    {
+        screen->corner_windows[i] = create_screen_corner_window (
+                screen->display->xdisplay, screen, corners[i]);
+    }
 }
 
 void
@@ -2460,6 +2590,47 @@ on_monitors_changed (MetaMonitorManager *manager,
                        &changes);
     }
 
+  if (screen->corner_windows[0] != None) 
+    {
+      int i;
+      MetaScreenCorner corners[] = {
+          META_SCREEN_TOPLEFT,
+          META_SCREEN_TOPRIGHT,
+          META_SCREEN_BOTTOMLEFT,
+          META_SCREEN_BOTTOMRIGHT,
+      };
+
+      for (i = 0; i < 4; i++) 
+        {
+          XWindowChanges changes;
+          int x = 0, y = 0;
+
+          switch (corners[i]) {
+              case META_SCREEN_TOPLEFT:
+                  x = y = 0;
+                  break;
+              case META_SCREEN_TOPRIGHT:
+                  x = screen->rect.width - CORNER_SIZE;
+                  y = 0;
+                  break;
+              case META_SCREEN_BOTTOMLEFT:
+                  x = 0;
+                  y = screen->rect.height - CORNER_SIZE; 
+                  break;
+              case META_SCREEN_BOTTOMRIGHT:
+                  x = screen->rect.width - CORNER_SIZE;
+                  y = screen->rect.height - CORNER_SIZE;
+                  break;
+          }
+
+          changes.x = x;
+          changes.y = y;
+
+          XConfigureWindow(screen->display->xdisplay, screen->corner_windows[i],
+                           CWX | CWY, &changes);
+        }
+    }
+
   /* Fix up monitor for all windows on this screen */
   meta_screen_foreach_window (screen, META_LIST_INCLUDE_OVERRIDE_REDIRECT, (MetaScreenWindowFunc) meta_window_update_for_monitors_changed, 0);
 
@@ -2997,3 +3168,18 @@ meta_screen_handle_xevent (MetaScreen *screen,
 
   return FALSE;
 }
+
+void          
+meta_screen_enter_corner (MetaScreen *screen, MetaScreenCorner corner)
+{
+  XUnmapWindow (screen->display->xdisplay, screen->corner_windows[corner]);
+  g_signal_emit (screen, screen_signals[CORNER_ENTERED], 0, corner);
+}
+
+void          
+meta_screen_leave_corner (MetaScreen *screen, MetaScreenCorner corner)
+{
+  XMapWindow (screen->display->xdisplay, screen->corner_windows[corner]);
+  g_signal_emit (screen, screen_signals[CORNER_LEAVED], 0, corner);
+}
+
