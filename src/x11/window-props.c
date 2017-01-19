@@ -1781,10 +1781,10 @@ meta_window_set_blur_region (MetaWindow     *window,
     window->deepin_blur_region = cairo_region_reference (region);
 
   cairo_rectangle_int_t r = {0, 0, 0, 0};
-  if (region) {
-      cairo_region_get_extents (region, &r);
+  if (window->deepin_blur_region) {
+      cairo_region_get_extents (window->deepin_blur_region, &r);
   }
-  meta_verbose ("%s: region [%d, %d, %d, %d]", __func__, r.x, r.y, r.width, r.height);
+  meta_verbose ("%s: region [%d, %d, %d, %d]\n", __func__, r.x, r.y, r.width, r.height);
   meta_compositor_window_blur_changed (window->display->compositor, window);
 }
 

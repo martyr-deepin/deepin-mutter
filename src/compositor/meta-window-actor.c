@@ -1932,7 +1932,7 @@ check_needs_reshape (MetaWindowActor *self)
     {
       meta_window_actor_update_input_region (self);
       meta_window_actor_update_opaque_region (self);
-      /*meta_window_actor_update_blur_region (self);*/
+      meta_window_actor_update_blur_region (self);
     }
 
   priv->needs_reshape = FALSE;
@@ -1966,8 +1966,9 @@ meta_window_actor_update_blur_region (MetaWindowActor *self)
 
       blur_region = cairo_region_copy (priv->window->deepin_blur_region);
       cairo_region_translate (blur_region, client_area.x, client_area.y);
-      if (priv->shape_region)
+      if (priv->shape_region) {
           cairo_region_intersect (blur_region, priv->shape_region);
+      }
     }
   else
     blur_region = NULL;
@@ -1982,7 +1983,6 @@ meta_window_actor_update_blur_region (MetaWindowActor *self)
 
   cairo_rectangle_int_t rect;
   cairo_region_get_extents (priv->deepin_blur_region, &rect);
-
   clutter_actor_set_position (priv->blur_background, rect.x, rect.y);
   clutter_actor_set_size (priv->blur_background, rect.width, rect.height);
 
