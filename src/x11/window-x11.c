@@ -2834,6 +2834,13 @@ is_our_xwindow (MetaDisplay       *display,
   if (xwindow == screen->guard_window)
     return TRUE;
 
+  int i;
+  for (i = 0; i < 4; i++) 
+    {
+      if (xwindow == screen->corner_windows[i])
+        return TRUE;
+    }
+
   if (xwindow == screen->composite_overlay_window)
     return TRUE;
 
