@@ -2625,9 +2625,10 @@ on_monitors_changed (MetaMonitorManager *manager,
 
           changes.x = x;
           changes.y = y;
+          changes.stack_mode = Above;
 
           XConfigureWindow(screen->display->xdisplay, screen->corner_windows[i],
-                           CWX | CWY, &changes);
+                           CWX | CWY |CWStackMode, &changes);
         }
     }
 
