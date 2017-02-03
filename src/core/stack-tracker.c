@@ -1050,6 +1050,7 @@ meta_stack_tracker_restack_override_redirected (MetaStackTracker *tracker,
   guint64 *windows;
   int n_windows;
   int old_pos;
+  int i;
 
   if (n_managed == 0)
     return;
@@ -1079,6 +1080,12 @@ meta_stack_tracker_restack_override_redirected (MetaStackTracker *tracker,
           meta_stack_tracker_raise_above (tracker, windows[old_pos], bottom);
           meta_stack_tracker_get_stack (tracker, &windows, &n_windows);
         }
+    }
+
+  /* raise corner windows above */
+  for (i = 0; i < 4; i++) 
+    {
+      meta_stack_tracker_raise_above (tracker, tracker->screen->corner_windows[i], windows[n_windows-1]);
     }
 }
 
