@@ -1816,6 +1816,8 @@ build_and_scan_frame_mask (MetaWindowActor       *self,
     }
 
   meta_shaped_texture_set_mask_texture (stex, mask_texture);
+  if (priv->blur_background) 
+    meta_blur_actor_set_mask (priv->blur_background, mask_texture);
   if (mask_texture)
     cogl_object_unref (mask_texture);
 

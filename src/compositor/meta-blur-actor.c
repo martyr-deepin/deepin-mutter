@@ -148,11 +148,13 @@ struct _MetaBlurActorPrivate
     ChangedFlags changed;
     CoglPipeline *template;
     CoglPipeline *pl_passthrough;
+    CoglPipeline *pl_masked; // masked by shape 
 
     CoglPipeline *pipeline;
     CoglPipeline *pipeline2;
 
     CoglTexture* texture;
+    CoglTexture* mask_texture;
     cairo_rectangle_int_t texture_area;
     CoglTexture* fbTex, *fbTex2;
     CoglOffscreen* fb, *fb2;
@@ -205,8 +207,13 @@ static void meta_blur_actor_dispose (GObject *object)
         cogl_object_unref (priv->pipeline);
         cogl_object_unref (priv->pipeline2);
         cogl_object_unref (priv->pl_passthrough);
+        cogl_object_unref (priv->pl_masked);
         priv->pipeline = NULL;
         priv->pipeline2 = NULL;
+    }
+
+    if (priv->mask_texture) {
+        g_clear_pointer (&priv->mask_texture, cogl_object_unref);
     }
 
     if (_stage_remove_always_redraw_actor)
@@ -230,6 +237,9 @@ static void make_pipeline (MetaBlurActor* self)
     }
 
     priv->pl_passthrough = cogl_pipeline_copy (priv->template);
+    priv->pl_masked = cogl_pipeline_copy (priv->template);
+    cogl_pipeline_set_layer_combine (priv->pl_masked, 1,
+            "RGBA = MODULATE (PREVIOUS, TEXTURE[A])", NULL);
 
 }
 
@@ -492,25 +502,55 @@ static void meta_blur_actor_paint (ClutterActor *actor)
     bounding.width = actor_box.x2 - actor_box.x1;
     bounding.height = actor_box.y2 - actor_box.y1;
 
+    CoglPipeline* pipeline = priv->pl_passthrough;
+
+    if (priv->clip_region && priv->mask_texture) {
+        fprintf(stderr, "%s, has clip, tex (%d, %d), bound: (%d, %d)\n", __func__, 
+                cogl_texture_get_width(priv->mask_texture),
+                cogl_texture_get_height(priv->mask_texture),
+                bounding.width, bounding.height);
+        cogl_pipeline_set_layer_texture (priv->pl_masked, 1, priv->mask_texture);
+        pipeline = priv->pl_masked;
+    }
+
     cogl_framebuffer_push_rectangle_clip (cogl_get_draw_framebuffer (),
             bounding.x, bounding.y, bounding.width, bounding.height);
 
     guint8 opacity;
     opacity = clutter_actor_get_paint_opacity (CLUTTER_ACTOR (self));
-    cogl_pipeline_set_color4ub (priv->pl_passthrough,
+    cogl_pipeline_set_color4ub (pipeline,
             opacity, opacity, opacity, opacity);
 
     setup_pipeline (self, &bounding);
     if (priv->radius > 0) {
-        cogl_pipeline_set_layer_texture (priv->pl_passthrough, 0, priv->fbTex2);
+        cogl_pipeline_set_layer_texture (pipeline, 0, priv->fbTex2);
 
     } else {
-        cogl_pipeline_set_layer_texture (priv->pl_passthrough, 0, priv->texture);
+        cogl_pipeline_set_layer_texture (pipeline, 0, priv->texture);
     }
-    cogl_framebuffer_draw_textured_rectangle (
-            cogl_get_draw_framebuffer (), priv->pl_passthrough,
-            bounding.x, bounding.y, bounding.width, bounding.height,
-            0.0f, 0.0f, 1.00f, 1.00f);
+
+    if (!priv->mask_texture) {
+        cogl_framebuffer_draw_textured_rectangle (
+                cogl_get_draw_framebuffer (), pipeline,
+                bounding.x, bounding.y, bounding.width, bounding.height,
+                0.0f, 0.0f, 1.00f, 1.00f);
+    } else {
+        float tex[8];
+        tex[0] = 0.0;
+        tex[1] = 0.0;
+        tex[2] = 1.0;
+        tex[3] = 1.0;
+
+        tex[4] = 0.0;
+        tex[5] = 0.0;
+        tex[6] = bounding.width / (float) cogl_texture_get_width (priv->mask_texture);
+        tex[7] = bounding.height / (float) cogl_texture_get_height (priv->mask_texture);
+
+        cogl_framebuffer_draw_multitextured_rectangle (
+                cogl_get_draw_framebuffer (), pipeline,
+                bounding.x, bounding.y, bounding.width, bounding.height,
+                &tex[0], 8);
+    }
 
   cogl_framebuffer_pop_clip (cogl_get_draw_framebuffer ());
 
@@ -765,6 +805,23 @@ void meta_blur_actor_set_rounds (MetaBlurActor *self, int rounds)
         if (rounds > 0) {
             priv->rounds = rounds;
         }
+
+        invalidate_pipeline (self, CHANGED_EFFECTS);
+        clutter_actor_queue_redraw (CLUTTER_ACTOR (self));
+    }
+}
+
+void meta_blur_actor_set_mask (MetaBlurActor *self, CoglTexture *mask)
+{
+    MetaBlurActorPrivate *priv = self->priv;
+
+    g_return_if_fail (META_IS_BLUR_ACTOR (self));
+
+    g_clear_pointer (&priv->mask_texture, cogl_object_unref);
+
+    if (mask != NULL) {
+        priv->mask_texture = mask;
+        cogl_object_ref (mask);
 
         invalidate_pipeline (self, CHANGED_EFFECTS);
         clutter_actor_queue_redraw (CLUTTER_ACTOR (self));
