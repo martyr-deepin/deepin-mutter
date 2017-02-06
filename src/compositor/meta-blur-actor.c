@@ -505,10 +505,10 @@ static void meta_blur_actor_paint (ClutterActor *actor)
     CoglPipeline* pipeline = priv->pl_passthrough;
 
     if (priv->clip_region && priv->mask_texture) {
-        fprintf(stderr, "%s, has clip, tex (%d, %d), bound: (%d, %d)\n", __func__, 
-                cogl_texture_get_width(priv->mask_texture),
-                cogl_texture_get_height(priv->mask_texture),
-                bounding.width, bounding.height);
+        /*fprintf(stderr, "%s, has clip, tex (%d, %d), bound: (%d, %d)\n", __func__, */
+                /*cogl_texture_get_width(priv->mask_texture),*/
+                /*cogl_texture_get_height(priv->mask_texture),*/
+                /*bounding.width, bounding.height);*/
         cogl_pipeline_set_layer_texture (priv->pl_masked, 1, priv->mask_texture);
         pipeline = priv->pl_masked;
     }
