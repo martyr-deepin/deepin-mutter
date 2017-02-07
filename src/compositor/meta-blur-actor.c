@@ -505,10 +505,10 @@ static void meta_blur_actor_paint (ClutterActor *actor)
     CoglPipeline* pipeline = priv->pl_passthrough;
 
     if (priv->clip_region && priv->mask_texture) {
-        /*fprintf(stderr, "%s, has clip, tex (%d, %d), bound: (%d, %d)\n", __func__, */
+        /*fprintf(stderr, "%s, has clip, mask (%d, %d), bound: (%d, %d, %d, %d)\n", __func__, */
                 /*cogl_texture_get_width(priv->mask_texture),*/
                 /*cogl_texture_get_height(priv->mask_texture),*/
-                /*bounding.width, bounding.height);*/
+                /*bounding.x, bounding.y, bounding.width, bounding.height);*/
         cogl_pipeline_set_layer_texture (priv->pl_masked, 1, priv->mask_texture);
         pipeline = priv->pl_masked;
     }
@@ -541,10 +541,12 @@ static void meta_blur_actor_paint (ClutterActor *actor)
         tex[2] = 1.0;
         tex[3] = 1.0;
 
-        tex[4] = 0.0;
-        tex[5] = 0.0;
-        tex[6] = bounding.width / (float) cogl_texture_get_width (priv->mask_texture);
-        tex[7] = bounding.height / (float) cogl_texture_get_height (priv->mask_texture);
+        float mask_width = (float) cogl_texture_get_width (priv->mask_texture);
+        float mask_height = (float) cogl_texture_get_height (priv->mask_texture);
+        tex[4] = clutter_actor_get_x (self) / mask_width;
+        tex[5] = clutter_actor_get_y (self) / mask_height;
+        tex[6] = tex[4] + bounding.width / mask_width;
+        tex[7] = tex[5] + bounding.height / mask_height;
 
         cogl_framebuffer_draw_multitextured_rectangle (
                 cogl_get_draw_framebuffer (), pipeline,
