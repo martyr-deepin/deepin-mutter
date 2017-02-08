@@ -99,6 +99,8 @@ struct _MetaScreen
 
   guint keys_grabbed : 1;
 
+  guint corner_actions_enabled: 1;
+
   int closing;
 
   /* Instead of unmapping withdrawn windows we can leave them mapped
@@ -109,6 +111,7 @@ struct _MetaScreen
   /* Windows used to support hot-zone functionality.
    */
   Window corner_windows[4];
+  gint corner_enabled[4];
 
   Window composite_overlay_window;
 };

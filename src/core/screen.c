@@ -781,6 +781,11 @@ meta_screen_new (MetaDisplay *display,
   screen->corner_windows[1] = None;
   screen->corner_windows[2] = None;
   screen->corner_windows[3] = None;
+  screen->corner_actions_enabled = TRUE;
+  screen->corner_enabled[0] = TRUE;
+  screen->corner_enabled[1] = TRUE;
+  screen->corner_enabled[2] = TRUE;
+  screen->corner_enabled[3] = TRUE;
 
   /* If we're a Wayland compositor, then we don't grab the COW, since it
    * will map it. */
@@ -3193,5 +3198,32 @@ meta_screen_leave_corner (MetaScreen *screen, MetaScreenCorner corner)
 {
   XMapWindow (screen->display->xdisplay, screen->corner_windows[corner]);
   g_signal_emit (screen, screen_signals[CORNER_LEAVED], 0, corner);
+}
+
+void
+meta_screen_enable_corner (MetaScreen *screen, MetaScreenCorner corner, gboolean val)
+{
+  if (screen->corner_enabled[corner] == val)
+    return;
+
+  screen->corner_enabled[corner] = val;
+  if (val)
+    XMapWindow (screen->display->xdisplay, screen->corner_windows[corner]);
+  else
+    XUnmapWindow (screen->display->xdisplay, screen->corner_windows[corner]);
+}
+
+void          
+meta_screen_enable_corner_actions (MetaScreen *screen, gboolean enabled)
+{
+  if (screen->corner_actions_enabled != enabled) 
+    {
+      screen->corner_actions_enabled = enabled; 
+      int i;
+      for (i = 0; i < 4; i++)
+        {
+          meta_screen_enable_corner (screen, i, enabled);
+        }
+    }
 }
 

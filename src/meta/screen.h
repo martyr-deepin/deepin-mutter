@@ -137,4 +137,8 @@ void          meta_screen_enter_corner        (MetaScreen                 *scree
                                                MetaScreenCorner            corner);
 void          meta_screen_leave_corner        (MetaScreen                 *screen,
                                                MetaScreenCorner            corner);
+void          meta_screen_enable_corner_actions (MetaScreen *screen, gboolean enable);
+void          meta_screen_enable_corner        (MetaScreen                 *screen,
+                                               MetaScreenCorner            corner, 
+                                               gboolean                    val);
 #endif

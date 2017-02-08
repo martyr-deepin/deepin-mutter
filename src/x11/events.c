@@ -1743,6 +1743,7 @@ meta_display_handle_xevent (MetaDisplay *display,
 
   input_event = get_input_event (display, event);
 
+  if (display->screen->corner_actions_enabled)
     {
       int i;
       MetaScreenCorner corners[] = {
