@@ -1085,7 +1085,7 @@ meta_stack_tracker_restack_override_redirected (MetaStackTracker *tracker,
   /* raise corner windows above */
   for (i = 0; i < 4; i++) 
     {
-      meta_stack_tracker_raise_above (tracker, tracker->screen->corner_windows[i], windows[n_windows-1]);
+      meta_stack_tracker_lower_below (tracker, tracker->screen->corner_windows[i], None);
     }
 }
 
