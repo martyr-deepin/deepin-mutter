@@ -154,8 +154,11 @@ struct _MetaBlurActorPrivate
     CoglPipeline *pipeline2;
 
     CoglTexture* texture;
-    CoglTexture* mask_texture;
-    cairo_rectangle_int_t texture_area;
+    CoglTexture* mask_texture; // mask from ShapeBounding
+
+    CoglTexture* blur_mask_texture; // for shaped region blur 
+    cairo_surface_t *blur_mask; 
+
     CoglTexture* fbTex, *fbTex2;
     CoglOffscreen* fb, *fb2;
     float fb_width;
@@ -215,6 +218,8 @@ static void meta_blur_actor_dispose (GObject *object)
     if (priv->mask_texture) {
         g_clear_pointer (&priv->mask_texture, cogl_object_unref);
     }
+    if (priv->blur_mask_texture) 
+        g_clear_pointer (&priv->blur_mask_texture, cogl_object_unref);
 
     if (_stage_remove_always_redraw_actor)
         _stage_remove_always_redraw_actor (meta_get_stage_for_screen (priv->screen), self);
@@ -484,6 +489,40 @@ meta_blur_actor_allocate (ClutterActor        *actor,
     CLUTTER_ACTOR_CLASS (meta_blur_actor_parent_class)->allocate (actor, box, flags);
 }
 
+void meta_blur_actor_set_blur_mask (MetaBlurActor *self, cairo_surface_t* blur_mask)
+{
+    MetaBlurActorPrivate *priv = self->priv;
+
+    if (priv->blur_mask)
+        g_clear_pointer (&priv->blur_mask, cairo_surface_destroy);
+
+    if (blur_mask) {
+        priv->blur_mask = cairo_surface_reference (blur_mask);
+
+        CoglError *error = NULL;
+        CoglContext *ctx = clutter_backend_get_cogl_context(clutter_get_default_backend());
+
+        CoglTexture* mask_texture = COGL_TEXTURE (cogl_texture_2d_new_from_data (ctx, 
+                    cairo_image_surface_get_width (priv->blur_mask),
+                    cairo_image_surface_get_height (priv->blur_mask),
+                    COGL_PIXEL_FORMAT_A_8, 
+                    cairo_image_surface_get_stride (priv->blur_mask),
+                    cairo_image_surface_get_data (priv->blur_mask), 
+                    &error));
+        if (error) {
+            g_warning ("Failed to allocate mask texture: %s", error->message);
+            cogl_error_free (error);
+            mask_texture = NULL;
+        }
+
+        if (priv->blur_mask_texture) 
+            g_clear_pointer (&priv->blur_mask_texture, cogl_object_unref);
+
+        if (mask_texture)
+            priv->blur_mask_texture = mask_texture;
+    }
+}
+
 static void meta_blur_actor_paint (ClutterActor *actor)
 {
     MetaBlurActor *self = META_BLUR_ACTOR (actor);
@@ -504,13 +543,14 @@ static void meta_blur_actor_paint (ClutterActor *actor)
 
     CoglPipeline* pipeline = priv->pl_passthrough;
 
-    if (priv->clip_region && priv->mask_texture) {
-        /*fprintf(stderr, "%s, has clip, mask (%d, %d), bound: (%d, %d, %d, %d)\n", __func__, */
-                /*cogl_texture_get_width(priv->mask_texture),*/
-                /*cogl_texture_get_height(priv->mask_texture),*/
-                /*bounding.x, bounding.y, bounding.width, bounding.height);*/
-        cogl_pipeline_set_layer_texture (priv->pl_masked, 1, priv->mask_texture);
+    if (priv->blur_mask_texture) {
         pipeline = priv->pl_masked;
+        cogl_pipeline_set_layer_texture (priv->pl_masked, 1, priv->blur_mask_texture);
+    }
+
+    if (priv->clip_region && priv->mask_texture) {
+        pipeline = priv->pl_masked;
+        cogl_pipeline_set_layer_texture (priv->pl_masked, 2, priv->mask_texture);
     }
 
     cogl_framebuffer_push_rectangle_clip (cogl_get_draw_framebuffer (),
@@ -529,29 +569,54 @@ static void meta_blur_actor_paint (ClutterActor *actor)
         cogl_pipeline_set_layer_texture (pipeline, 0, priv->texture);
     }
 
-    if (!priv->mask_texture) {
+    if (pipeline == priv->pl_passthrough) {
         cogl_framebuffer_draw_textured_rectangle (
                 cogl_get_draw_framebuffer (), pipeline,
                 bounding.x, bounding.y, bounding.width, bounding.height,
                 0.0f, 0.0f, 1.00f, 1.00f);
     } else {
-        float tex[8];
-        tex[0] = 0.0;
-        tex[1] = 0.0;
-        tex[2] = 1.0;
-        tex[3] = 1.0;
+        if (!priv->mask_texture) {
+            // blur with blur_mask
+            float tex[8];
+            tex[0] = 0.0;
+            tex[1] = 0.0;
+            tex[2] = 1.0;
+            tex[3] = 1.0;
 
-        float mask_width = (float) cogl_texture_get_width (priv->mask_texture);
-        float mask_height = (float) cogl_texture_get_height (priv->mask_texture);
-        tex[4] = clutter_actor_get_x (self) / mask_width;
-        tex[5] = clutter_actor_get_y (self) / mask_height;
-        tex[6] = tex[4] + bounding.width / mask_width;
-        tex[7] = tex[5] + bounding.height / mask_height;
+            tex[4] = 0.0;
+            tex[5] = 0.0;
+            tex[6] = 1.0;
+            tex[7] = 1.0;
 
-        cogl_framebuffer_draw_multitextured_rectangle (
-                cogl_get_draw_framebuffer (), pipeline,
-                bounding.x, bounding.y, bounding.width, bounding.height,
-                &tex[0], 8);
+            cogl_framebuffer_draw_multitextured_rectangle (
+                    cogl_get_draw_framebuffer (), pipeline,
+                    bounding.x, bounding.y, bounding.width, bounding.height,
+                    &tex[0], 8);
+        } else {
+            // blur with blur_mask and shape
+            float tex[12];
+            tex[0] = 0.0;
+            tex[1] = 0.0;
+            tex[2] = 1.0;
+            tex[3] = 1.0;
+
+            tex[4] = 0.0;
+            tex[5] = 0.0;
+            tex[6] = 1.0;
+            tex[7] = 1.0;
+
+            float mask_width = (float) cogl_texture_get_width (priv->mask_texture);
+            float mask_height = (float) cogl_texture_get_height (priv->mask_texture);
+            tex[8] = clutter_actor_get_x (self) / mask_width;
+            tex[9] = clutter_actor_get_y (self) / mask_height;
+            tex[10] = tex[8] + bounding.width / mask_width;
+            tex[11] = tex[9] + bounding.height / mask_height;
+
+            cogl_framebuffer_draw_multitextured_rectangle (
+                    cogl_get_draw_framebuffer (), pipeline,
+                    bounding.x, bounding.y, bounding.width, bounding.height,
+                    &tex[0], 12);
+        }
     }
 
   cogl_framebuffer_pop_clip (cogl_get_draw_framebuffer ());

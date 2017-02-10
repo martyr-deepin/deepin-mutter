@@ -456,6 +456,9 @@ meta_window_actor_update_blur_background (MetaWindowActor *self)
           priv->blur_background = meta_blur_actor_new (window->screen);
           meta_blur_actor_set_radius (priv->blur_background, 25);
           clutter_actor_insert_child_below (CLUTTER_ACTOR (self), CLUTTER_ACTOR (priv->blur_background), NULL);
+          //FIXME: what if shape changed, and blur_region intersected with the shape
+          if (window->deepin_blur_mask)
+            meta_blur_actor_set_blur_mask (priv->blur_background, window->deepin_blur_mask);
         }
 
       meta_window_actor_update_blur_region (self);

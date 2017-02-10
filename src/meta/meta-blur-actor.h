@@ -20,6 +20,7 @@
 
 #include <clutter/clutter.h>
 #include <meta/screen.h>
+#include <cairo.h>
 
 #define META_TYPE_BLUR_ACTOR            (meta_blur_actor_get_type ())
 #define META_BLUR_ACTOR(obj)            (G_TYPE_CHECK_INSTANCE_CAST ((obj), META_TYPE_BLUR_ACTOR, MetaBlurActor))
@@ -53,6 +54,7 @@ ClutterActor *meta_blur_actor_new    (MetaScreen *screen);
 void meta_blur_actor_set_radius (MetaBlurActor *self, int radius);
 void meta_blur_actor_set_rounds (MetaBlurActor *self, int rounds);
 void meta_blur_actor_set_mask (MetaBlurActor *self, CoglTexture *mask);
+void meta_blur_actor_set_blur_mask (MetaBlurActor *self, cairo_surface_t* mask);
 
 #endif /* META_BLUR_ACTOR_H */
 

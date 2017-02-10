@@ -38,6 +38,7 @@
 #define _XOPEN_SOURCE 500 /* for gethostname() */
 
 #include <config.h>
+#include <math.h>
 #include "window-props.h"
 #include "window-x11.h"
 #include "window-x11-private.h"
@@ -1782,10 +1783,26 @@ meta_window_set_blur_region (MetaWindow     *window,
 
   cairo_rectangle_int_t r = {0, 0, 0, 0};
   if (window->deepin_blur_region) {
+      int n = cairo_region_num_rectangles (window->deepin_blur_region);
+      for (int i = 0; i < n; i++) {
+          cairo_region_get_rectangle (window->deepin_blur_region, i, &r);
+          meta_verbose ("%s: region subrect [%d, %d, %d, %d]\n", __func__, r.x, r.y, r.width, r.height);
+      }
       cairo_region_get_extents (window->deepin_blur_region, &r);
+      meta_verbose ("%s: region [%d, %d, %d, %d]\n", __func__, r.x, r.y, r.width, r.height);
   }
-  meta_verbose ("%s: region [%d, %d, %d, %d]\n", __func__, r.x, r.y, r.width, r.height);
   meta_compositor_window_blur_changed (window->display->compositor, window);
+}
+
+static void
+meta_window_set_blur_mask (MetaWindow     *window,
+                            cairo_surface_t *mask)
+{
+  if (window->deepin_blur_mask)
+    g_clear_pointer (&window->deepin_blur_mask, cairo_surface_destroy);
+
+  if (mask != NULL)
+    window->deepin_blur_mask = cairo_surface_reference (mask);
 }
 
 static void
@@ -1839,6 +1856,131 @@ reload_deepin_blur_region (MetaWindow    *window,
  out:
   meta_window_set_blur_region (window, blur_region);
   cairo_region_destroy (blur_region);
+}
+
+static void _draw_round_box (cairo_t *cr, gint width, gint height, double radius)
+{
+    cairo_set_antialias(cr, CAIRO_ANTIALIAS_BEST);
+
+    double xc = radius, yc = radius;
+    double angle1 = 180.0  * (M_PI/180.0);  /* angles are specified */
+    double angle2 = 270.0 * (M_PI/180.0);  /* in radians           */
+
+    cairo_arc (cr, xc, yc, radius, angle1, angle2);
+
+    xc = width - radius;
+    angle1 = 270.0 * (M_PI/180.0);
+    angle2 = 360.0 * (M_PI/180.0);
+    cairo_arc (cr, xc, yc, radius, angle1, angle2);
+
+    yc = height - radius;
+    angle1 = 0.0 * (M_PI/180.0);
+    angle2 = 90.0 * (M_PI/180.0);
+    cairo_arc (cr, xc, yc, radius, angle1, angle2);
+
+    xc = radius;
+    angle1 = 90.0 * (M_PI/180.0);
+    angle2 = 180.0 * (M_PI/180.0);
+    cairo_arc (cr, xc, yc, radius, angle1, angle2);
+
+    cairo_set_antialias(cr, CAIRO_ANTIALIAS_DEFAULT);
+}
+
+static cairo_surface_t* build_blur_mask (cairo_region_t *region, int *radius)
+{
+    cairo_t *cr;
+    cairo_surface_t *surface;
+
+    cairo_rectangle_int_t bounds;
+    cairo_region_get_extents (region, &bounds);
+
+    region = cairo_region_copy (region);
+    cairo_region_translate (region, -bounds.x, -bounds.y);
+
+    surface = cairo_image_surface_create (CAIRO_FORMAT_A8, bounds.width, bounds.height);
+    cr = cairo_create (surface);
+
+    cairo_set_source_rgba (cr, 1, 1, 1, 0);
+    cairo_rectangle (cr, 0, 0, bounds.width, bounds.height);
+    cairo_fill (cr);
+
+    cairo_rectangle_int_t r;
+    int n = cairo_region_num_rectangles (region);
+    for (int i = 0; i < n; i++) {
+        cairo_region_get_rectangle (region, i, &r);
+        cairo_save (cr);
+        cairo_set_source_rgba (cr, 1, 1, 1, 1);
+        cairo_translate (cr, r.x, r.y);
+        _draw_round_box (cr, r.width, r.height, radius[i]);
+        cairo_fill (cr);
+        cairo_restore (cr);
+        meta_verbose ("%s: (%d, %d, %d, %d, %d)\n", __func__, r.x, r.y, r.width, r.height, radius[i]);
+    }
+
+    cairo_destroy (cr);
+
+    return surface;
+}
+
+static void
+reload_deepin_blur_region_rounded (MetaWindow    *window,
+                           MetaPropValue *value,
+                           gboolean       initial)
+{
+  cairo_region_t *blur_region = NULL;
+  int *radius = NULL;
+  cairo_surface_t *blur_mask = NULL;
+
+  if (value->type != META_PROP_VALUE_INVALID)
+    {
+      uint32_t *region = value->v.cardinal_list.cardinals;
+      int nitems = value->v.cardinal_list.n_cardinals;
+
+      cairo_rectangle_int_t *rects;
+      int i, rect_index, nrects;
+
+      if (nitems % 5 != 0)
+        {
+          meta_verbose ("_NET_WM_DEEPIN_BLUR_REGION_ROUNDED does not have a list of 5-tuples.");
+          goto out;
+        }
+
+      /* empty region */
+      if (nitems == 0)
+        goto out;
+
+      nrects = nitems / 5;
+
+      rects = g_new (cairo_rectangle_int_t, nrects);
+      radius = g_new (int, nrects);
+
+      rect_index = 0;
+      i = 0;
+      while (i < nitems)
+        {
+          cairo_rectangle_int_t *rect = &rects[rect_index];
+
+          rect->x = region[i++];
+          rect->y = region[i++];
+          rect->width = region[i++];
+          rect->height = region[i++];
+
+          radius[rect_index] = region[i++];
+          rect_index++;
+        }
+
+      blur_region = cairo_region_create_rectangles (rects, nrects);
+
+      g_free (rects);
+    }
+
+ out:
+  blur_mask = build_blur_mask (blur_region, radius);
+  meta_window_set_blur_mask (window, blur_mask);
+  meta_window_set_blur_region (window, blur_region);
+
+  cairo_region_destroy (blur_region);
+  if (radius) g_free (radius);
 }
 
 static void
@@ -1966,6 +2108,7 @@ meta_display_init_window_prop_hooks (MetaDisplay *display)
     { display->atom__GTK_FRAME_EXTENTS,                META_PROP_VALUE_CARDINAL_LIST,reload_gtk_frame_extents,                LOAD_INIT },
     { display->atom__DEEPIN_OVERRIDE,                  META_PROP_VALUE_CARDINAL,     reload_deepin_override,                  LOAD_INIT },
     { display->atom__NET_WM_DEEPIN_BLUR_REGION,     META_PROP_VALUE_CARDINAL_LIST, reload_deepin_blur_region, LOAD_INIT | INCLUDE_OR },
+    { display->atom__NET_WM_DEEPIN_BLUR_REGION_ROUNDED, META_PROP_VALUE_CARDINAL_LIST, reload_deepin_blur_region_rounded, LOAD_INIT | INCLUDE_OR },
     { display->atom__NET_WM_USER_TIME_WINDOW, META_PROP_VALUE_WINDOW, reload_net_wm_user_time_window, LOAD_INIT },
     { display->atom__NET_WM_ICON,      META_PROP_VALUE_INVALID,  reload_net_wm_icon,  NONE },
     { display->atom__KWM_WIN_ICON,     META_PROP_VALUE_INVALID,  reload_kwm_win_icon, NONE },

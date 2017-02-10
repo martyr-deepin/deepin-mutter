@@ -361,6 +361,9 @@ struct _MetaWindow
   /* if non-NULL, the background blur region _NET_WM_DEEPIN_BLUR_REGION */
   cairo_region_t *deepin_blur_region;
 
+  /* for representing discreted shaped blur area */
+  cairo_surface_t *deepin_blur_mask;
+
   /* the input shape region for picking */
   cairo_region_t *input_region;
 
