@@ -1858,6 +1858,62 @@ reload_deepin_blur_region (MetaWindow    *window,
   cairo_region_destroy (blur_region);
 }
 
+static void _draw_round_box2 (cairo_t *cr, gint width, gint height, double xradius, double yradius)
+{
+    cairo_set_antialias(cr, CAIRO_ANTIALIAS_BEST);
+
+    double xc = xradius, yc = yradius;
+    double angle1 = 180.0  * (M_PI/180.0);  /* angles are specified */
+    double angle2 = 270.0 * (M_PI/180.0);  /* in radians           */
+
+    {
+        cairo_save (cr);
+        cairo_translate (cr, xc, yc);
+        cairo_scale (cr, 1.0, yradius / xradius);
+        cairo_translate (cr, -xc, -yc);
+        cairo_arc (cr, xc, yc, xradius, angle1, angle2);
+        cairo_restore (cr);
+    }
+
+    xc = width - xradius;
+    angle1 = 270.0 * (M_PI/180.0);
+    angle2 = 360.0 * (M_PI/180.0);
+    {
+        cairo_save (cr);
+        cairo_translate (cr, xc, yc);
+        cairo_scale (cr, 1.0, yradius / xradius);
+        cairo_translate (cr, -xc, -yc);
+        cairo_arc (cr, xc, yc, xradius, angle1, angle2);
+        cairo_restore (cr);
+    }
+
+    yc = height - yradius;
+    angle1 = 0.0 * (M_PI/180.0);
+    angle2 = 90.0 * (M_PI/180.0);
+    {
+        cairo_save (cr);
+        cairo_translate (cr, xc, yc);
+        cairo_scale (cr, 1.0, yradius / xradius);
+        cairo_translate (cr, -xc, -yc);
+        cairo_arc (cr, xc, yc, xradius, angle1, angle2);
+        cairo_restore (cr);
+    }
+
+    xc = xradius;
+    angle1 = 90.0 * (M_PI/180.0);
+    angle2 = 180.0 * (M_PI/180.0);
+    {
+        cairo_save (cr);
+        cairo_translate (cr, xc, yc);
+        cairo_scale (cr, 1.0, yradius / xradius);
+        cairo_translate (cr, -xc, -yc);
+        cairo_arc (cr, xc, yc, xradius, angle1, angle2);
+        cairo_restore (cr);
+    }
+
+    cairo_set_antialias(cr, CAIRO_ANTIALIAS_DEFAULT);
+}
+
 static void _draw_round_box (cairo_t *cr, gint width, gint height, double radius)
 {
     cairo_set_antialias(cr, CAIRO_ANTIALIAS_BEST);
@@ -1911,10 +1967,15 @@ static cairo_surface_t* build_blur_mask (cairo_region_t *region, int *radius)
         cairo_save (cr);
         cairo_set_source_rgba (cr, 1, 1, 1, 1);
         cairo_translate (cr, r.x, r.y);
-        _draw_round_box (cr, r.width, r.height, radius[i]);
+        if (radius[i*2] == radius[i*2+1]) {
+            _draw_round_box (cr, r.width, r.height, radius[i*2]);
+        } else {
+            _draw_round_box2 (cr, r.width, r.height, radius[i*2], radius[i*2+1]);
+        }
         cairo_fill (cr);
         cairo_restore (cr);
-        meta_verbose ("%s: (%d, %d, %d, %d, %d)\n", __func__, r.x, r.y, r.width, r.height, radius[i]);
+        meta_verbose ("%s: (%d, %d, %d, %d, %d, %d)\n", __func__,
+                r.x, r.y, r.width, r.height, radius[i*2], radius[i*2+1]);
     }
 
     cairo_destroy (cr);
@@ -1939,9 +2000,9 @@ reload_deepin_blur_region_rounded (MetaWindow    *window,
       cairo_rectangle_int_t *rects;
       int i, rect_index, nrects;
 
-      if (nitems % 5 != 0)
+      if (nitems % 6 != 0)
         {
-          meta_verbose ("_NET_WM_DEEPIN_BLUR_REGION_ROUNDED does not have a list of 5-tuples.");
+          meta_verbose ("_NET_WM_DEEPIN_BLUR_REGION_ROUNDED does not have a list of 6-tuples.");
           goto out;
         }
 
@@ -1949,10 +2010,10 @@ reload_deepin_blur_region_rounded (MetaWindow    *window,
       if (nitems == 0)
         goto out;
 
-      nrects = nitems / 5;
+      nrects = nitems / 6;
 
       rects = g_new (cairo_rectangle_int_t, nrects);
-      radius = g_new (int, nrects);
+      radius = g_new (int, nrects * 2);
 
       rect_index = 0;
       i = 0;
@@ -1965,7 +2026,8 @@ reload_deepin_blur_region_rounded (MetaWindow    *window,
           rect->width = region[i++];
           rect->height = region[i++];
 
-          radius[rect_index] = region[i++];
+          radius[rect_index*2] = region[i++];
+          radius[rect_index*2+1] = region[i++];
           rect_index++;
         }
 
