@@ -1795,17 +1795,6 @@ meta_window_set_blur_region (MetaWindow     *window,
 }
 
 static void
-meta_window_set_blur_mask (MetaWindow     *window,
-                            cairo_surface_t *mask)
-{
-  if (window->deepin_blur_mask)
-    g_clear_pointer (&window->deepin_blur_mask, cairo_surface_destroy);
-
-  if (mask != NULL)
-    window->deepin_blur_mask = cairo_surface_reference (mask);
-}
-
-static void
 reload_deepin_blur_region (MetaWindow    *window,
                            MetaPropValue *value,
                            gboolean       initial)
@@ -1942,8 +1931,14 @@ static void _draw_round_box (cairo_t *cr, gint width, gint height, double radius
     cairo_set_antialias(cr, CAIRO_ANTIALIAS_DEFAULT);
 }
 
-static cairo_surface_t* build_blur_mask (cairo_region_t *region, int *radius)
+static cairo_surface_t* build_blur_mask (cairo_region_t *region, GArray *radiuses)
 {
+    if (region == NULL || cairo_region_is_empty (region)) {
+        return NULL;
+    }
+
+    int *radius = (int*) radiuses->data;
+
     cairo_t *cr;
     cairo_surface_t *surface;
 
@@ -1984,13 +1979,59 @@ static cairo_surface_t* build_blur_mask (cairo_region_t *region, int *radius)
 }
 
 static void
+meta_window_set_blur_region_with_radius (MetaWindow     *window,
+                                        cairo_region_t *region, GArray *radiuses)
+{
+  cairo_surface_t *blur_mask = NULL;
+
+  if (cairo_region_equal (window->deepin_blur_region, region)) {
+    int n = cairo_region_num_rectangles (region);
+    meta_verbose ("%s: n = %d, len = %d\n", __func__, n, radiuses->len);
+    if (memcmp (window->deepin_blur_radiuses, radiuses, n*2*sizeof(int)) == 0)
+      return;
+  }
+
+  g_clear_pointer (&window->deepin_blur_region, cairo_region_destroy);
+  g_clear_pointer (&window->deepin_blur_radiuses, g_array_unref);
+  g_clear_pointer (&window->deepin_blur_mask, cairo_surface_destroy);
+
+  blur_mask = build_blur_mask (region, radiuses);
+  if (blur_mask != NULL)
+    window->deepin_blur_mask = cairo_surface_reference (blur_mask);
+
+#if 0
+  if (blur_mask != NULL) {
+      char *fn = g_strdup_printf ("/tmp/mask-0x%x-%lu", window->xwindow, g_get_monotonic_time () / 1000);
+      cairo_surface_write_to_png (blur_mask, fn);
+      g_free (fn);
+  }
+#endif
+
+  if (region != NULL)
+    window->deepin_blur_region = cairo_region_reference (region);
+
+  window->deepin_blur_radiuses = g_array_ref (radiuses);
+
+  cairo_rectangle_int_t r = {0, 0, 0, 0};
+  if (window->deepin_blur_region) {
+      int n = cairo_region_num_rectangles (window->deepin_blur_region);
+      for (int i = 0; i < n; i++) {
+          cairo_region_get_rectangle (window->deepin_blur_region, i, &r);
+          meta_verbose ("%s: region subrect [%d, %d, %d, %d]\n", __func__, r.x, r.y, r.width, r.height);
+      }
+      cairo_region_get_extents (window->deepin_blur_region, &r);
+      meta_verbose ("%s: bounds [%d, %d, %d, %d]\n", __func__, r.x, r.y, r.width, r.height);
+  }
+  meta_compositor_window_blur_changed (window->display->compositor, window);
+}
+
+static void
 reload_deepin_blur_region_rounded (MetaWindow    *window,
                            MetaPropValue *value,
                            gboolean       initial)
 {
   cairo_region_t *blur_region = NULL;
-  int *radius = NULL;
-  cairo_surface_t *blur_mask = NULL;
+  GArray *radiuses = g_array_new (FALSE, FALSE, sizeof(int));
 
   if (value->type != META_PROP_VALUE_INVALID)
     {
@@ -2013,7 +2054,6 @@ reload_deepin_blur_region_rounded (MetaWindow    *window,
       nrects = nitems / 6;
 
       rects = g_new (cairo_rectangle_int_t, nrects);
-      radius = g_new (int, nrects * 2);
 
       rect_index = 0;
       i = 0;
@@ -2026,8 +2066,8 @@ reload_deepin_blur_region_rounded (MetaWindow    *window,
           rect->width = region[i++];
           rect->height = region[i++];
 
-          radius[rect_index*2] = region[i++];
-          radius[rect_index*2+1] = region[i++];
+          g_array_append_val (radiuses, region[i++]);
+          g_array_append_val (radiuses, region[i++]);
           rect_index++;
         }
 
@@ -2037,12 +2077,10 @@ reload_deepin_blur_region_rounded (MetaWindow    *window,
     }
 
  out:
-  blur_mask = build_blur_mask (blur_region, radius);
-  meta_window_set_blur_mask (window, blur_mask);
-  meta_window_set_blur_region (window, blur_region);
+  meta_window_set_blur_region_with_radius (window, blur_region, radiuses);
 
   cairo_region_destroy (blur_region);
-  if (radius) g_free (radius);
+  g_array_unref (radiuses);
 }
 
 static void

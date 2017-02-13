@@ -278,11 +278,14 @@ meta_window_finalize (GObject *object)
   if (window->input_region)
     cairo_region_destroy (window->input_region);
 
-  if (window->input_region)
+  if (window->deepin_blur_region)
     cairo_region_destroy (window->deepin_blur_region);
 
   if (window->deepin_blur_mask) 
       cairo_surface_destroy (window->deepin_blur_mask);
+
+  if (window->deepin_blur_radiuses) 
+      g_array_unref (window->deepin_blur_radiuses);
 
   if (window->transient_for)
     g_object_unref (window->transient_for);

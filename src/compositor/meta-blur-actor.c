@@ -204,6 +204,7 @@ static void meta_blur_actor_dispose (GObject *object)
         cogl_object_unref (priv->fbTex2);
         cogl_object_unref (priv->fb);
         cogl_object_unref (priv->fb2);
+        cogl_object_unref (priv->texture);
         priv->fbTex = NULL;
     }
     if (priv->pipeline) {
@@ -215,11 +216,10 @@ static void meta_blur_actor_dispose (GObject *object)
         priv->pipeline2 = NULL;
     }
 
-    if (priv->mask_texture) {
-        g_clear_pointer (&priv->mask_texture, cogl_object_unref);
-    }
-    if (priv->blur_mask_texture) 
-        g_clear_pointer (&priv->blur_mask_texture, cogl_object_unref);
+    g_clear_pointer (&priv->mask_texture, cogl_object_unref);
+    g_clear_pointer (&priv->blur_mask_texture, cogl_object_unref);
+
+    g_clear_pointer (&priv->clip_region, cairo_region_destroy);
 
     if (_stage_remove_always_redraw_actor)
         _stage_remove_always_redraw_actor (meta_get_stage_for_screen (priv->screen), self);
@@ -493,8 +493,8 @@ void meta_blur_actor_set_blur_mask (MetaBlurActor *self, cairo_surface_t* blur_m
 {
     MetaBlurActorPrivate *priv = self->priv;
 
-    if (priv->blur_mask)
-        g_clear_pointer (&priv->blur_mask, cairo_surface_destroy);
+    g_clear_pointer (&priv->blur_mask, cairo_surface_destroy);
+    g_clear_pointer (&priv->blur_mask_texture, cogl_object_unref);
 
     if (blur_mask) {
         priv->blur_mask = cairo_surface_reference (blur_mask);
@@ -514,9 +514,6 @@ void meta_blur_actor_set_blur_mask (MetaBlurActor *self, cairo_surface_t* blur_m
             cogl_error_free (error);
             mask_texture = NULL;
         }
-
-        if (priv->blur_mask_texture) 
-            g_clear_pointer (&priv->blur_mask_texture, cogl_object_unref);
 
         if (mask_texture)
             priv->blur_mask_texture = mask_texture;

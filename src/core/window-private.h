@@ -358,8 +358,13 @@ struct _MetaWindow
   /* if non-NULL, the opaque region _NET_WM_OPAQUE_REGION */
   cairo_region_t *opaque_region;
 
-  /* if non-NULL, the background blur region _NET_WM_DEEPIN_BLUR_REGION */
+  /* if non-NULL, the background blur region _NET_WM_DEEPIN_BLUR_REGION or 
+   * _NET_WM_DEEPIN_BLUR_REGION_ROUNDED
+   **/
   cairo_region_t *deepin_blur_region;
+
+  /* radius (xr, yr) list for deepin_blur_region if any */
+  GArray *deepin_blur_radiuses; 
 
   /* for representing discreted shaped blur area */
   cairo_surface_t *deepin_blur_mask;

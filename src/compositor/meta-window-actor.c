@@ -456,11 +456,11 @@ meta_window_actor_update_blur_background (MetaWindowActor *self)
           priv->blur_background = meta_blur_actor_new (window->screen);
           meta_blur_actor_set_radius (priv->blur_background, 25);
           clutter_actor_insert_child_below (CLUTTER_ACTOR (self), CLUTTER_ACTOR (priv->blur_background), NULL);
-          //FIXME: what if shape changed, and blur_region intersected with the shape
-          if (window->deepin_blur_mask)
-            meta_blur_actor_set_blur_mask (priv->blur_background, window->deepin_blur_mask);
         }
 
+      //FIXME: what if shape changed, and blur_region intersected with the shape
+      if (window->deepin_blur_mask)
+        meta_blur_actor_set_blur_mask (priv->blur_background, window->deepin_blur_mask);
       meta_window_actor_update_blur_region (self);
     }
 
@@ -1981,10 +1981,12 @@ meta_window_actor_update_blur_region (MetaWindowActor *self)
   if (cairo_region_equal (blur_region, priv->deepin_blur_region)) 
     return;
 
-  if (priv->deepin_blur_region) 
-    g_clear_pointer(&priv->deepin_blur_region, cairo_region_destroy);
+  g_clear_pointer (&priv->deepin_blur_region, cairo_region_destroy);
 
-  priv->deepin_blur_region = blur_region;
+  if (blur_region)
+      priv->deepin_blur_region = blur_region;
+  else
+      priv->deepin_blur_region = cairo_region_create ();
 
   cairo_rectangle_int_t rect;
   cairo_region_get_extents (priv->deepin_blur_region, &rect);
