@@ -1931,7 +1931,9 @@ static void _draw_round_box (cairo_t *cr, gint width, gint height, double radius
     cairo_set_antialias(cr, CAIRO_ANTIALIAS_DEFAULT);
 }
 
-static cairo_surface_t* build_blur_mask (cairo_region_t *region, GArray *radiuses)
+static cairo_surface_t* build_blur_mask (cairo_region_t *region,
+                                        cairo_rectangle_int_t *origin_rects, int nrects,
+                                        GArray *radiuses)
 {
     if (region == NULL || cairo_region_is_empty (region)) {
         return NULL;
@@ -1945,9 +1947,6 @@ static cairo_surface_t* build_blur_mask (cairo_region_t *region, GArray *radiuse
     cairo_rectangle_int_t bounds;
     cairo_region_get_extents (region, &bounds);
 
-    region = cairo_region_copy (region);
-    cairo_region_translate (region, -bounds.x, -bounds.y);
-
     surface = cairo_image_surface_create (CAIRO_FORMAT_A8, bounds.width, bounds.height);
     cr = cairo_create (surface);
 
@@ -1955,10 +1954,13 @@ static cairo_surface_t* build_blur_mask (cairo_region_t *region, GArray *radiuse
     cairo_rectangle (cr, 0, 0, bounds.width, bounds.height);
     cairo_fill (cr);
 
-    cairo_rectangle_int_t r;
-    int n = cairo_region_num_rectangles (region);
-    for (int i = 0; i < n; i++) {
-        cairo_region_get_rectangle (region, i, &r);
+    for (int i = 0; i < nrects; i++) {
+        cairo_rectangle_int_t r = {
+            origin_rects[i].x - bounds.x, 
+            origin_rects[i].y - bounds.y, 
+            origin_rects[i].width,
+            origin_rects[i].height,
+        };
         cairo_save (cr);
         cairo_set_source_rgba (cr, 1, 1, 1, 1);
         cairo_translate (cr, r.x, r.y);
@@ -1980,14 +1982,19 @@ static cairo_surface_t* build_blur_mask (cairo_region_t *region, GArray *radiuse
 
 static void
 meta_window_set_blur_region_with_radius (MetaWindow     *window,
-                                        cairo_region_t *region, GArray *radiuses)
+                                        cairo_region_t *region,
+                                        cairo_rectangle_int_t *origin_rects, int nrects,
+                                        GArray *radiuses)
 {
   cairo_surface_t *blur_mask = NULL;
 
+  /*
+   * cairo_region make split our original rectangle into subrect, so num_rectangles may not 
+   * match size of radiuses, and we need to take care of that:
+   *   mask should be build based on orignal rects
+   */
   if (cairo_region_equal (window->deepin_blur_region, region)) {
-    int n = cairo_region_num_rectangles (region);
-    meta_verbose ("%s: n = %d, len = %d\n", __func__, n, radiuses->len);
-    if (memcmp (window->deepin_blur_radiuses, radiuses, n*2*sizeof(int)) == 0)
+    if (memcmp (window->deepin_blur_radiuses, radiuses, radiuses->len*sizeof(int)) == 0)
       return;
   }
 
@@ -1995,7 +2002,7 @@ meta_window_set_blur_region_with_radius (MetaWindow     *window,
   g_clear_pointer (&window->deepin_blur_radiuses, g_array_unref);
   g_clear_pointer (&window->deepin_blur_mask, cairo_surface_destroy);
 
-  blur_mask = build_blur_mask (region, radiuses);
+  blur_mask = build_blur_mask (region, origin_rects, nrects, radiuses);
   if (blur_mask != NULL)
     window->deepin_blur_mask = cairo_surface_reference (blur_mask);
 
@@ -2032,14 +2039,15 @@ reload_deepin_blur_region_rounded (MetaWindow    *window,
 {
   cairo_region_t *blur_region = NULL;
   GArray *radiuses = g_array_new (FALSE, FALSE, sizeof(int));
+  cairo_rectangle_int_t *rects = NULL;
+  int nrects = 0;
 
   if (value->type != META_PROP_VALUE_INVALID)
     {
       uint32_t *region = value->v.cardinal_list.cardinals;
       int nitems = value->v.cardinal_list.n_cardinals;
 
-      cairo_rectangle_int_t *rects;
-      int i, rect_index, nrects;
+      int i, rect_index;
 
       if (nitems % 6 != 0)
         {
@@ -2072,15 +2080,14 @@ reload_deepin_blur_region_rounded (MetaWindow    *window,
         }
 
       blur_region = cairo_region_create_rectangles (rects, nrects);
-
-      g_free (rects);
     }
 
  out:
-  meta_window_set_blur_region_with_radius (window, blur_region, radiuses);
+  meta_window_set_blur_region_with_radius (window, blur_region, rects, nrects, radiuses);
 
   cairo_region_destroy (blur_region);
   g_array_unref (radiuses);
+  if (rects) g_free (rects);
 }
 
 static void
