@@ -165,6 +165,7 @@ static void meta_blurred_background_actor_dispose (GObject *object)
         cogl_object_unref (priv->fbTex2);
         cogl_object_unref (priv->fb);
         cogl_object_unref (priv->fb2);
+        cogl_object_unref (priv->texture);
         priv->fbTex = NULL;
     }
     meta_blurred_background_actor_set_background (self, NULL);
