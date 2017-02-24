@@ -29,6 +29,8 @@
 #include "meta-background-private.h"
 #include "meta-cullable.h"
 
+static int total_actors = 0;
+
 enum
 {
     PROP_META_SCREEN = 1,
@@ -115,6 +117,8 @@ struct _MetaBlurredBackgroundActorPrivate
     MetaScreen *screen;
     int monitor;
 
+    guint disposed: 1;
+
     MetaBackground *background;
 
     gboolean blurred;
@@ -159,6 +163,10 @@ static void meta_blurred_background_actor_dispose (GObject *object)
     MetaBlurredBackgroundActor *self = META_BLURRED_BACKGROUND_ACTOR (object);
     MetaBlurredBackgroundActorPrivate *priv = self->priv;
 
+    if (priv->disposed) return;
+
+    priv->disposed = TRUE;
+    meta_verbose ("%s: total = %d\n", __func__, --total_actors);
     set_clip_region (self, NULL);
     if (priv->fbTex) {
         cogl_object_unref (priv->fbTex);
@@ -602,6 +610,7 @@ ClutterActor * meta_blurred_background_actor_new (MetaScreen *screen,
 {
     MetaBlurredBackgroundActor *self;
 
+    meta_verbose ("%s: total = %d\n", __func__, ++total_actors);
     self = g_object_new (META_TYPE_BLURRED_BACKGROUND_ACTOR,
             "meta-screen", screen,
             "monitor", monitor,

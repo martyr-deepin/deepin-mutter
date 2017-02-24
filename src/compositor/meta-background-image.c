@@ -226,6 +226,10 @@ meta_background_image_cache_load (MetaBackgroundImageCache *cache,
   MetaBackgroundImage *image;
   GTask *task;
 
+  char *name = g_file_get_path(file);
+  meta_verbose ("%s -> %s\n", __func__, name);
+  if (name) free(name);
+
   g_return_val_if_fail (META_IS_BACKGROUND_IMAGE_CACHE (cache), NULL);
   g_return_val_if_fail (file != NULL, NULL);
 
@@ -283,6 +287,9 @@ static void
 meta_background_image_finalize (GObject *object)
 {
   MetaBackgroundImage *image = META_BACKGROUND_IMAGE (object);
+  char *name = g_file_get_path(file);
+  meta_verbose ("%s -> %s\n", __func__, name);
+  if (name) free(name);
 
   if (image->in_cache)
     g_hash_table_remove (image->cache->images, image->file);
