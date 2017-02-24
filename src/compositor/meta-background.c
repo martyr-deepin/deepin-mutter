@@ -938,6 +938,9 @@ meta_background_set_blend (MetaBackground          *self,
   free_wallpaper_texture (self);
   if (file2)
     mark_changed (self);
+  else if (meta_background_image_is_loaded(priv->background_image1)) {
+    mark_changed (self);
+  }
 }
 
 void
