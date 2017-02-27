@@ -128,6 +128,7 @@ struct _MetaBlurredBackgroundActorPrivate
 
     ChangedFlags changed;
     CoglPipeline *pl_passthrough;
+    CoglPipeline *pl_masked; // masked by shape 
 
     CoglPipeline *pipeline;
     CoglPipeline *pipeline2;
@@ -138,6 +139,9 @@ struct _MetaBlurredBackgroundActorPrivate
     CoglOffscreen* fb, *fb2;
     float fb_width;
     float fb_height;
+
+    CoglTexture* blur_mask_texture; // for shaped region blur 
+    cairo_surface_t *blur_mask; 
 
     cairo_region_t *clip_region;
 };
@@ -181,9 +185,12 @@ static void meta_blurred_background_actor_dispose (GObject *object)
         cogl_object_unref (priv->pipeline);
         cogl_object_unref (priv->pipeline2);
         cogl_object_unref (priv->pl_passthrough);
+        cogl_object_unref (priv->pl_masked);
         priv->pipeline = NULL;
         priv->pipeline2 = NULL;
     }
+
+    g_clear_pointer (&priv->blur_mask_texture, cogl_object_unref);
 
     G_OBJECT_CLASS (meta_blurred_background_actor_parent_class)->dispose (object);
 }
@@ -253,6 +260,9 @@ static void make_pipeline (MetaBlurredBackgroundActor* self)
     }
 
     priv->pl_passthrough = cogl_pipeline_copy (template);
+    priv->pl_masked = cogl_pipeline_copy (template);
+    cogl_pipeline_set_layer_combine (priv->pl_masked, 1,
+            "RGBA = MODULATE (PREVIOUS, TEXTURE[A])", NULL);
 
     priv->pipeline = cogl_pipeline_copy (template);
 
@@ -283,10 +293,10 @@ static void create_texture (MetaBlurredBackgroundActor* self)
     width *= scale;
     height *= scale;
 
-    if (priv->fbTex2) {
-        cogl_object_unref (priv->fbTex2);
-        priv->fbTex2 = NULL;
-    }
+    g_clear_pointer (&priv->fbTex, cogl_object_unref);
+    g_clear_pointer (&priv->fbTex2, cogl_object_unref);
+    g_clear_pointer (&priv->fb, cogl_object_unref);
+    g_clear_pointer (&priv->fb2, cogl_object_unref);
 
     priv->fb_width = width;
     priv->fb_height = height;
@@ -387,6 +397,7 @@ static void setup_pipeline (MetaBlurredBackgroundActor   *self,
 
     if (priv->changed) {
         CoglPipelineWrapMode wrap_mode;
+
         priv->texture = meta_background_get_texture (priv->background,
                 priv->monitor,
                 &priv->texture_area,
@@ -439,22 +450,49 @@ static void meta_blurred_background_actor_paint (ClutterActor *actor)
     bounding.width = actor_box.x2 - actor_box.x1;
     bounding.height = actor_box.y2 - actor_box.y1;
 
+    CoglPipeline* pipeline = priv->pl_passthrough;
+
+    if (priv->blur_mask_texture) {
+        pipeline = priv->pl_masked;
+        cogl_pipeline_set_layer_texture (priv->pl_masked, 1, priv->blur_mask_texture);
+    }
+
     guint8 opacity;
     opacity = clutter_actor_get_paint_opacity (CLUTTER_ACTOR (self));
-    cogl_pipeline_set_color4ub (priv->pl_passthrough,
+    cogl_pipeline_set_color4ub (pipeline,
             opacity, opacity, opacity, opacity);
 
     setup_pipeline (self, &bounding);
     if (priv->radius > 0) {
-        cogl_pipeline_set_layer_texture (priv->pl_passthrough, 0, priv->fbTex2);
+        cogl_pipeline_set_layer_texture (pipeline, 0, priv->fbTex2);
 
     } else {
-        cogl_pipeline_set_layer_texture (priv->pl_passthrough, 0, priv->texture);
+        cogl_pipeline_set_layer_texture (pipeline, 0, priv->texture);
     }
-    cogl_framebuffer_draw_textured_rectangle (
-            cogl_get_draw_framebuffer (), priv->pl_passthrough,
-            bounding.x, bounding.y, bounding.width, bounding.height,
-            0.0f, 0.0f, 1.00f, 1.00f);
+
+    if (pipeline == priv->pl_passthrough) {
+        cogl_framebuffer_draw_textured_rectangle (
+                cogl_get_draw_framebuffer (), pipeline,
+                bounding.x, bounding.y, bounding.width, bounding.height,
+                0.0f, 0.0f, 1.00f, 1.00f);
+    } else {
+        // blur with blur_mask
+        float tex[8];
+        tex[0] = 0.0;
+        tex[1] = 0.0;
+        tex[2] = 1.0;
+        tex[3] = 1.0;
+
+        tex[4] = 0.0;
+        tex[5] = 0.0;
+        tex[6] = 1.0;
+        tex[7] = 1.0;
+
+        cogl_framebuffer_draw_multitextured_rectangle (
+                cogl_get_draw_framebuffer (), pipeline,
+                bounding.x, bounding.y, bounding.width, bounding.height,
+                &tex[0], 8);
+    }
 }
 
 static void meta_blurred_background_actor_set_property (GObject      *object,
@@ -729,3 +767,37 @@ void meta_blurred_background_actor_set_rounds (MetaBlurredBackgroundActor *self,
         clutter_actor_queue_redraw (CLUTTER_ACTOR (self));
     }
 }
+
+void meta_blurred_background_actor_set_blur_mask (MetaBlurredBackgroundActor *self,
+        cairo_surface_t* blur_mask)
+{ 
+    MetaBlurredBackgroundActorPrivate *priv = self->priv;
+
+    g_clear_pointer (&priv->blur_mask, cairo_surface_destroy);
+    g_clear_pointer (&priv->blur_mask_texture, cogl_object_unref);
+
+    if (blur_mask) {
+        priv->blur_mask = cairo_surface_reference (blur_mask);
+
+        CoglError *error = NULL;
+        CoglContext *ctx = clutter_backend_get_cogl_context(clutter_get_default_backend());
+
+        CoglTexture* mask_texture = COGL_TEXTURE (cogl_texture_2d_new_from_data (ctx, 
+                    cairo_image_surface_get_width (priv->blur_mask),
+                    cairo_image_surface_get_height (priv->blur_mask),
+                    COGL_PIXEL_FORMAT_A_8, 
+                    cairo_image_surface_get_stride (priv->blur_mask),
+                    cairo_image_surface_get_data (priv->blur_mask), 
+                    &error));
+        if (error) {
+            g_warning ("Failed to allocate mask texture: %s", error->message);
+            cogl_error_free (error);
+            mask_texture = NULL;
+        }
+
+        if (mask_texture)
+            priv->blur_mask_texture = mask_texture;
+    }
+
+}
+

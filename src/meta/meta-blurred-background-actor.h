@@ -63,4 +63,7 @@ void meta_blurred_background_actor_set_radius (MetaBlurredBackgroundActor *self,
 void meta_blurred_background_actor_set_rounds (MetaBlurredBackgroundActor *self,
                                          int rounds);
 
+void meta_blurred_background_actor_set_blur_mask (MetaBlurredBackgroundActor *self,
+        cairo_surface_t* mask);
+
 #endif /* META_BLURRED_BACKGROUND_ACTOR_H */
