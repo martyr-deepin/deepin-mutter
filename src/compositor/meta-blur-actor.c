@@ -25,6 +25,7 @@
 #include <clutter/clutter.h>
 
 #include "cogl-utils.h"
+#include "blur-utils.h"
 #include "clutter-utils.h"
 #include <meta/errors.h>
 #include <meta/screen.h>
@@ -50,14 +51,6 @@ typedef enum {
     CHANGED_ALL = 0xFFFF
 } ChangedFlags;
 
-static const char* gaussian_blur_global_definition =
-"#define texpick texture2D\n";
-
-#define VERTICAL   1
-#define HORIZONTAL 2
-
-static const char* gaussian_blur_glsl_declarations =
-"uniform vec2 resolution;";
 
 static void build_gaussian_blur_kernel(int* pradius, float* offset, float* weight)
 {
@@ -89,51 +82,6 @@ static void build_gaussian_blur_kernel(int* pradius, float* offset, float* weigh
         weight[i] = w;
     }
     *pradius = radius;
-}
-
-static char *build_shader(int direction, int radius, float* offsets, float *weight)
-{
-    char* ret = (char*)malloc(10000);
-    if (!ret) {
-        return NULL;
-    }
-
-    char *p = ret;
-
-    if (direction == VERTICAL) {
-        int sz = sprintf(p, "vec2 tc = cogl_tex_coord.st;\n"
-                "cogl_texel = texpick(cogl_sampler, tc) * %f;\n",
-                weight[0]);
-        p += sz;
-
-        for (int i = 1; i < radius; i++) {
-            sz = sprintf(p, 
-                    "cogl_texel += texpick(cogl_sampler, tc - vec2(0.0, %f/resolution.y)) * %f; \n"
-                    "cogl_texel += texpick(cogl_sampler, tc + vec2(0.0, %f/resolution.y)) * %f; \n",
-                    offsets[i], weight[i],
-                    offsets[i], weight[i]);
-            p += sz;
-        }
-    } else {
-
-        int sz = sprintf(p,
-                "vec2 tc = vec2(cogl_tex_coord.s, 1.0 - cogl_tex_coord.t); \n"
-                "cogl_texel = texpick(cogl_sampler, tc) * %f;\n",
-                weight[0]);
-        p += sz;
-
-        for (int i = 1; i < radius; i++) {
-            sz = sprintf(p, 
-                    "cogl_texel += texpick(cogl_sampler, tc - vec2(%f/resolution.x, 0.0)) * %f; \n"
-                    "cogl_texel += texpick(cogl_sampler, tc + vec2(%f/resolution.x, 0.0)) * %f; \n",
-                    offsets[i], weight[i],
-                    offsets[i], weight[i]);
-            p += sz;
-        }
-    }
-    
-    /*fprintf(stderr, "[%s]\n", ret);*/
-    return ret;
 }
 
 struct _MetaBlurActorPrivate

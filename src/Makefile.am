@@ -125,6 +125,8 @@ libdeepin_mutter_la_SOURCES =				\
 	compositor/clutter-utils.h		\
 	compositor/cogl-utils.c			\
 	compositor/cogl-utils.h			\
+	compositor/blur-utils.c			\
+	compositor/blur-utils.h			\
 	compositor/compositor.c			\
 	compositor/compositor-private.h		\
 	compositor/meta-blur-effect.c		\

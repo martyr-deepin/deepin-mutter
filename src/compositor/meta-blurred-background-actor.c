@@ -18,10 +18,12 @@
 #include <config.h>
 
 #include <math.h>
+#include <stdlib.h>
 #include <GL/gl.h>
 #include <clutter/clutter.h>
 
 #include "cogl-utils.h"
+#include "blur-utils.h"
 #include "clutter-utils.h"
 #include <meta/errors.h>
 #include <meta/screen.h>
@@ -45,36 +47,6 @@ typedef enum {
     CHANGED_EFFECTS = 1 << 1,
     CHANGED_ALL = 0xFFFF
 } ChangedFlags;
-
-// "#extension GL_ARB_shader_texture_lod: enable\n"
-static const char* gaussian_blur_global_definition =
-"#ifdef GL_ARB_shader_texture_lod\n"
-"#define texpick texture2DLod\n"
-"#else\n"
-"#define texpick texture2DLod\n"
-"#endif\n";
-
-// kernel[0] = radius, kernel[1-20] = offset, kernel[21-40] = weight
-static const char* gaussian_blur_glsl_declarations =
-"uniform float kernel[41];"
-"uniform vec2 resolution;";
-
-static const char* vs_code = 
-"float lod = 0.0;"
-"cogl_texel = texpick(cogl_sampler, cogl_tex_coord.st, lod) * kernel[21];"
-"for (int i = 1; i < kernel[0]; i++) {"
-    "cogl_texel += texpick(cogl_sampler, cogl_tex_coord.st - vec2(0.0, kernel[1+i]/resolution.y), lod) * kernel[21+i];"
-    "cogl_texel += texpick(cogl_sampler, cogl_tex_coord.st + vec2(0.0, kernel[1+i]/resolution.y), lod) * kernel[21+i];"
-"}";
-
-static const char* vs_code_h =
-"float lod = 0.0;"
-"vec2 tc = vec2(cogl_tex_coord.s, cogl_tex_coord.t);"
-"cogl_texel = texpick(cogl_sampler, tc, lod) * kernel[21];"
-"for (int i = 1; i < kernel[0]; i++) {"
-    "cogl_texel += texpick(cogl_sampler, tc + vec2(kernel[1+i]/resolution.x, 0.0), lod) * kernel[21+i];"
-    "cogl_texel += texpick(cogl_sampler, tc - vec2(kernel[1+i]/resolution.x, 0.0), lod) * kernel[21+i];"
-"}";
 
 
 static void build_gaussian_blur_kernel(int* pradius, float* offset, float* weight)
@@ -127,6 +99,7 @@ struct _MetaBlurredBackgroundActorPrivate
     int rounds;
 
     ChangedFlags changed;
+    CoglPipeline *template;
     CoglPipeline *pl_passthrough;
     CoglPipeline *pl_masked; // masked by shape 
 
@@ -259,26 +232,12 @@ static void make_pipeline (MetaBlurredBackgroundActor* self)
         cogl_object_unref (snippet);
     }
 
-    priv->pl_passthrough = cogl_pipeline_copy (template);
-    priv->pl_masked = cogl_pipeline_copy (template);
+    priv->template = template;
+    priv->pl_passthrough = cogl_pipeline_copy (priv->template);
+    priv->pl_masked = cogl_pipeline_copy (priv->template);
     cogl_pipeline_set_layer_combine (priv->pl_masked, 1,
             "RGBA = MODULATE (PREVIOUS, TEXTURE[A])", NULL);
 
-    priv->pipeline = cogl_pipeline_copy (template);
-
-    CoglSnippet* snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_TEXTURE_LOOKUP,
-            gaussian_blur_glsl_declarations, NULL);
-    cogl_snippet_set_replace (snippet, vs_code);
-    cogl_pipeline_add_layer_snippet (priv->pipeline, 0, snippet);
-    cogl_object_unref (snippet);
-
-    priv->pipeline2 = cogl_pipeline_copy (template);
-
-    snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_TEXTURE_LOOKUP,
-            gaussian_blur_glsl_declarations, NULL);
-    cogl_snippet_set_replace (snippet, vs_code_h);
-    cogl_pipeline_add_layer_snippet (priv->pipeline2, 0, snippet);
-    cogl_object_unref (snippet);
 }
 
 static float scale = 0.25f;
@@ -742,6 +701,28 @@ void meta_blurred_background_actor_set_radius (MetaBlurredBackgroundActor *self,
             build_gaussian_blur_kernel(&radius, &priv->kernel[1], &priv->kernel[21]);
             priv->radius = radius;
             priv->kernel[0] = radius;
+
+            g_clear_pointer (&priv->pipeline, cogl_object_unref);
+            priv->pipeline = cogl_pipeline_copy (priv->template);
+
+            char *vs_code = build_shader(VERTICAL, radius, &priv->kernel[1], &priv->kernel[21]);
+            CoglSnippet* snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_TEXTURE_LOOKUP,
+                    gaussian_blur_glsl_declarations, NULL);
+            cogl_snippet_set_replace (snippet, vs_code);
+            cogl_pipeline_add_layer_snippet (priv->pipeline, 0, snippet);
+            cogl_object_unref (snippet);
+            free(vs_code);
+
+            g_clear_pointer (&priv->pipeline2, cogl_object_unref);
+            priv->pipeline2 = cogl_pipeline_copy (priv->template);
+
+            char *hs_code = build_shader(HORIZONTAL, radius, &priv->kernel[1], &priv->kernel[21]);
+            snippet = cogl_snippet_new (COGL_SNIPPET_HOOK_TEXTURE_LOOKUP,
+                    gaussian_blur_glsl_declarations, NULL);
+            cogl_snippet_set_replace (snippet, hs_code);
+            cogl_pipeline_add_layer_snippet (priv->pipeline2, 0, snippet);
+            cogl_object_unref (snippet);
+            free(hs_code);
         }
 
         invalidate_pipeline (self, CHANGED_EFFECTS);
