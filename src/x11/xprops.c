@@ -903,6 +903,8 @@ meta_prop_get_values (MetaDisplay   *display,
             case META_PROP_VALUE_SYNC_COUNTER_LIST:
 	      values[i].required_type = XA_CARDINAL;
               break;
+            case META_PROP_VALUE_DEEPIN_BLUR_MASK:
+              values[i].required_type = display->atom__NET_WM_DEEPIN_BLUR_REGION_MASK;
             }
         }
 
@@ -968,6 +970,10 @@ meta_prop_get_values (MetaDisplay   *display,
           if (!latin1_string_from_results (&results,
                                            &values[i].v.str))
             values[i].type = META_PROP_VALUE_INVALID;
+          break;
+        case META_PROP_VALUE_DEEPIN_BLUR_MASK:
+          values[i].v.mask.data = g_memdup (results.prop, results.n_items);
+          values[i].v.mask.size = results.n_items;
           break;
         case META_PROP_VALUE_STRING_AS_UTF8:
           if (!latin1_string_from_results (&results,
@@ -1057,6 +1063,9 @@ free_value (MetaPropValue *value)
     case META_PROP_VALUE_UTF8:
     case META_PROP_VALUE_STRING:
       free (value->v.str);
+      break;
+    case META_PROP_VALUE_DEEPIN_BLUR_MASK:
+      free (value->v.mask.data);
       break;
     case META_PROP_VALUE_STRING_AS_UTF8:
       g_free (value->v.str);

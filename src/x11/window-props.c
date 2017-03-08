@@ -2091,6 +2091,43 @@ reload_deepin_blur_region_rounded (MetaWindow    *window,
 }
 
 static void
+reload_deepin_blur_region_mask (MetaWindow    *window,
+                           MetaPropValue *value,
+                           gboolean       initial)
+{
+  if (value->type != META_PROP_VALUE_INVALID)
+    {
+      unsigned char *data = value->v.mask.data;
+      int sz = value->v.mask.size;
+
+      int *ip = (int*)data;
+      int xoff = *ip, yoff = *(ip+1);
+      int w = *(ip+2), h = *(ip+3);
+      int stride = *(ip+4);
+
+      meta_verbose ("%s w = %d, h = %d, stride = %d, sz = %d, data=%p\n", __func__, w, h, stride, sz, data);
+
+      g_clear_pointer (&window->deepin_blur_region, cairo_region_destroy);
+      g_clear_pointer (&window->deepin_blur_radiuses, g_array_unref);
+      g_clear_pointer (&window->deepin_blur_mask, cairo_surface_destroy);
+
+      cairo_rectangle_int_t r = {xoff, yoff, w, h};
+      window->deepin_blur_region = cairo_region_create_rectangle (&r);
+      window->deepin_blur_mask = cairo_image_surface_create_for_data (
+              data+20, CAIRO_FORMAT_A8, w, h, stride);
+      cairo_status_t st = cairo_surface_status (window->deepin_blur_mask);
+      if (st != CAIRO_STATUS_SUCCESS) {
+          g_clear_pointer (&window->deepin_blur_region, cairo_region_destroy);
+          g_clear_pointer (&window->deepin_blur_mask, cairo_surface_destroy);
+          meta_verbose ("%s blur mask error\n", __func__);
+          return;
+      }
+
+      meta_compositor_window_blur_changed (window->display->compositor, window);
+    }
+}
+
+static void
 reload_bypass_compositor (MetaWindow    *window,
                           MetaPropValue *value,
                           gboolean       initial)
@@ -2216,6 +2253,7 @@ meta_display_init_window_prop_hooks (MetaDisplay *display)
     { display->atom__DEEPIN_OVERRIDE,                  META_PROP_VALUE_CARDINAL,     reload_deepin_override,                  LOAD_INIT },
     { display->atom__NET_WM_DEEPIN_BLUR_REGION,     META_PROP_VALUE_CARDINAL_LIST, reload_deepin_blur_region, LOAD_INIT | INCLUDE_OR },
     { display->atom__NET_WM_DEEPIN_BLUR_REGION_ROUNDED, META_PROP_VALUE_CARDINAL_LIST, reload_deepin_blur_region_rounded, LOAD_INIT | INCLUDE_OR },
+    { display->atom__NET_WM_DEEPIN_BLUR_REGION_MASK, META_PROP_VALUE_DEEPIN_BLUR_MASK, reload_deepin_blur_region_mask, LOAD_INIT | INCLUDE_OR },
     { display->atom__NET_WM_USER_TIME_WINDOW, META_PROP_VALUE_WINDOW, reload_net_wm_user_time_window, LOAD_INIT },
     { display->atom__NET_WM_ICON,      META_PROP_VALUE_INVALID,  reload_net_wm_icon,  NONE },
     { display->atom__KWM_WIN_ICON,     META_PROP_VALUE_INVALID,  reload_kwm_win_icon, NONE },
