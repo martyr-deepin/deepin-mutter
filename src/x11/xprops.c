@@ -972,8 +972,9 @@ meta_prop_get_values (MetaDisplay   *display,
             values[i].type = META_PROP_VALUE_INVALID;
           break;
         case META_PROP_VALUE_DEEPIN_BLUR_MASK:
-          values[i].v.mask.data = g_memdup (results.prop, results.n_items);
+          values[i].v.mask.data = results.prop;
           values[i].v.mask.size = results.n_items;
+          results.prop = NULL;
           break;
         case META_PROP_VALUE_STRING_AS_UTF8:
           if (!latin1_string_from_results (&results,
@@ -1045,6 +1046,9 @@ meta_prop_get_values (MetaDisplay   *display,
             values[i].type = META_PROP_VALUE_INVALID;
           break;
         }
+
+      if (results.prop != NULL)
+        g_free (results.prop);
 
     next:
       ++i;
