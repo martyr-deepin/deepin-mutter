@@ -164,6 +164,7 @@ static void meta_blur_actor_dispose (GObject *object)
     }
 
     g_clear_pointer (&priv->blur_mask_texture, cogl_object_unref);
+    g_clear_pointer (&priv->blur_mask, cairo_surface_destroy);
 
     g_clear_pointer (&priv->clip_region, cairo_region_destroy);
 
