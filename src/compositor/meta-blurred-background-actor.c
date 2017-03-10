@@ -163,6 +163,7 @@ static void meta_blurred_background_actor_dispose (GObject *object)
         priv->pipeline2 = NULL;
     }
 
+    g_clear_pointer (&priv->blur_mask, cairo_surface_destroy);
     g_clear_pointer (&priv->blur_mask_texture, cogl_object_unref);
 
     G_OBJECT_CLASS (meta_blurred_background_actor_parent_class)->dispose (object);
