@@ -219,14 +219,10 @@ static void create_texture (MetaBlurActor* self)
     }
 
     if (priv->fbTex2) {
-        cogl_object_unref (priv->fbTex2);
-        cogl_object_unref (priv->fbTex);
-        cogl_object_unref (priv->fb);
-        cogl_object_unref (priv->fb2);
-        priv->fbTex2 = NULL;
-        priv->fbTex = NULL;
-        priv->fb = NULL;
-        priv->fb2 = NULL;
+        g_clear_pointer (&priv->fbTex2, cogl_object_unref);
+        g_clear_pointer (&priv->fbTex, cogl_object_unref);
+        g_clear_pointer (&priv->fb, cogl_object_unref);
+        g_clear_pointer (&priv->fb2, cogl_object_unref);
     }
 
     priv->fb_width = fb_width;
@@ -235,16 +231,18 @@ static void create_texture (MetaBlurActor* self)
 
     priv->fbTex = cogl_texture_2d_new_with_size(ctx, priv->fb_width, priv->fb_height);
     cogl_texture_set_components(priv->fbTex, COGL_TEXTURE_COMPONENTS_RGBA);
-    cogl_primitive_texture_set_auto_mipmap(priv->fbTex, TRUE);
+    cogl_primitive_texture_set_auto_mipmap(priv->fbTex, FALSE);
 
     CoglError *error = NULL;
     if (cogl_texture_allocate(priv->fbTex, &error) == FALSE) {
-        meta_verbose ("cogl_texture_allocat failed: %s\n", error->message);
+        meta_warning ("cogl_texture_allocat failed: %s\n", error->message);
+        goto _error;
     }
 
     priv->fb = cogl_offscreen_new_with_texture(priv->fbTex);
     if (cogl_framebuffer_allocate(priv->fb, &error) == FALSE) {
-        meta_verbose ("cogl_framebuffer_allocate failed: %s\n", error->message);
+        meta_warning ("cogl_framebuffer_allocate failed: %s\n", error->message);
+        goto _error;
     }
 
     cogl_framebuffer_orthographic(priv->fb, 0, 0,
@@ -252,18 +250,28 @@ static void create_texture (MetaBlurActor* self)
 
     priv->fbTex2 = cogl_texture_2d_new_with_size(ctx, priv->fb_width, priv->fb_height);
     cogl_texture_set_components(priv->fbTex2, COGL_TEXTURE_COMPONENTS_RGBA);
+    cogl_primitive_texture_set_auto_mipmap(priv->fbTex2, FALSE);
 
     if (cogl_texture_allocate(priv->fbTex2, &error) == FALSE) {
-        meta_verbose ("cogl_texture_allocat failed: %s\n", error->message);
+        meta_warning ("cogl_texture_allocat failed: %s\n", error->message);
+        goto _error;
     }
 
     priv->fb2 = cogl_offscreen_new_with_texture(priv->fbTex2);
     if (cogl_framebuffer_allocate(priv->fb2, &error) == FALSE) {
-        meta_verbose ("cogl_framebuffer_allocate failed: %s\n", error->message);
+        meta_warning ("cogl_framebuffer_allocate failed: %s\n", error->message);
+        goto _error;
     }
 
     cogl_framebuffer_orthographic(priv->fb2, 0, 0,
             priv->fb_width, priv->fb_height, -1., 1.);
+    return;
+
+_error:
+    g_clear_pointer (&priv->fbTex2, cogl_object_unref);
+    g_clear_pointer (&priv->fbTex, cogl_object_unref);
+    g_clear_pointer (&priv->fb, cogl_object_unref);
+    g_clear_pointer (&priv->fb2, cogl_object_unref);
 }
 
 static void preblur_texture(MetaBlurActor* self)
@@ -337,7 +345,9 @@ static gboolean prepare_texture(MetaBlurActor* self)
 
         CoglError *error = NULL;
         if (cogl_texture_allocate(priv->texture, &error) == FALSE) {
-            meta_verbose ("cogl_texture_allocat failed: %s\n", error->message);
+            meta_warning ("cogl_texture_allocat failed: %s\n", error->message);
+            g_clear_pointer (&priv->texture, cogl_object_unref);
+            return;
         }
 
         cogl_pipeline_set_layer_texture (priv->pipeline, 0, priv->texture);
@@ -403,7 +413,7 @@ static void setup_pipeline (MetaBlurActor   *self, cairo_rectangle_int_t *rect)
     }
 
     prepare_texture(self);
-    if (priv->radius) {
+    if (priv->radius && priv->texture) {
         create_texture (self);
 
         cogl_pipeline_set_layer_texture (priv->pipeline2, 0, priv->fbTex);
@@ -501,6 +511,12 @@ static void meta_blur_actor_paint (ClutterActor *actor)
             opacity, opacity, opacity, opacity);
 
     setup_pipeline (self, &bounding);
+    if (priv->texture == NULL) {
+        cogl_framebuffer_pop_clip (cogl_get_draw_framebuffer ());
+        CLUTTER_ACTOR_CLASS (meta_blur_actor_parent_class)->paint (actor);
+        return;
+    }
+
     if (priv->radius > 0) {
         cogl_pipeline_set_layer_texture (pipeline, 0, priv->fbTex2);
 
