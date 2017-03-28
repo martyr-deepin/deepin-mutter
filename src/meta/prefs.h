@@ -45,6 +45,7 @@
  * @META_PREF_FOCUS_CHANGE_ON_POINTER_REST: focus change on pointer rest
  * @META_PREF_TITLEBAR_FONT: title-bar font
  * @META_PREF_NUM_WORKSPACES: number of workspaces
+ * @META_PREF_DYNAMIC_BLUR: dynamic background blurring
  * @META_PREF_DYNAMIC_WORKSPACES: dynamic workspaces
  * @META_PREF_KEYBINDINGS: keybindings
  * @META_PREF_DISABLE_WORKAROUNDS: disable workarounds
@@ -82,6 +83,7 @@ typedef enum
   META_PREF_FOCUS_CHANGE_ON_POINTER_REST,
   META_PREF_TITLEBAR_FONT,
   META_PREF_NUM_WORKSPACES,
+  META_PREF_DYNAMIC_BLUR,
   META_PREF_DYNAMIC_WORKSPACES,
   META_PREF_KEYBINDINGS,
   META_PREF_DISABLE_WORKAROUNDS,
@@ -129,6 +131,7 @@ gboolean                    meta_prefs_get_raise_on_click     (void);
 /* returns NULL if GTK default should be used */
 const PangoFontDescription* meta_prefs_get_titlebar_font      (void);
 int                         meta_prefs_get_num_workspaces     (void);
+gboolean                    meta_prefs_get_dynamic_blur       (void);
 gboolean                    meta_prefs_get_dynamic_workspaces (void);
 gboolean                    meta_prefs_get_disable_workarounds (void);
 gboolean                    meta_prefs_get_auto_raise         (void);

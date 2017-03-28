@@ -32,6 +32,7 @@
 #include <meta/compositor-mutter.h>
 #include <meta/meta-blur-actor.h>
 #include "meta-cullable.h"
+#include "core/screen-private.h"
 
 static void _stage_add_always_redraw_actor(ClutterStage *stage, ClutterActor *actor)
     __attribute__((weakref("clutter_stage_add_always_redraw_actor")));
@@ -86,6 +87,8 @@ static void build_gaussian_blur_kernel(int* pradius, float* offset, float* weigh
 
 struct _MetaBlurActorPrivate
 {
+    guint enabled: 1;
+
     MetaScreen *screen;
 
     gboolean blurred;
@@ -144,6 +147,12 @@ static void meta_blur_actor_dispose (GObject *object)
 {
     MetaBlurActor *self = META_BLUR_ACTOR (object);
     MetaBlurActorPrivate *priv = self->priv;
+
+    GList *l = g_list_find (priv->screen->blur_actors, self);
+    if (l) {
+        priv->screen->blur_actors = g_list_remove_link (priv->screen->blur_actors, l);
+        g_list_free (l);
+    }
 
     set_clip_region (self, NULL);
     if (priv->fbTex) {
@@ -214,7 +223,7 @@ static void create_texture (MetaBlurActor* self)
     fb_width = (MAX(fb_width, 1));
     fb_height = (MAX(fb_height, 1));
 
-    if (priv->fb_width == fb_width && priv->fb_height == fb_height) {
+    if (priv->fbTex2 != NULL && (priv->fb_width == fb_width && priv->fb_height == fb_height)) {
         return;
     }
 
@@ -405,10 +414,7 @@ static void setup_pipeline (MetaBlurActor   *self, cairo_rectangle_int_t *rect)
     MetaBlurActorPrivate *priv = self->priv;
 
     if (priv->changed & CHANGED_SIZE) {
-        if (priv->texture != NULL) {
-            cogl_object_unref (priv->texture);
-            priv->texture = NULL;
-        }
+        g_clear_pointer (&priv->texture, cogl_object_unref);
         priv->changed &= ~CHANGED_SIZE;
     }
 
@@ -489,6 +495,11 @@ static void meta_blur_actor_paint (ClutterActor *actor)
     if ((priv->clip_region && cairo_region_is_empty (priv->clip_region)))
         return;
 
+    if (!priv->enabled) {
+        CLUTTER_ACTOR_CLASS (meta_blur_actor_parent_class)->paint (actor);
+        return;
+    }
+
     clutter_actor_get_content_box (actor, &actor_box);
     bounding.x = actor_box.x1;
     bounding.y = actor_box.y1;
@@ -511,6 +522,7 @@ static void meta_blur_actor_paint (ClutterActor *actor)
             opacity, opacity, opacity, opacity);
 
     setup_pipeline (self, &bounding);
+
     if (priv->texture == NULL) {
         cogl_framebuffer_pop_clip (cogl_get_draw_framebuffer ());
         CLUTTER_ACTOR_CLASS (meta_blur_actor_parent_class)->paint (actor);
@@ -695,9 +707,11 @@ static void meta_blur_actor_init (MetaBlurActor *self)
 
     priv->radius = 0; // means no blur
     priv->rounds = 1;
+    priv->enabled = meta_prefs_get_dynamic_blur ();
 
     // if clutter is not patched, use this hack instead
     if (_stage_add_always_redraw_actor == NULL) {
+        meta_warning ("clutter is not patched, visual artifacts may happen.");
         g_signal_connect (G_OBJECT(self), "parent-set", on_parent_changed, NULL);
     }
 }
@@ -706,9 +720,9 @@ ClutterActor * meta_blur_actor_new (MetaScreen *screen)
 {
     MetaBlurActor *self;
 
-    self = g_object_new (META_TYPE_BLUR_ACTOR,
-            "meta-screen", screen,
-            NULL);
+    self = g_object_new (META_TYPE_BLUR_ACTOR, "meta-screen", screen, NULL);
+
+    screen->blur_actors = g_list_append (screen->blur_actors, self);
 
     make_pipeline (self);
 
@@ -807,4 +821,23 @@ void meta_blur_actor_set_rounds (MetaBlurActor *self, int rounds)
     }
 }
 
+
+void meta_blur_actor_set_enabled (MetaBlurActor *self, gboolean val)
+{
+    MetaBlurActorPrivate *priv = self->priv;
+
+    if (priv->enabled != val) {
+        if (!val) {
+            //free resources
+            g_clear_pointer (&priv->fbTex2, cogl_object_unref);
+            g_clear_pointer (&priv->fbTex, cogl_object_unref);
+            g_clear_pointer (&priv->fb, cogl_object_unref);
+            g_clear_pointer (&priv->fb2, cogl_object_unref);
+            g_clear_pointer (&priv->texture, cogl_object_unref);
+        }
+        invalidate_pipeline (self, CHANGED_EFFECTS);
+        clutter_actor_queue_redraw (CLUTTER_ACTOR (self));
+        priv->enabled = val;
+    }
+}
 

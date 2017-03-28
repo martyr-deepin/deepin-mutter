@@ -87,6 +87,7 @@ static GDesktopTitlebarAction action_double_click_titlebar = G_DESKTOP_TITLEBAR_
 static GDesktopTitlebarAction action_middle_click_titlebar = G_DESKTOP_TITLEBAR_ACTION_LOWER;
 static GDesktopTitlebarAction action_right_click_titlebar = G_DESKTOP_TITLEBAR_ACTION_MENU;
 static gboolean dynamic_workspaces = FALSE;
+static gboolean dynamic_blur = TRUE;
 static gboolean disable_workarounds = FALSE;
 static gboolean auto_raise = FALSE;
 static gboolean auto_raise_delay = 500;
@@ -313,6 +314,13 @@ static MetaBoolPreference preferences_bool[] =
         META_PREF_TITLEBAR_FONT, /* note! shares a pref */
       },
       &use_system_font,
+    },
+    {
+      { "dynamic-blur",
+        SCHEMA_MUTTER,
+        META_PREF_DYNAMIC_BLUR,
+      },
+      &dynamic_blur,
     },
     {
       { "dynamic-workspaces",
@@ -1775,6 +1783,12 @@ meta_prefs_get_dynamic_workspaces (void)
 }
 
 gboolean
+meta_prefs_get_dynamic_blur (void)
+{
+  return dynamic_blur;
+}
+
+gboolean
 meta_prefs_get_disable_workarounds (void)
 {
   return disable_workarounds;
@@ -1879,6 +1893,9 @@ meta_preference_to_string (MetaPreference pref)
 
     case META_PREF_DRAG_THRESHOLD:
       return "DRAG_TRHESHOLD";
+
+    case META_PREF_DYNAMIC_BLUR:
+      return "DYNAMIC_BLUR";
 
     case META_PREF_DYNAMIC_WORKSPACES:
       return "DYNAMIC_WORKSPACES";

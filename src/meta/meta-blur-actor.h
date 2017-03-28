@@ -54,6 +54,7 @@ ClutterActor *meta_blur_actor_new    (MetaScreen *screen);
 void meta_blur_actor_set_radius (MetaBlurActor *self, int radius);
 void meta_blur_actor_set_rounds (MetaBlurActor *self, int rounds);
 void meta_blur_actor_set_blur_mask (MetaBlurActor *self, cairo_surface_t* mask);
+void meta_blur_actor_set_enabled (MetaBlurActor *self, gboolean val);
 
 #endif /* META_BLUR_ACTOR_H */
 

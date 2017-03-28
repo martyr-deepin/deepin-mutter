@@ -35,6 +35,15 @@
       </_description>
     </key>
 
+    <key type="b" name="dynamic-blur">
+      <default>true</default>
+      <_summary>Enable dynamic background blur</_summary>
+      <_description>
+        Use dynamic background blurring effect for any window that
+        declares _NET_WM_DEEPIN_BLUR_* property
+      </_description>
+    </key>
+        
     <key name="dynamic-workspaces" type="b">
       <default>false</default>
       <_summary>Workspaces are managed dynamically</_summary>

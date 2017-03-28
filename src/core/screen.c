@@ -40,6 +40,7 @@
 #include "keybindings-private.h"
 #include "stack.h"
 #include <meta/compositor.h>
+#include <meta/meta-blur-actor.h>
 #include <meta/meta-enum-types.h>
 #include "core.h"
 #include "meta-cursor-tracker-private.h"
@@ -772,6 +773,7 @@ meta_screen_new (MetaDisplay *display,
 
   screen->active_workspace = NULL;
   screen->workspaces = NULL;
+  screen->blur_actors = NULL;
   screen->rows_of_workspaces = 1;
   screen->columns_of_workspaces = -1;
   screen->vertical_workspaces = FALSE;
@@ -1047,6 +1049,17 @@ prefs_changed_callback (MetaPreference pref,
   else if (pref == META_PREF_WORKSPACE_NAMES)
     {
       set_workspace_names (screen);
+    }
+  else if (pref == META_PREF_DYNAMIC_BLUR)
+    {
+      fprintf(stderr, "%s: dynamic_blur = %d\n", __func__,
+              meta_prefs_get_dynamic_blur ());
+      GList *l = screen->blur_actors;
+      while (l) {
+        MetaBlurActor *actor = META_BLUR_ACTOR (l->data);
+        meta_blur_actor_set_enabled (actor, meta_prefs_get_dynamic_blur ());
+        l = l->next;
+      }
     }
 }
 

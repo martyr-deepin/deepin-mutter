@@ -87,6 +87,8 @@ struct _MetaScreen
 
   GSList *startup_sequences;
 
+  GList *blur_actors;
+
   Window wm_cm_selection_window;
   guint work_area_later;
   guint check_fullscreen_later;
