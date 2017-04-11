@@ -1067,7 +1067,6 @@ meta_pre_paint_func (gpointer data)
                                                                     frame_callback,
                                                                     compositor,
                                                                     NULL);
-      cogl_onscreen_set_swap_throttled (compositor->onscreen, FALSE);
     }
 
   if (compositor->windows == NULL)
