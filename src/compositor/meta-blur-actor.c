@@ -367,7 +367,10 @@ static gboolean prepare_texture(MetaBlurActor* self)
     }
 
     clutter_stage_ensure_current (clutter_actor_get_stage (self));
-    cogl_texture_copy_sub_image (priv->texture, 0, 0, x, fh - y - height, width, height);
+    x = fminf(fmaxf(x, 0.0), fw);
+    y = fh - y - height;
+    y = fminf(fmaxf(y, 0.0), fh);
+    cogl_texture_copy_sub_image (priv->texture, 0, 0, x, y, width, height);
 #else
     // slow version, which works....
     static CoglPixelBuffer *pixbuf = NULL;
