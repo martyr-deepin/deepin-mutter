@@ -366,10 +366,11 @@ static gboolean prepare_texture(MetaBlurActor* self)
         /*cogl_pipeline_set_layer_wrap_mode (priv->pipeline, 0, wrap_mode);*/
     }
 
+
     clutter_stage_ensure_current (clutter_actor_get_stage (self));
     x = fminf(fmaxf(x, 0.0), fw);
-    y = fh - y - height;
-    y = fminf(fmaxf(y, 0.0), fh);
+    y = fmaxf(y, 0.0);
+    y = fminf(fh - y - height, fh);
     cogl_texture_copy_sub_image (priv->texture, 0, 0, x, y, width, height);
 #else
     // slow version, which works....
@@ -490,8 +491,9 @@ static void meta_blur_actor_paint (ClutterActor *actor)
 {
     MetaBlurActor *self = META_BLUR_ACTOR (actor);
     MetaBlurActorPrivate *priv = self->priv;
-    ClutterActorBox actor_box;
+    ClutterActorBox actor_box, transformed;
     cairo_rectangle_int_t bounding;
+    float tx, ty, tw, th;
 
     priv->queued_redraw = 0;
 
@@ -502,6 +504,13 @@ static void meta_blur_actor_paint (ClutterActor *actor)
         CLUTTER_ACTOR_CLASS (meta_blur_actor_parent_class)->paint (actor);
         return;
     }
+
+    clutter_actor_get_transformed_position (actor, &tx, &ty);
+    clutter_actor_get_transformed_size (actor, &tw, &th);
+    transformed.x1 = tx;
+    transformed.y1 = ty;
+    transformed.x2 = tx + tw;
+    transformed.y2 = ty + th;
 
     clutter_actor_get_content_box (actor, &actor_box);
     bounding.x = actor_box.x1;
@@ -552,10 +561,25 @@ static void meta_blur_actor_paint (ClutterActor *actor)
         tex[2] = 1.0;
         tex[3] = 1.0;
 
+
         tex[4] = 0.0;
         tex[5] = 0.0;
         tex[6] = 1.0;
         tex[7] = 1.0;
+
+        if (transformed.x1 < 0) {
+            float sx = -transformed.x1 / (transformed.x2 - transformed.x1);
+            bounding.x = sx * bounding.width;
+            tex[4] = sx;
+            tex[2] = 1.0 - sx;
+        }
+
+        if (transformed.y1 < 0) {
+            float sy = -transformed.y1 / (transformed.y2 - transformed.y1);
+            bounding.y = sy * bounding.width;
+            tex[5] = sy;
+            tex[3] = 1.0 - sy;
+        }
 
         cogl_framebuffer_draw_multitextured_rectangle (
                 cogl_get_draw_framebuffer (), pipeline,
