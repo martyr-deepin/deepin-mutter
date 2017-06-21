@@ -1994,7 +1994,8 @@ meta_window_set_blur_region_with_radius (MetaWindow     *window,
    *   mask should be build based on orignal rects
    */
   if (cairo_region_equal (window->deepin_blur_region, region)) {
-    if (memcmp (window->deepin_blur_radiuses, radiuses, radiuses->len*sizeof(int)) == 0)
+    if (window->deepin_blur_radiuses &&
+            memcmp (window->deepin_blur_radiuses, radiuses, radiuses->len*sizeof(int)) == 0)
       return;
   }
 
