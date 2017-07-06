@@ -2003,6 +2003,11 @@ meta_window_set_blur_region_with_radius (MetaWindow     *window,
   g_clear_pointer (&window->deepin_blur_radiuses, g_array_unref);
   g_clear_pointer (&window->deepin_blur_mask, cairo_surface_destroy);
 
+  if (nrects == 0) {
+      meta_compositor_window_blur_changed (window->display->compositor, window);
+      return;
+  }
+
   blur_mask = build_blur_mask (region, origin_rects, nrects, radiuses);
   window->deepin_blur_mask = blur_mask;
 

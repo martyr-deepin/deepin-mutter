@@ -445,6 +445,7 @@ meta_window_actor_update_blur_background (MetaWindowActor *self)
     {
       if (priv->blur_background) 
         {
+            g_clear_pointer (&priv->deepin_blur_region, cairo_region_destroy);
           clutter_actor_remove_child (CLUTTER_ACTOR (self), CLUTTER_ACTOR (priv->blur_background));
           priv->blur_background = NULL;
         }
