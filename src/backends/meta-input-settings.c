@@ -204,6 +204,7 @@ static void
 update_touchpad_left_handed (MetaInputSettings  *input_settings,
                              ClutterInputDevice *device)
 {
+#if 0
   MetaInputSettingsClass *input_settings_class;
   GDesktopTouchpadHandedness handedness;
   MetaInputSettingsPrivate *priv;
@@ -244,12 +245,14 @@ update_touchpad_left_handed (MetaInputSettings  *input_settings,
                                  input_settings_class->set_left_handed,
                                  enabled);
     }
+#endif
 }
 
 static void
 update_mouse_left_handed (MetaInputSettings  *input_settings,
                           ClutterInputDevice *device)
 {
+#if 0
   MetaInputSettingsClass *input_settings_class;
   MetaInputSettingsPrivate *priv;
   gboolean enabled;
@@ -283,6 +286,7 @@ update_mouse_left_handed (MetaInputSettings  *input_settings,
       if (touchpad_handedness == G_DESKTOP_TOUCHPAD_HANDEDNESS_MOUSE)
         update_touchpad_left_handed (input_settings, NULL);
     }
+#endif
 }
 
 static GSettings *
@@ -765,7 +769,6 @@ apply_device_settings (MetaInputSettings  *input_settings,
   update_mouse_left_handed (input_settings, device);
   update_device_speed (input_settings, device);
   update_device_natural_scroll (input_settings, device);
-
   update_touchpad_left_handed (input_settings, device);
   update_device_speed (input_settings, device);
   update_device_natural_scroll (input_settings, device);
