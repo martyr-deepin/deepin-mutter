@@ -628,6 +628,7 @@ meta_input_settings_changed_cb (GSettings  *settings,
   MetaInputSettings *input_settings = META_INPUT_SETTINGS (user_data);
   MetaInputSettingsPrivate *priv = meta_input_settings_get_instance_private (input_settings);
 
+#if 0
   if (settings == priv->mouse_settings)
     {
       if (strcmp (key, "left-handed") == 0)
@@ -666,6 +667,7 @@ meta_input_settings_changed_cb (GSettings  *settings,
           strcmp (key, "delay") == 0)
         update_keyboard_repeat (input_settings);
     }
+#endif
 }
 
 static void
