@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <locale.h>
 #include <glib.h>
+#include <math.h>
 
 static void build_gaussian_blur_kernel(int* pradius, float* offset, float* weight)
 {
