@@ -19,6 +19,11 @@
 
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/time.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #include <GL/gl.h>
 #include <clutter/clutter.h>
 

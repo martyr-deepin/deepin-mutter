@@ -1311,7 +1311,7 @@ update_cursor_theme_from_gtk (GtkSettings *settings,
   g_value_init (&value, G_TYPE_STRING);
   if (gdk_screen_get_setting (screen, "gtk-cursor-theme-name", &value))
     {
-      xsettings_cursor_theme = g_strdup (g_value_get_int (&value));
+      xsettings_cursor_theme = g_strdup (g_value_get_string (&value));
     }
 
   if (g_strcmp0(xsettings_cursor_theme, cursor_theme) != 0)

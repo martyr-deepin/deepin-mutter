@@ -356,7 +356,7 @@ static gboolean prepare_texture(MetaBlurActor* self)
         if (cogl_texture_allocate(priv->texture, &error) == FALSE) {
             meta_warning ("cogl_texture_allocat failed: %s\n", error->message);
             g_clear_pointer (&priv->texture, cogl_object_unref);
-            return;
+            return FALSE;
         }
 
         cogl_pipeline_set_layer_texture (priv->pipeline, 0, priv->texture);
