@@ -82,6 +82,20 @@ typedef enum
 } MetaMaximizeFlags;
 
 /**
+ * MetaTileSide
+ * @META_TILE_SIDE_NONE: none
+ * @META_TILE_SIDE_LEFT: left
+ * @META_TILE_SIDE_RIGHT: right
+ * for user tile request
+ */
+typedef enum
+{
+    META_TILE_SIDE_NONE,
+    META_TILE_SIDE_LEFT,
+    META_TILE_SIDE_RIGHT,
+} MetaTileSide;
+
+/**
  * MetaWindowClientType:
  * @META_WINDOW_CLIENT_TYPE_WAYLAND: A Wayland based window
  * @META_WINDOW_CLIENT_TYPE_X11: An X11 based window
@@ -235,6 +249,9 @@ void        meta_window_focus              (MetaWindow  *window,
 
 void        meta_window_check_alive        (MetaWindow  *window,
                                             guint32      timestamp);
+void        meta_window_tile_by_side       (MetaWindow        *window,
+                                            MetaTileSide side);
+void        meta_window_begin_to_move      (MetaWindow        *window);
 
 void meta_window_get_work_area_current_monitor (MetaWindow    *window,
                                                 MetaRectangle *area);
