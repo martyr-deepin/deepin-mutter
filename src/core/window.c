@@ -8006,7 +8006,8 @@ meta_window_tile_by_side (MetaWindow *window, MetaTileSide side)
         default: return;
     }
 
-    meta_window_tile (window);
+    if (meta_window_can_tile_side_by_side (window))
+        meta_window_tile (window);
 }
 
 void
