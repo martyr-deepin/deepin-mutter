@@ -567,24 +567,45 @@ static void meta_blur_actor_paint (ClutterActor *actor)
         tex[6] = 1.0;
         tex[7] = 1.0;
 
-        if (transformed.x1 < 0) {
-            float sx = -transformed.x1 / (transformed.x2 - transformed.x1);
+
+        if (transformed.x1 < 0.0f) {
+            float sx = fabsf(transformed.x1) / (transformed.x2 - transformed.x1);
             bounding.x = sx * bounding.width;
             tex[4] = sx;
             tex[2] = 1.0 - sx;
         }
 
-        if (transformed.y1 < 0) {
-            float sy = -transformed.y1 / (transformed.y2 - transformed.y1);
-            bounding.y = sy * bounding.width;
+        if (transformed.y1 < 0.0f) {
+            float sy = fabsf(transformed.y1) / (transformed.y2 - transformed.y1);
+            bounding.y = sy * bounding.height;
             tex[5] = sy;
             tex[3] = 1.0 - sy;
         }
+
+#ifdef DEBUG
+        fprintf(stderr, "%s: %f, %f, %f, %f, (%d, %d, %d, %d)\n", __func__, transformed.x1,
+                transformed.y1, transformed.x2 - transformed.x1,
+                transformed.y2 - transformed.y1, 
+                bounding.x, bounding.y, bounding.width, bounding.height);
+
+        CoglColor clr;
+        cogl_color_init_from_4ub(&clr, 0, 255, 0, 255);
+        cogl_framebuffer_clear (cogl_get_draw_framebuffer (),
+                COGL_BUFFER_BIT_COLOR, &clr);
+
+        cogl_pipeline_set_color4f(pipeline, 1.0, 0.0, 0.0, 1.0);
+
+        cogl_framebuffer_draw_rectangle (cogl_get_draw_framebuffer (),
+                pipeline,
+                bounding.x, bounding.y, bounding.width, bounding.height);
+
+#else
 
         cogl_framebuffer_draw_multitextured_rectangle (
                 cogl_get_draw_framebuffer (), pipeline,
                 bounding.x, bounding.y, bounding.width, bounding.height,
                 &tex[0], 8);
+#endif
     }
 
   cogl_framebuffer_pop_clip (cogl_get_draw_framebuffer ());
