@@ -46,9 +46,11 @@
 #include "meta-cursor-renderer-native.h"
 #include "meta-idle-monitor-native.h"
 
+#ifndef HAVE_LIBGUDEV232
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(GUdevDevice, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(GUdevClient, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(GUdevEnumerator, g_object_unref)
+#endif
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(Login1Session, g_object_unref)
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(Login1Seat, g_object_unref)
 

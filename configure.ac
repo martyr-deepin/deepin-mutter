@@ -194,6 +194,10 @@ PKG_CHECK_MODULES(MUTTER, $MUTTER_PC_MODULES)
 
 MUTTER_NATIVE_BACKEND_MODULES="clutter-egl-1.0 libdrm libsystemd libinput gudev-1.0 gbm >= 10.3"
 
+if $PKG_CONFIG --exists "gudev-1.0 >= 232"; then
+    AC_DEFINE([HAVE_LIBGUDEV232], 1, [Building with gudev version 232])
+fi
+
 AC_ARG_ENABLE(native-backend,
   AS_HELP_STRING([--disable-native-backend], [disable mutter native (KMS) backend]),,
   enable_native_backend=auto
