@@ -1,3 +1,12 @@
+##  3.20.24 (2017-11-06)
+
+
+#### Bug Fixes
+
+*   set tile monitor ([acad3597](acad3597))
+
+
+
 ## 3.20.23 (2017-11-03)
 
 #### Features

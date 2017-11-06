@@ -8006,6 +8006,9 @@ meta_window_tile_by_side (MetaWindow *window, MetaTileSide side)
         default: return;
     }
 
+    if (window->tile_mode != META_TILE_NONE && window->monitor)
+        window->tile_monitor_number = window->monitor->number;
+
     if (meta_window_can_tile_side_by_side (window))
         meta_window_tile (window);
 }
