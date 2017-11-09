@@ -45,6 +45,11 @@
 #define _XOPEN_SOURCE /* for putenv() and some signal-related functions */
 
 #include <config.h>
+#include <sys/mman.h>
+#include <string.h>
+#include <errno.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <meta/main.h>
 #include "util-private.h"
 #include "display-private.h"
@@ -533,6 +538,23 @@ meta_run (void)
 
   if (!meta_display_open ())
     meta_exit (META_EXIT_ERROR);
+
+  struct rlimit old, new;
+  if (getrlimit (RLIMIT_MEMLOCK, &old) < 0) {
+      meta_verbose ("getrlimit failed: %s\n", strerror(errno));
+  } else {
+      new.rlim_cur = old.rlim_max;
+      new.rlim_max = old.rlim_max;
+      if (setrlimit (RLIMIT_MEMLOCK, &new) < 0) {
+          meta_verbose ("setrlimit failed: %s\n", strerror(errno));
+      }
+  }
+
+  // force wm to reside into mem
+  int result = mlockall (MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT);
+  if (result != 0) {
+      meta_warning ("mlockall failed: %s\n", strerror(errno));
+  }
 
   g_main_loop_run (meta_main_loop);
 
