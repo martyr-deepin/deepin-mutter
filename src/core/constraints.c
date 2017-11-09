@@ -227,7 +227,7 @@ static const Constraint all_constraints[] = {
   {constrain_fully_onscreen,     "constrain_fully_onscreen"},
   {constrain_titlebar_visible,   "constrain_titlebar_visible"},
   {constrain_partially_onscreen, "constrain_partially_onscreen"},
-  {constrain_keep_at_edge,       "constrain_keep_at_edge"},
+  /*{constrain_keep_at_edge,       "constrain_keep_at_edge"},*/
   {NULL,                         NULL}
 };
 
