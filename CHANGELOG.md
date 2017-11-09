@@ -1,3 +1,12 @@
+##  3.20.25 (2017-11-09)
+
+
+#### Bug Fixes
+
+*   remove keep_at_edge constraints ([18e5cbec](18e5cbec))
+
+
+
 ##  3.20.24 (2017-11-06)
 
 
