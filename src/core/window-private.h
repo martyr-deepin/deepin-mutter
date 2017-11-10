@@ -130,6 +130,7 @@ struct _MetaWindow
   char *gtk_window_object_path;
   char *gtk_app_menu_object_path;
   char *gtk_menubar_object_path;
+  char *flatpak_appid;
 
   int hide_titlebar_when_maximized;
   int net_wm_pid;
@@ -653,6 +654,8 @@ void meta_window_set_title                (MetaWindow *window,
 void meta_window_set_wm_class             (MetaWindow *window,
                                            const char *wm_class,
                                            const char *wm_instance);
+void meta_window_set_flatpak_appid        (MetaWindow *window,
+                                           const char *id);
 void meta_window_set_gtk_dbus_properties  (MetaWindow *window,
                                            const char *application_id,
                                            const char *unique_bus_name,

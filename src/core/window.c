@@ -173,6 +173,7 @@ enum {
   PROP_GTK_APP_MENU_OBJECT_PATH,
   PROP_GTK_MENUBAR_OBJECT_PATH,
   PROP_ON_ALL_WORKSPACES,
+  PROP_FLATPAK_APPID,
 
   LAST_PROP,
 };
@@ -305,6 +306,7 @@ meta_window_finalize (GObject *object)
   g_free (window->gtk_window_object_path);
   g_free (window->gtk_app_menu_object_path);
   g_free (window->gtk_menubar_object_path);
+  g_free (window->flatpak_appid);
 
   G_OBJECT_CLASS (meta_window_parent_class)->finalize (object);
 }
@@ -394,6 +396,8 @@ meta_window_get_property(GObject         *object,
     case PROP_ON_ALL_WORKSPACES:
       g_value_set_boolean (value, win->on_all_workspaces);
       break;
+    case PROP_FLATPAK_APPID:
+      g_value_set_string (value, win->flatpak_appid);
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -582,6 +586,12 @@ meta_window_class_init (MetaWindowClass *klass)
                           "Whether the window is set to appear on all workspaces",
                           FALSE,
                           G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+  obj_props[PROP_FLATPAK_APPID] =
+    g_param_spec_string ("flatpak-appid",
+                         "FLATPAK_APPID",
+                         "Contents of the FLATPAK_APPID property of this window",
+                         NULL,
+                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   g_object_class_install_properties (object_class, LAST_PROP, obj_props);
 
@@ -991,6 +1001,7 @@ _meta_window_shared_new (MetaDisplay         *display,
   window->wm_client_machine = NULL;
   window->is_remote = FALSE;
   window->startup_id = NULL;
+  window->flatpak_appid = NULL;
 
   window->net_wm_pid = -1;
 
@@ -6981,6 +6992,18 @@ meta_window_get_gtk_unique_bus_name (MetaWindow *window)
 }
 
 /**
+ * meta_window_get_flatpak_appid:
+ * @window: a #MetaWindow
+ *
+ * Return value: (transfer none): the flatpak appid or %NULL
+ **/
+const char *
+meta_window_get_flatpak_appid (MetaWindow *window)
+{
+    return window->flatpak_appid;
+}
+
+/**
  * meta_window_get_gtk_application_object_path:
  * @window: a #MetaWindow
  *
@@ -7404,6 +7427,16 @@ meta_window_set_title (MetaWindow *window,
   meta_window_update_desc (window);
 
   g_object_notify_by_pspec (G_OBJECT (window), obj_props[PROP_TITLE]);
+}
+
+void 
+meta_window_set_flatpak_appid (MetaWindow *window,
+                               const char *id)
+{
+    g_free (window->flatpak_appid);
+    window->flatpak_appid = g_strdup (id);
+
+    g_object_notify_by_pspec (G_OBJECT (window), obj_props[PROP_FLATPAK_APPID]);
 }
 
 void

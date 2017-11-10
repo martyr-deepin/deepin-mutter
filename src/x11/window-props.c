@@ -998,6 +998,28 @@ reload_mwm_hints (MetaWindow    *window,
 }
 
 static void
+reload_flatpak_appid (MetaWindow    *window,
+                          MetaPropValue *value,
+                          gboolean       initial)
+{
+  g_free (window->flatpak_appid);
+  window->flatpak_appid = NULL;
+
+  if (value->type != META_PROP_VALUE_INVALID)
+    {
+      meta_window_set_flatpak_appid (window, value->v.str);
+    }
+  else
+    {
+      meta_window_set_flatpak_appid (window, NULL);
+    }
+
+  meta_verbose ("Window %s has flatpak_appid \"%s\"\n",
+          window->desc,
+          window->flatpak_appid ? window->flatpak_appid : "unset");
+}
+
+static void
 reload_wm_class (MetaWindow    *window,
                  MetaPropValue *value,
                  gboolean       initial)
@@ -2256,6 +2278,7 @@ meta_display_init_window_prop_hooks (MetaDisplay *display)
     { display->atom__GTK_MENUBAR_OBJECT_PATH,          META_PROP_VALUE_UTF8,         reload_gtk_menubar_object_path,          LOAD_INIT },
     { display->atom__GTK_FRAME_EXTENTS,                META_PROP_VALUE_CARDINAL_LIST,reload_gtk_frame_extents,                LOAD_INIT },
     { display->atom__DEEPIN_OVERRIDE,                  META_PROP_VALUE_CARDINAL,     reload_deepin_override,                  LOAD_INIT },
+    { display->atom_FLATPAK_APPID,   META_PROP_VALUE_STRING,     reload_flatpak_appid,    LOAD_INIT },
     { display->atom__NET_WM_DEEPIN_BLUR_REGION,     META_PROP_VALUE_CARDINAL_LIST, reload_deepin_blur_region, LOAD_INIT | INCLUDE_OR },
     { display->atom__NET_WM_DEEPIN_BLUR_REGION_ROUNDED, META_PROP_VALUE_CARDINAL_LIST, reload_deepin_blur_region_rounded, LOAD_INIT | INCLUDE_OR },
     { display->atom__NET_WM_DEEPIN_BLUR_REGION_MASK, META_PROP_VALUE_DEEPIN_BLUR_MASK, reload_deepin_blur_region_mask, LOAD_INIT | INCLUDE_OR },
