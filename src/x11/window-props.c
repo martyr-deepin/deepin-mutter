@@ -1856,6 +1856,13 @@ reload_deepin_blur_region (MetaWindow    *window,
           rect->width = region[i++];
           rect->height = region[i++];
 
+          if (rect->width <= 0 || rect->height <= 0)
+            {
+              meta_verbose ("_NET_WM_DEEPIN_BLUR_REGION geometry is invalid (%d, %d, %d, %d).",
+                      rect->x, rect->y, rect->width, rect->height);
+              g_free (rects);
+              goto out;
+            }
           rect_index++;
         }
 
@@ -2094,6 +2101,7 @@ reload_deepin_blur_region_rounded (MetaWindow    *window,
       i = 0;
       while (i < nitems)
         {
+          int rx, ry;
           cairo_rectangle_int_t *rect = &rects[rect_index];
 
           rect->x = region[i++];
@@ -2101,9 +2109,18 @@ reload_deepin_blur_region_rounded (MetaWindow    *window,
           rect->width = region[i++];
           rect->height = region[i++];
 
-          g_array_append_val (radiuses, region[i++]);
-          g_array_append_val (radiuses, region[i++]);
+          rx = region[i++];
+          ry = region[i++];
+          g_array_append_val (radiuses, rx);
+          g_array_append_val (radiuses, ry);
           rect_index++;
+
+          if (rect->width <= 0 || rect->height <= 0 || rx < 0 || ry < 0)
+            {
+              meta_verbose ("_NET_WM_DEEPIN_BLUR_ROUNDED geometry is invalid (%d, %d, %d, %d).",
+                      rect->x, rect->y, rect->width, rect->height);
+              goto out;
+            }
         }
 
       blur_region = cairo_region_create_rectangles (rects, nrects);
@@ -2131,6 +2148,12 @@ reload_deepin_blur_region_mask (MetaWindow    *window,
       int xoff = *ip, yoff = *(ip+1);
       int w = *(ip+2), h = *(ip+3);
       int stride = *(ip+4);
+
+      if (xoff < 0 || yoff < 0 || w <= 0 || h <= 0) {
+          meta_verbose ("_NET_WM_DEEPIN_BLUR_REGION_MASK geometry is invalid (%d, %d, %d, %d).",
+                  xoff, yoff, w, h);
+          return;
+      }
 
       meta_verbose ("%s w = %d, h = %d, stride = %d, sz = %d, data=%p\n", __func__, w, h, stride, sz, data);
 
