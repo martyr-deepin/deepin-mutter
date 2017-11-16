@@ -1,3 +1,16 @@
+##  3.20.26 (2017-11-16)
+
+
+#### Bug Fixes
+
+*   check validity of blur related coordinates ([bec56108](bec56108))
+
+#### Features
+
+*   support FLATPAK_APPID property ([7dc6e653](7dc6e653))
+
+
+
 ##  3.20.25 (2017-11-09)
 
 
