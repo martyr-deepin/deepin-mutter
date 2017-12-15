@@ -2161,10 +2161,19 @@ reload_deepin_blur_region_mask (MetaWindow    *window,
       g_clear_pointer (&window->deepin_blur_radiuses, g_array_unref);
       g_clear_pointer (&window->deepin_blur_mask, cairo_surface_destroy);
 
+      cairo_surface_t * surface = cairo_image_surface_create_for_data (
+              data + 20, CAIRO_FORMAT_A8, w, h, stride);
+
       cairo_rectangle_int_t r = {xoff, yoff, w, h};
       window->deepin_blur_region = cairo_region_create_rectangle (&r);
-      window->deepin_blur_mask = cairo_image_surface_create_for_data (
-              data+20, CAIRO_FORMAT_A8, w, h, stride);
+      window->deepin_blur_mask = cairo_image_surface_create (CAIRO_FORMAT_A8, w, h);
+      cairo_t *cr = cairo_create (window->deepin_blur_mask);
+      cairo_set_source_surface (cr, surface, 0, 0);
+      cairo_paint (cr);
+      cairo_destroy(cr);
+
+      cairo_surface_destroy (surface);
+
       cairo_status_t st = cairo_surface_status (window->deepin_blur_mask);
       if (st != CAIRO_STATUS_SUCCESS) {
           g_clear_pointer (&window->deepin_blur_region, cairo_region_destroy);
