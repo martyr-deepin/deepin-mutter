@@ -1,7 +1,7 @@
 Source: deepin-mutter
 Section: x11
 Priority: optional
-Maintainer: Deepin Sysdev <sysdev@deepin.com>
+Maintainer: Deepin Packages Builder <packages@deepin.com>
 Build-Depends: cdbs (>= 0.4.90),
                debhelper (>= 9),
                gnome-pkg-tools (>= 0.10),
@@ -49,7 +49,7 @@ Build-Depends: cdbs (>= 0.4.90),
                xkb-data,
                zenity,
                gnome-common
-Standards-Version: 3.9.6
+Standards-Version: 3.9.8
 Vcs-Browser: https://gitcafe.com/Deepin/deepin-mutter
 
 Package: deepin-mutter
@@ -141,7 +141,7 @@ Section: introspection
 Architecture: any
 Depends: ${gir:Depends},
          ${shlibs:Depends},
-         ${misc:Depends}
+         ${misc:Depends},
          libdeepin-mutter0g (= ${binary:Version})
 Description: GObject introspection data for Mutter
  Mutter is a small window manager, using GTK+ and Clutter to do
