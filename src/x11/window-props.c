@@ -659,20 +659,28 @@ reload_wm_name (MetaWindow    *window,
 static gboolean
 is_run_on_livecd ()
 {
+  static int is_run_on_livecd_cached = -1;
+
   GError * error = NULL;
   gchar* data = NULL;
   gsize len = 0;
   gboolean ret = FALSE;
 
-  if (!g_file_get_contents ("/proc/cmdline", &data, &len, &error)) 
+  // only do one calculation at all
+  if (is_run_on_livecd_cached == -1) 
     {
-      meta_warning ("%s\n", error->message);
-      g_error_free (error);
-      return ret;
-    }
+      if (!g_file_get_contents ("/proc/cmdline", &data, &len, &error)) 
+        {
+          meta_warning ("%s\n", error->message);
+          g_error_free (error);
+          is_run_on_livecd_cached = ret;
+          return ret;
+        }
 
-  ret = (g_strstr_len (data, len, "boot=casper") != NULL);
-  g_free (data);
+      ret = (g_strstr_len (data, len, "boot=casper") != NULL);
+      is_run_on_livecd_cached = ret;
+      g_free (data);
+    }
 
   return ret;
 }
