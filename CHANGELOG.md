@@ -1,3 +1,14 @@
+##  3.20.27 (2018-03-07)
+
+
+#### Bug Fixes
+
+*   cache result for is_run_on_livecd ([b831ee84](b831ee84))
+*   Adapt lintian ([d59de6e5](d59de6e5))
+*   use mask surface with owned data ([5b943d63](5b943d63))
+
+
+
 ##  3.20.26 (2017-11-16)
 
 
