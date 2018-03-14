@@ -1807,6 +1807,8 @@ meta_window_set_blur_region (MetaWindow     *window,
     return;
 
   g_clear_pointer (&window->deepin_blur_region, cairo_region_destroy);
+  g_clear_pointer (&window->deepin_blur_radiuses, g_array_unref);
+  g_clear_pointer (&window->deepin_blur_mask, cairo_surface_destroy);
 
   if (region != NULL)
     window->deepin_blur_region = cairo_region_reference (region);
@@ -1868,6 +1870,7 @@ reload_deepin_blur_region (MetaWindow    *window,
             {
               meta_verbose ("_NET_WM_DEEPIN_BLUR_REGION geometry is invalid (%d, %d, %d, %d).",
                       rect->x, rect->y, rect->width, rect->height);
+              nrects = 0;
               g_free (rects);
               goto out;
             }
@@ -2127,6 +2130,7 @@ reload_deepin_blur_region_rounded (MetaWindow    *window,
             {
               meta_verbose ("_NET_WM_DEEPIN_BLUR_ROUNDED geometry is invalid (%d, %d, %d, %d).",
                       rect->x, rect->y, rect->width, rect->height);
+              nrects = 0;
               goto out;
             }
         }

@@ -49,6 +49,7 @@ enum
 typedef enum {
     CHANGED_EFFECTS = 1 << 1,
     CHANGED_SIZE    = 1 << 2,
+    CHANGED_POS     = 1 << 3,
     CHANGED_ALL = 0xFFFF
 } ChangedFlags;
 
@@ -367,6 +368,7 @@ static gboolean prepare_texture(MetaBlurActor* self)
     }
 
 
+    //FIXME: not always need to update
     clutter_stage_ensure_current (clutter_actor_get_stage (self));
     x = fminf(fmaxf(x, 0.0), fw);
     y = fmaxf(y, 0.0);
@@ -417,13 +419,20 @@ static void setup_pipeline (MetaBlurActor   *self, cairo_rectangle_int_t *rect)
 {
     MetaBlurActorPrivate *priv = self->priv;
 
+    //FIXME: need a way from clutter to tell if re-blur is necessary
+    gboolean need_reblur = TRUE || priv->changed > 0;
+
     if (priv->changed & CHANGED_SIZE) {
         g_clear_pointer (&priv->texture, cogl_object_unref);
         priv->changed &= ~CHANGED_SIZE;
     }
 
+    if (priv->changed & CHANGED_POS) {
+        priv->changed &= ~CHANGED_POS;
+    }
+
     prepare_texture(self);
-    if (priv->radius && priv->texture) {
+    if (priv->radius && priv->texture && need_reblur) {
         create_texture (self);
 
         cogl_pipeline_set_layer_texture (priv->pipeline2, 0, priv->fbTex);
@@ -452,7 +461,36 @@ meta_blur_actor_allocate (ClutterActor        *actor,
     MetaBlurActorPrivate *priv = self->priv;
     ClutterActorClass *parent_class;
 
-    invalidate_pipeline (self, CHANGED_SIZE);
+    static ClutterActorBox prev_box = CLUTTER_ACTOR_BOX_INIT_ZERO; 
+
+    if (!clutter_actor_box_equal (&prev_box, box)) {
+        ChangedFlags changes = 0;
+        if (prev_box.x1 != box->x1 || prev_box.y1 != box->y1) {
+            changes |= CHANGED_POS;
+        }
+
+        float w1, w2, h1, h2;
+        clutter_actor_box_get_size (&prev_box, &w1, &h1);
+        clutter_actor_box_get_size (box, &w2, &h2);
+        if (w1 != w2 || h1 != h2) {
+            changes |= CHANGED_SIZE;
+        }
+        
+        invalidate_pipeline (self, changes);
+        prev_box = *box;
+    } else {
+        // could be moved relative to the stage
+        static float prev_rx = 0.0f, prev_ry = 0.0f;
+        float rx, ry;
+        clutter_actor_get_transformed_position (actor, &rx, &ry);
+
+        if (rx != prev_rx || ry != prev_ry) {
+            invalidate_pipeline (self, CHANGED_POS);
+            prev_rx = rx;
+            prev_ry = ry;
+        }
+    }
+
     CLUTTER_ACTOR_CLASS (meta_blur_actor_parent_class)->allocate (actor, box, flags);
 }
 
