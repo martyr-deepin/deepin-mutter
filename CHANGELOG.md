@@ -1,3 +1,12 @@
+##  3.20.28 (2018-03-16)
+
+
+#### Features
+
+*   fine-grained control if texture needs recreate ([dbfd9a5a](dbfd9a5a))
+
+
+
 ##  3.20.27 (2018-03-07)
 
 
