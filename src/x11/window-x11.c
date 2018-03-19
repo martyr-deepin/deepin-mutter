@@ -598,8 +598,9 @@ meta_window_x11_unmanage (MetaWindow *window)
     {
       /* We need to put WM_STATE so that others will understand it on
        * restart.
+       * DEEPIN: do not update state for override-redirect windows.
        */
-      if (!window->minimized)
+      if (!window->override_redirect && !window->minimized)
         meta_window_x11_set_wm_state (window);
 
       /* If we're unmanaging a window that is not withdrawn, then
