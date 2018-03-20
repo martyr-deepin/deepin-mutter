@@ -1384,7 +1384,11 @@ constrain_titlebar_visible (MetaWindow         *window,
       vert_amount_onscreen = borders.visible.top;
     }
   else
-    bottom_amount = vert_amount_offscreen;
+    {
+      bottom_amount = vert_amount_offscreen;
+      // wild guess: see comment of meta_window_get_titlebar_rect
+      bottom_amount += 50;
+    }
 
   /* Extend the region, have a helper function handle the constraint,
    * then return the region to its original size.
@@ -1462,7 +1466,11 @@ constrain_partially_onscreen (MetaWindow         *window,
       vert_amount_onscreen = borders.visible.top;
     }
   else
-    bottom_amount = vert_amount_offscreen;
+    {
+      bottom_amount = vert_amount_offscreen;
+      // wild guess: see comment of meta_window_get_titlebar_rect
+      bottom_amount += 50;
+    }
 
   /* Extend the region, have a helper function handle the constraint,
    * then return the region to its original size.
