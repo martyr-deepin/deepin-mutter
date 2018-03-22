@@ -1,3 +1,17 @@
+##  3.20.29 (2018-03-22)
+
+
+#### Bug Fixes
+
+*   reduce texture recreation ([317b09df](317b09df))
+*   keep wm_state of OR window when unmanaged ([f2a831b0](f2a831b0))
+
+#### Features
+
+*   expand available region for CSD window ([1cedcd7f](1cedcd7f))
+
+
+
 ##  3.20.28 (2018-03-16)
 
 
