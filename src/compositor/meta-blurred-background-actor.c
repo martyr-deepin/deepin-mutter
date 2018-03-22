@@ -258,6 +258,10 @@ static void create_texture (MetaBlurredBackgroundActor* self)
     width *= scale;
     height *= scale;
 
+    if (priv->fbTex2 != NULL && priv->fb_width == width && priv->fb_height == height) {
+        return;
+    }
+    
     g_clear_pointer (&priv->fbTex, cogl_object_unref);
     g_clear_pointer (&priv->fbTex2, cogl_object_unref);
     g_clear_pointer (&priv->fb, cogl_object_unref);
@@ -346,13 +350,6 @@ static void preblur_texture(MetaBlurredBackgroundActor* self)
         if (i > 0) cogl_framebuffer_finish(priv->fb2);
     }
     meta_verbose ("preblur rendering time: %d\n", get_time() - start);
-
-    cogl_object_unref (priv->fbTex);
-    cogl_object_unref (priv->fb);
-    cogl_object_unref (priv->fb2);
-    priv->fbTex = NULL;
-    priv->fb = NULL;
-    priv->fb2 = NULL;
 }
 
 static void setup_pipeline (MetaBlurredBackgroundActor   *self,
