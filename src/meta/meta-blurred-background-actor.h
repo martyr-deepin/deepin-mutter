@@ -66,4 +66,7 @@ void meta_blurred_background_actor_set_rounds (MetaBlurredBackgroundActor *self,
 void meta_blurred_background_actor_set_blur_mask (MetaBlurredBackgroundActor *self,
         cairo_surface_t* mask);
 
+void meta_blurred_background_actor_set_enabled (MetaBlurredBackgroundActor *self,
+        gboolean enabled);
+
 #endif /* META_BLURRED_BACKGROUND_ACTOR_H */

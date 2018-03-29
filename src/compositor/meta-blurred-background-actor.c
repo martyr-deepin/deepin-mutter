@@ -45,11 +45,13 @@ enum
     PROP_BACKGROUND,
     PROP_RADIUS,
     PROP_ROUNDS,
+    PROP_ENABLED,
 };
 
 typedef enum {
     CHANGED_BACKGROUND = 1 << 0,
     CHANGED_EFFECTS = 1 << 1,
+    CHANGED_ENABLED = 1 << 2,
     CHANGED_ALL = 0xFFFF
 } ChangedFlags;
 
@@ -367,7 +369,9 @@ static void setup_pipeline (MetaBlurredBackgroundActor   *self,
 
         cogl_primitive_texture_set_auto_mipmap (priv->texture, TRUE);
 
-        if (priv->radius) {
+        gboolean need_reblur = (priv->changed & (CHANGED_EFFECTS|CHANGED_BACKGROUND));
+
+        if (need_reblur && priv->radius) {
             cogl_pipeline_set_layer_texture (priv->pipeline, 0, priv->texture);
             cogl_pipeline_set_layer_filters (priv->pipeline, 0,
                     COGL_PIPELINE_FILTER_LINEAR_MIPMAP_LINEAR,
@@ -414,7 +418,7 @@ static void meta_blurred_background_actor_paint (ClutterActor *actor)
 
     CoglPipeline* pipeline = priv->pl_passthrough;
 
-    if (priv->blur_mask_texture) {
+    if (priv->blurred && priv->blur_mask_texture) {
         pipeline = priv->pl_masked;
         cogl_pipeline_set_layer_texture (priv->pl_masked, 1, priv->blur_mask_texture);
     }
@@ -425,7 +429,7 @@ static void meta_blurred_background_actor_paint (ClutterActor *actor)
             opacity, opacity, opacity, opacity);
 
     setup_pipeline (self, &bounding);
-    if (priv->radius > 0) {
+    if (priv->blurred && priv->radius > 0) {
         cogl_pipeline_set_layer_texture (pipeline, 0, priv->fbTex2);
 
     } else {
@@ -484,6 +488,10 @@ static void meta_blurred_background_actor_set_property (GObject      *object,
             meta_blurred_background_actor_set_rounds (self,
                     g_value_get_int (value));
             break;
+        case PROP_ENABLED:
+            meta_blurred_background_actor_set_enabled (self,
+                    g_value_get_boolean (value));
+            break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
             break;
@@ -513,6 +521,9 @@ static void meta_blurred_background_actor_get_property (GObject      *object,
             break;
         case PROP_ROUNDS:
             g_value_set_int (value, priv->rounds);
+            break;
+        case PROP_ENABLED:
+            g_value_set_boolean (value, priv->blurred);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -591,6 +602,16 @@ meta_blurred_background_actor_class_init (MetaBlurredBackgroundActorClass *klass
     g_object_class_install_property (object_class,
             PROP_ROUNDS,
             param_spec);
+
+    param_spec = g_param_spec_boolean ("enabled",
+                "blur enabled",
+                "blur enabled",
+                TRUE,
+                G_PARAM_READWRITE);
+
+    g_object_class_install_property (object_class,
+            PROP_ENABLED,
+            param_spec);
 }
 
 static void meta_blurred_background_actor_init (MetaBlurredBackgroundActor *self)
@@ -603,6 +624,7 @@ static void meta_blurred_background_actor_init (MetaBlurredBackgroundActor *self
 
     priv->radius = 0; // means no blur
     priv->rounds = 1;
+    priv->blurred = TRUE;
 }
 
 ClutterActor * meta_blurred_background_actor_new (MetaScreen *screen,
@@ -733,6 +755,17 @@ void meta_blurred_background_actor_set_radius (MetaBlurredBackgroundActor *self,
     }
 }
 
+void meta_blurred_background_actor_set_enabled (MetaBlurredBackgroundActor *self, gboolean enabled)
+{
+    MetaBlurredBackgroundActorPrivate *priv = self->priv;
+
+    g_return_if_fail (META_IS_BLURRED_BACKGROUND_ACTOR (self));
+    if (priv->blurred != enabled) {
+        priv->blurred = enabled;
+        invalidate_pipeline (self, CHANGED_ENABLED);
+        clutter_actor_queue_redraw (CLUTTER_ACTOR (self));
+    }
+}
 
 void meta_blurred_background_actor_set_rounds (MetaBlurredBackgroundActor *self, int rounds)
 {
