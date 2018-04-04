@@ -195,6 +195,15 @@ meta_plugin_manager_event_simple (MetaPluginManager *plugin_mgr,
           klass->destroy (plugin, actor);
         }
       break;
+    case META_PLUGIN_TILE:
+      if (klass->tile)
+        {
+          retval = TRUE;
+          meta_plugin_manager_kill_window_effects (plugin_mgr,
+                                                   actor);
+          klass->tile (plugin, actor);
+        }
+      break;
     default:
       g_warning ("Incorrect handler called for event %d", event);
     }

@@ -125,6 +125,15 @@ struct _MetaPluginClass
    */
   void (*destroy)          (MetaPlugin         *plugin,
                             MetaWindowActor    *actor);
+  /**
+   * MetaPluginClass::tile:
+   * @actor: a #MetaWindowActor
+   *
+   * Virtual function called when the window represented by @actor is tiled.
+   */
+  void (*tile)              (MetaPlugin         *plugin,
+                            MetaWindowActor    *actor);
+
 
   /**
    * MetaPluginClass::switch_workspace:
@@ -367,6 +376,10 @@ meta_plugin_map_completed (MetaPlugin      *plugin,
 void
 meta_plugin_destroy_completed (MetaPlugin      *plugin,
                                MetaWindowActor *actor);
+
+void
+meta_plugin_tile_completed (MetaPlugin      *plugin,
+                            MetaWindowActor *actor);
 
 void
 meta_plugin_complete_display_change (MetaPlugin *plugin,

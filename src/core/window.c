@@ -2972,6 +2972,9 @@ meta_window_tile (MetaWindow *window)
 
   if (window->frame)
     meta_frame_queue_draw (window->frame);
+
+  if (!window->tile_match)
+    meta_compositor_tile_window (window->display->compositor, window);
 }
 
 static gboolean

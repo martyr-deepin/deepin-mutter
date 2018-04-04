@@ -51,6 +51,7 @@ typedef enum
   META_COMP_EFFECT_UNMINIMIZE,
   META_COMP_EFFECT_DESTROY,
   META_COMP_EFFECT_MINIMIZE,
+  META_COMP_EFFECT_TILE,
   META_COMP_EFFECT_NONE
 } MetaCompEffect;
 
@@ -93,6 +94,8 @@ void meta_compositor_show_window       (MetaCompositor      *compositor,
 void meta_compositor_hide_window       (MetaCompositor      *compositor,
                                         MetaWindow          *window,
                                         MetaCompEffect       effect);
+void meta_compositor_tile_window       (MetaCompositor      *compositor,
+                                        MetaWindow          *window);
 void meta_compositor_switch_workspace  (MetaCompositor      *compositor,
                                         MetaWorkspace       *from,
                                         MetaWorkspace       *to,

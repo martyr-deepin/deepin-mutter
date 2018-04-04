@@ -97,6 +97,7 @@ struct _MetaWindowActorPrivate
   gint              size_change_in_progress;
   gint              map_in_progress;
   gint              destroy_in_progress;
+  gint              tile_in_progress;
 
   /* List of FrameData for recent frames */
   GList            *frames;
@@ -1091,7 +1092,8 @@ meta_window_actor_effect_in_progress (MetaWindowActor *self)
   return (self->priv->minimize_in_progress ||
 	  self->priv->size_change_in_progress ||
 	  self->priv->map_in_progress ||
-	  self->priv->destroy_in_progress);
+	  self->priv->destroy_in_progress ||
+      self->priv->tile_in_progress);
 }
 
 static gboolean
@@ -1132,6 +1134,9 @@ start_simple_effect (MetaWindowActor  *self,
     break;
   case META_PLUGIN_DESTROY:
     counter = &priv->destroy_in_progress;
+    break;
+  case META_PLUGIN_TILE:
+    counter = &priv->tile_in_progress;
     break;
   case META_PLUGIN_SIZE_CHANGE:
   case META_PLUGIN_SWITCH_WORKSPACE:
@@ -1237,6 +1242,16 @@ meta_window_actor_effect_completed (MetaWindowActor  *self,
 	g_warning ("Error in size change accounting.");
 	priv->size_change_in_progress = 0;
       }
+    break;
+  case META_PLUGIN_TILE:
+    {
+      priv->tile_in_progress--;
+      if (priv->tile_in_progress < 0)
+       {
+         g_warning ("Error in tile accounting.");
+         priv->tile_in_progress = 0;
+       }
+    }
     break;
   case META_PLUGIN_SWITCH_WORKSPACE:
     g_assert_not_reached ();
@@ -1413,6 +1428,43 @@ meta_window_actor_hide (MetaWindowActor *self,
 
   if (!start_simple_effect (self, event))
     clutter_actor_hide (CLUTTER_ACTOR (self));
+}
+
+void
+meta_window_actor_tile (MetaWindowActor *self,
+                        MetaCompEffect   effect)
+{
+  MetaWindowActorPrivate *priv = self->priv;
+  MetaCompositor *compositor = priv->compositor;
+  MetaPluginEffect event;
+
+  g_return_if_fail (priv->visible);
+
+  /* If a plugin is animating a workspace transition, we have to
+   * hold off on hiding the window, and do it after the workspace
+   * switch completes
+   */
+  if (compositor->switch_workspace_in_progress)
+    return;
+
+  /* this means an iteractive dual-tiling is running
+   */
+  if (priv->tile_in_progress)
+      return;
+
+  switch (effect)
+    {
+    case META_COMP_EFFECT_TILE:
+      event = META_PLUGIN_TILE;
+      break;
+    case META_COMP_EFFECT_NONE:
+      event = META_PLUGIN_NONE;
+      break;
+    default:
+      g_assert_not_reached();
+    }
+
+  start_simple_effect (self, event);
 }
 
 void

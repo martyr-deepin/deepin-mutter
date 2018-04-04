@@ -787,6 +787,14 @@ meta_compositor_hide_window (MetaCompositor *compositor,
 }
 
 void
+meta_compositor_tile_window (MetaCompositor *compositor,
+                             MetaWindow     *window)
+{
+  MetaWindowActor *window_actor = META_WINDOW_ACTOR (meta_window_get_compositor_private (window));
+  meta_window_actor_tile (window_actor, META_COMP_EFFECT_TILE);
+}
+
+void
 meta_compositor_size_change_window (MetaCompositor    *compositor,
                                     MetaWindow        *window,
                                     MetaSizeChange     which_change,

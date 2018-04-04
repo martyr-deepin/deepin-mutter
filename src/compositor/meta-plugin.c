@@ -138,6 +138,13 @@ meta_plugin_destroy_completed (MetaPlugin      *plugin,
   meta_plugin_window_effect_completed (plugin, actor, META_PLUGIN_DESTROY);
 }
 
+void
+meta_plugin_tile_completed (MetaPlugin      *plugin,
+                            MetaWindowActor *actor)
+{
+  meta_plugin_window_effect_completed (plugin, actor, META_PLUGIN_TILE);
+}
+
 /**
  * meta_plugin_begin_modal:
  * @plugin: a #MetaPlugin
