@@ -2973,7 +2973,7 @@ meta_window_tile (MetaWindow *window)
   if (window->frame)
     meta_frame_queue_draw (window->frame);
 
-  if (!window->tile_match)
+  if (!window->tile_match && window->tile_mode != META_TILE_MAXIMIZED)
     meta_compositor_tile_window (window->display->compositor, window);
 }
 
