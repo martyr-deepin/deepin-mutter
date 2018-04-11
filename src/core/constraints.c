@@ -837,11 +837,12 @@ constrain_tiling (MetaWindow         *window,
                   ConstraintPriority  priority,
                   gboolean            check_only)
 {
-  MetaRectangle target_size;
+  MetaRectangle target_size, tile_area;
   MetaRectangle min_size, max_size;
   gboolean hminbad, vminbad;
   gboolean horiz_equal, vert_equal;
   gboolean constraint_already_satisfied;
+  int tile_monitor_number;
 
   if (priority > PRIORITY_TILING)
     return TRUE;
@@ -864,9 +865,14 @@ constrain_tiling (MetaWindow         *window,
   if (hminbad || vminbad)
     return TRUE;
 
+  tile_monitor_number = meta_window_get_current_tile_monitor_number (window);
+  meta_window_get_work_area_for_monitor (window, tile_monitor_number, &tile_area);
+
   /* Determine whether constraint is already satisfied; exit if it is */
-  horiz_equal = target_size.x      == info->current.x &&
-                target_size.width  == info->current.width;
+  if (META_WINDOW_TILED_RIGHT(window))
+    horiz_equal = tile_area.x + tile_area.width == info->current.x + info->current.width;
+  else
+    horiz_equal = tile_area.x      == info->current.x;
   vert_equal  = target_size.y      == info->current.y &&
                 target_size.height == info->current.height;
   constraint_already_satisfied = horiz_equal && vert_equal;
@@ -874,8 +880,9 @@ constrain_tiling (MetaWindow         *window,
     return constraint_already_satisfied;
 
   /*** Enforce constraint ***/
-  info->current.x      = target_size.x;
-  info->current.width  = target_size.width;
+  info->current.x      = tile_area.x;
+  if (META_WINDOW_TILED_RIGHT(window))
+      info->current.x      += tile_area.width - info->current.width;
   info->current.y      = target_size.y;
   info->current.height = target_size.height;
 

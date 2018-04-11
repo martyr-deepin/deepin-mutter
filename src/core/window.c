@@ -1024,6 +1024,7 @@ _meta_window_shared_new (MetaDisplay         *display,
   window->preferred_output_winsys_id = window->monitor->winsys_id;
 
   window->tile_match = NULL;
+  window->tile_counterpart = NULL;
 
   /* Assign this #MetaWindow a sequence number which can be used
    * for sorting.
@@ -2773,6 +2774,7 @@ meta_window_maximize (MetaWindow        *window,
 
           window->maximized_vertically = FALSE;
           window->tile_mode = META_TILE_NONE;
+          meta_window_compute_tile_counterpart (window);
         }
 
       meta_window_maximize_internal (window,
@@ -2965,15 +2967,25 @@ meta_window_tile (MetaWindow *window)
   else
     directions = META_MAXIMIZE_VERTICAL;
 
+  if (meta_screen_has_tiled_window_for_monitor (window->tile_mode, window))
+    {
+      meta_verbose ("another window is tiled in the same mode, disallow this request");
+      window->tile_mode = META_TILE_NONE;
+      meta_screen_update_tile_preview (window->screen, FALSE);
+      fprintf (stderr, "another window is tiled in the same mode, disallow this request\n");
+      return;
+    }
+
   meta_window_maximize_internal (window, directions, NULL);
   meta_screen_update_tile_preview (window->screen, FALSE);
+  meta_window_compute_tile_counterpart (window);
 
   meta_window_move_resize_now (window);
 
   if (window->frame)
     meta_frame_queue_draw (window->frame);
 
-  if (!window->tile_match && window->tile_mode != META_TILE_MAXIMIZED)
+  if (!window->tile_counterpart && window->tile_mode != META_TILE_MAXIMIZED)
     meta_compositor_tile_window (window->display->compositor, window);
 }
 
@@ -2981,6 +2993,12 @@ static gboolean
 meta_window_can_tile_maximized (MetaWindow *window)
 {
   return window->has_maximize_func;
+}
+
+MetaTileSide
+meta_window_get_tile_mode (MetaWindow *window)
+{
+    return window->tile_mode;
 }
 
 gboolean
@@ -3945,11 +3963,20 @@ meta_window_resize_frame_with_gravity (MetaWindow *window,
 static void
 meta_window_move_resize_now (MetaWindow  *window)
 {
+  MetaRectangle rect = window->unconstrained_rect;
+
+  if (!window->calc_placement && META_WINDOW_TILED_SIDE_BY_SIDE (window))
+    {
+      MetaRectangle tile_area;
+      meta_window_get_current_tile_area (window, &tile_area);
+      rect.width = tile_area.width;
+    }
+
   meta_window_move_resize_frame (window, FALSE,
-                                 window->unconstrained_rect.x,
-                                 window->unconstrained_rect.y,
-                                 window->unconstrained_rect.width,
-                                 window->unconstrained_rect.height);
+                                 rect.x,
+                                 rect.y,
+                                 rect.width,
+                                 rect.height);
 }
 
 static gboolean
@@ -5653,6 +5680,7 @@ update_move (MetaWindow  *window,
          request. */
       window->tile_mode = META_TILE_NONE;
       window->tile_monitor_number = -1;
+      meta_window_compute_tile_counterpart (window);
     }
   else if (meta_prefs_get_edge_tiling () &&
            !META_WINDOW_MAXIMIZED (window) &&
@@ -5695,8 +5723,16 @@ update_move (MetaWindow  *window,
       else
         window->tile_mode = META_TILE_NONE;
 
+      if (meta_screen_has_tiled_window_for_monitor (window->tile_mode, window))
+        {
+          meta_verbose ("another window is tiled in the same mode, disallow this request");
+          window->tile_mode = META_TILE_NONE;
+        }
+
       if (window->tile_mode != META_TILE_NONE)
         window->tile_monitor_number = monitor->number;
+
+      meta_window_compute_tile_counterpart (window);
     }
 
   /* shake loose (unmaximize) maximized or tiled window if dragged beyond
@@ -5715,6 +5751,7 @@ update_move (MetaWindow  *window,
        */
       window->shaken_loose = !meta_prefs_get_edge_tiling ();
       window->tile_mode = META_TILE_NONE;
+      meta_window_compute_tile_counterpart (window);
 
       /* move the unmaximized window to the cursor */
       prop =
@@ -5751,6 +5788,7 @@ update_move (MetaWindow  *window,
       int monitor;
 
       window->tile_mode = META_TILE_NONE;
+      meta_window_compute_tile_counterpart (window);
       wmonitor = window->monitor;
 
       for (monitor = 0; monitor < window->screen->n_monitor_infos; monitor++)
@@ -5981,6 +6019,7 @@ update_tile_mode (MetaWindow *window)
               window->tile_mode = META_TILE_NONE;
           break;
     }
+  meta_window_compute_tile_counterpart (window);
 }
 
 void
@@ -7340,6 +7379,59 @@ MetaWindow *
 meta_window_get_tile_match (MetaWindow *window)
 {
   return window->tile_match;
+}
+
+/**
+ * meta_window_get_tile_counterpart:
+ * @window: a #MetaWindow
+ *
+ * Returns the matching tiled window on the same monitor as @window. This is
+ * the least constrained version of above.
+ * Return value: (transfer none) (nullable): the matching tiled window or
+ * %NULL if it doesn't exist.
+ */
+MetaWindow *
+meta_window_get_tile_counterpart (MetaWindow *window)
+{
+  return window->tile_counterpart;
+}
+
+void
+meta_window_compute_tile_counterpart (MetaWindow *window)
+{
+  MetaWindow *match;
+  MetaStack *stack;
+  MetaTileMode match_tile_mode = META_TILE_NONE;
+
+  if (window->tile_counterpart)
+    window->tile_counterpart->tile_counterpart = NULL;
+  window->tile_counterpart = NULL;
+
+  if (META_WINDOW_TILED_LEFT (window))
+    match_tile_mode = META_TILE_RIGHT;
+  else if (META_WINDOW_TILED_RIGHT (window))
+    match_tile_mode = META_TILE_LEFT;
+  else
+    return;
+
+  stack = window->screen->stack;
+
+  for (match = meta_stack_get_top (stack);
+       match;
+       match = meta_stack_get_below (stack, match, FALSE))
+    {
+      if (//!match->shaded && !match->minimized &&
+          match->tile_mode == match_tile_mode &&
+          match->monitor == window->monitor &&
+          meta_window_get_workspace (match) == meta_window_get_workspace (window))
+        {
+          //NOTE: this may unstable if we can't assume that only two tiled windows 
+          //exists on the same monitor.
+          window->tile_counterpart = match;
+          match->tile_counterpart = window;
+          break;
+        }
+    }
 }
 
 void

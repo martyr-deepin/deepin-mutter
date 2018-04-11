@@ -232,6 +232,7 @@ MetaFrameType meta_window_get_frame_type (MetaWindow *window);
 cairo_region_t *meta_window_get_frame_bounds (MetaWindow *window);
 
 MetaWindow *meta_window_get_tile_match (MetaWindow *window);
+MetaWindow *meta_window_get_tile_counterpart (MetaWindow *window);
 
 void        meta_window_make_fullscreen    (MetaWindow  *window);
 void        meta_window_unmake_fullscreen  (MetaWindow  *window);
@@ -276,6 +277,8 @@ gboolean meta_window_is_above (MetaWindow *window);
 gboolean meta_window_allows_move (MetaWindow *window);
 gboolean meta_window_allows_resize (MetaWindow *window);
 gboolean meta_window_is_client_decorated (MetaWindow *window);
+gboolean meta_window_can_tile_side_by_side (MetaWindow *window);
+MetaTileSide meta_window_get_tile_mode (MetaWindow *window);
 
 gboolean meta_window_titlebar_is_onscreen    (MetaWindow *window);
 void     meta_window_shove_titlebar_onscreen (MetaWindow *window);

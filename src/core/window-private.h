@@ -460,6 +460,12 @@ struct _MetaWindow
 
   /* The currently complementary tiled window, if any */
   MetaWindow *tile_match;
+  /* DEEPIN: the currently complementary tiled window, if any. 
+   * It has no constraints as tile_match above, like no intersection windows 
+   * inbetween. and we assumes only two tiled windows at most in the same 
+   * monitor.
+   */
+  MetaWindow *tile_counterpart;
 
   /* Bypass compositor hints */
   guint bypass_compositor;
@@ -525,6 +531,11 @@ struct _MetaWindowClass
                                          ((w)->size_hints.min_height < (w)->size_hints.max_height)))
 #define META_WINDOW_ALLOWS_HORIZONTAL_RESIZE(w) (META_WINDOW_ALLOWS_RESIZE_EXCEPT_HINTS (w) && (w)->size_hints.min_width < (w)->size_hints.max_width)
 #define META_WINDOW_ALLOWS_VERTICAL_RESIZE(w)   (META_WINDOW_ALLOWS_RESIZE_EXCEPT_HINTS (w) && (w)->size_hints.min_height < (w)->size_hints.max_height)
+//deepin addons
+#define META_WINDOW_ALLOWS_TILED_RESIZE_LEFT(w)   ((w)->has_resize_func && \
+                                                   !META_WINDOW_TILED_LEFT (w))
+#define META_WINDOW_ALLOWS_TILED_RESIZE_RIGHT(w)   ((w)->has_resize_func && \
+                                                    !META_WINDOW_TILED_RIGHT (w))
 
 MetaWindow * _meta_window_shared_new       (MetaDisplay         *display,
                                             MetaScreen          *screen,
@@ -643,9 +654,9 @@ void meta_window_update_for_monitors_changed (MetaWindow *window);
 void meta_window_on_all_workspaces_changed (MetaWindow *window);
 
 gboolean meta_window_should_attach_to_parent (MetaWindow *window);
-gboolean meta_window_can_tile_side_by_side   (MetaWindow *window);
 
 void meta_window_compute_tile_match (MetaWindow *window);
+void meta_window_compute_tile_counterpart (MetaWindow *window);
 
 gboolean meta_window_updates_are_frozen (MetaWindow *window);
 

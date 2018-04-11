@@ -1637,7 +1637,9 @@ get_control (MetaUIFrame *frame, int root_x, int root_y)
 
   has_north_resize = (type != META_FRAME_TYPE_ATTACHED);
   has_vert = (flags & META_FRAME_ALLOWS_VERTICAL_RESIZE) != 0;
-  has_horiz = (flags & META_FRAME_ALLOWS_HORIZONTAL_RESIZE) != 0;
+  has_horiz = (flags & META_FRAME_ALLOWS_HORIZONTAL_RESIZE) != 0 ||
+    (flags & META_FRAME_ALLOWS_TILED_RESIZE_LEFT) != 0 ||
+    (flags & META_FRAME_ALLOWS_TILED_RESIZE_RIGHT) != 0;
 
   if (POINT_IN_RECT (x, y, fgeom.title_rect))
     {

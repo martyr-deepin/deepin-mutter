@@ -259,6 +259,12 @@ meta_frame_get_flags (MetaFrame *frame)
   if (META_WINDOW_ALLOWS_VERTICAL_RESIZE (frame->window))
     flags |= META_FRAME_ALLOWS_VERTICAL_RESIZE;
 
+  if (META_WINDOW_ALLOWS_TILED_RESIZE_LEFT (frame->window))
+    flags |= META_FRAME_ALLOWS_TILED_RESIZE_LEFT;
+
+  if (META_WINDOW_ALLOWS_TILED_RESIZE_RIGHT (frame->window))
+    flags |= META_FRAME_ALLOWS_TILED_RESIZE_RIGHT;
+
   if (meta_window_appears_focused (frame->window))
     flags |= META_FRAME_HAS_FOCUS;
 

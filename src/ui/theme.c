@@ -105,6 +105,16 @@ meta_frame_layout_get_borders (const MetaFrameLayout *layout,
       borders->invisible.right  = MAX (borders->invisible.right,
                                        draggable_borders - borders->visible.right);
     }
+  else if (flags & META_FRAME_ALLOWS_TILED_RESIZE_LEFT)
+    {
+      borders->invisible.left   = MAX (borders->invisible.left,
+                                       draggable_borders - borders->visible.left);
+    }
+  else if (flags & META_FRAME_ALLOWS_TILED_RESIZE_RIGHT)
+    {
+      borders->invisible.right  = MAX (borders->invisible.right,
+                                       draggable_borders - borders->visible.right);
+    }
 
   if (flags & META_FRAME_ALLOWS_VERTICAL_RESIZE)
     {

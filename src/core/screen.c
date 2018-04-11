@@ -1607,6 +1607,35 @@ meta_screen_hide_tile_preview (MetaScreen *screen)
   meta_compositor_hide_tile_preview (screen->display->compositor);
 }
 
+gboolean
+meta_screen_has_tiled_window_for_monitor (MetaTileMode tile_mode, 
+                                          MetaWindow* window)
+{
+  MetaWindow *target;
+  MetaStack *stack;
+
+  if (tile_mode == META_TILE_NONE || tile_mode == META_TILE_MAXIMIZED)
+    return FALSE;
+
+  stack = window->screen->stack;
+
+  for (target = meta_stack_get_top (stack);
+       target;
+       target = meta_stack_get_below (stack, target, FALSE))
+    {
+      /* shaded or minimized is accounted for matching here.
+       */
+      if (//!target->shaded && !target->minimized &&
+        target != window &&
+        target->tile_mode == tile_mode &&
+        target->monitor == window->monitor &&
+        meta_window_get_workspace (target) == meta_window_get_workspace (window))
+        return TRUE;
+    }
+
+  return FALSE;
+}
+
 MetaWindow*
 meta_screen_get_mouse_window (MetaScreen  *screen,
                               MetaWindow  *not_this_one)
