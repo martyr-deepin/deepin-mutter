@@ -1561,7 +1561,7 @@ meta_screen_update_tile_preview_timeout (gpointer data)
       int monitor;
 
       monitor = meta_window_get_current_tile_monitor_number (window);
-      meta_window_get_current_tile_area (window, &tile_rect);
+      meta_window_get_current_tile_area_constrianted (window, &tile_rect);
       meta_compositor_show_tile_preview (screen->display->compositor,
                                          window, &tile_rect, monitor);
     }
@@ -1607,8 +1607,8 @@ meta_screen_hide_tile_preview (MetaScreen *screen)
   meta_compositor_hide_tile_preview (screen->display->compositor);
 }
 
-gboolean
-meta_screen_has_tiled_window_for_monitor (MetaTileMode tile_mode, 
+MetaWindow*
+meta_screen_get_tiled_window_for_monitor (MetaTileMode tile_mode, 
                                           MetaWindow* window)
 {
   MetaWindow *target;
@@ -1630,10 +1630,17 @@ meta_screen_has_tiled_window_for_monitor (MetaTileMode tile_mode,
         target->tile_mode == tile_mode &&
         target->monitor == window->monitor &&
         meta_window_get_workspace (target) == meta_window_get_workspace (window))
-        return TRUE;
+        return target;
     }
 
-  return FALSE;
+  return NULL;
+}
+
+gboolean
+meta_screen_has_tiled_window_for_monitor (MetaTileMode tile_mode, 
+                                          MetaWindow* window)
+{
+  return meta_screen_get_tiled_window_for_monitor (tile_mode, window) != NULL;
 }
 
 MetaWindow*

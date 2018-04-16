@@ -615,7 +615,10 @@ GList* meta_window_get_workspaces (MetaWindow *window);
 int meta_window_get_current_tile_monitor_number (MetaWindow *window);
 void meta_window_get_current_tile_area         (MetaWindow    *window,
                                                 MetaRectangle *tile_area);
-
+void meta_window_get_current_tile_area_constrianted (MetaWindow    *window,
+                                                     MetaRectangle *tile_area);
+MetaWindow* meta_screen_get_tiled_window_for_monitor (MetaTileMode tile_mode, 
+                                                      MetaWindow* window);
 
 gboolean meta_window_same_application (MetaWindow *window,
                                        MetaWindow *other_window);

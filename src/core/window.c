@@ -2972,13 +2972,12 @@ meta_window_tile (MetaWindow *window)
       meta_verbose ("another window is tiled in the same mode, disallow this request");
       window->tile_mode = META_TILE_NONE;
       meta_screen_update_tile_preview (window->screen, FALSE);
-      fprintf (stderr, "another window is tiled in the same mode, disallow this request\n");
       return;
     }
 
   meta_window_maximize_internal (window, directions, NULL);
-  meta_screen_update_tile_preview (window->screen, FALSE);
   meta_window_compute_tile_counterpart (window);
+  meta_screen_update_tile_preview (window->screen, FALSE);
 
   meta_window_move_resize_now (window);
 
@@ -3968,8 +3967,19 @@ meta_window_move_resize_now (MetaWindow  *window)
   if (!window->calc_placement && META_WINDOW_TILED_SIDE_BY_SIDE (window))
     {
       MetaRectangle tile_area;
-      meta_window_get_current_tile_area (window, &tile_area);
-      rect.width = tile_area.width;
+      int tile_monitor_number;
+
+      tile_monitor_number = meta_window_get_current_tile_monitor_number (window);
+      meta_window_get_work_area_for_monitor (window, tile_monitor_number, &tile_area);
+      rect.width = tile_area.width / 2;
+
+      if (window->tile_counterpart != NULL)
+        {
+          MetaWindow *part = window->tile_counterpart; 
+
+          if (!(part->minimized || part->shaded || part->hidden))
+              rect.width = tile_area.width - part->rect.width;
+        }
     }
 
   meta_window_move_resize_frame (window, FALSE,
@@ -6002,6 +6012,34 @@ update_resize (MetaWindow *window,
   /* Store the latest resize time, if we actually resized. */
   if (window->rect.width != old.width || window->rect.height != old.height)
     g_get_current_time (&window->display->grab_last_moveresize_time);
+
+  if (META_WINDOW_TILED_SIDE_BY_SIDE (window) && window->tile_counterpart)
+    {
+      //TODO: improve precodition checks and gravity and min width constriant
+      //and state (minimized, etc)
+      // precondition: new_h should be the same as the old one
+      // new_w should be less or equal to workarea.width
+    
+      MetaWindow *part = window->tile_counterpart; 
+      MetaRectangle tile_area;
+      int tile_monitor_number;
+
+      if (part->minimized || part->shaded || part->hidden)
+        return;
+
+      tile_monitor_number = meta_window_get_current_tile_monitor_number (window);
+      meta_window_get_work_area_for_monitor (window, tile_monitor_number, &tile_area);
+
+      if (ABS(part->rect.width + old.width - tile_area.width) >= 8)
+        return;
+
+      //TODO: min width constrain
+      
+      tile_area.width -= window->rect.width;
+
+      meta_window_resize_frame_with_gravity (part, TRUE, tile_area.width, new_h, gravity);
+    }
+
 }
 
 static void
@@ -6292,6 +6330,41 @@ meta_window_get_current_tile_area (MetaWindow    *window,
 
   if (window->tile_mode == META_TILE_RIGHT)
     tile_area->x += tile_area->width;
+}
+
+void
+meta_window_get_current_tile_area_constrianted (MetaWindow    *window,
+                                                MetaRectangle *tile_area)
+{
+  MetaRectangle adjust_rect;
+  MetaWindow* counterpart;
+  int tile_monitor_number;
+
+  g_return_if_fail (window->tile_mode != META_TILE_NONE);
+
+  tile_monitor_number = meta_window_get_current_tile_monitor_number (window);
+
+  meta_window_get_work_area_for_monitor (window, tile_monitor_number, tile_area);
+  adjust_rect = *tile_area;
+
+  if (window->tile_mode == META_TILE_LEFT  ||
+      window->tile_mode == META_TILE_RIGHT)
+    tile_area->width /= 2;
+
+  counterpart = meta_screen_get_tiled_window_for_monitor (
+          (window->tile_mode == META_TILE_LEFT ? META_TILE_RIGHT: META_TILE_LEFT),
+          window);
+
+  if (counterpart != NULL)
+    {
+      if (counterpart->minimized || counterpart->shaded || counterpart->hidden)
+        return;
+
+      tile_area->width = adjust_rect.width - counterpart->rect.width;
+    }
+
+  if (window->tile_mode == META_TILE_RIGHT)
+    tile_area->x += adjust_rect.width - tile_area->width;
 }
 
 gboolean
