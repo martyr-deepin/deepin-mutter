@@ -152,26 +152,20 @@ static void meta_blurred_background_actor_dispose (GObject *object)
     priv->disposed = TRUE;
     meta_verbose ("%s: total = %d\n", __func__, --total_actors);
     set_clip_region (self, NULL);
-    if (priv->fbTex) {
-        cogl_object_unref (priv->fbTex);
-        cogl_object_unref (priv->fbTex2);
-        cogl_object_unref (priv->fb);
-        cogl_object_unref (priv->fb2);
-        priv->fbTex = NULL;
-    }
-    meta_blurred_background_actor_set_background (self, NULL);
-    if (priv->pipeline) {
-        cogl_object_unref (priv->pipeline);
-        cogl_object_unref (priv->pipeline2);
-        cogl_object_unref (priv->pl_passthrough);
-        cogl_object_unref (priv->pl_masked);
-        priv->pipeline = NULL;
-        priv->pipeline2 = NULL;
-    }
+    g_clear_pointer (&priv->fbTex, cogl_object_unref);
+    g_clear_pointer (&priv->fbTex2, cogl_object_unref);
+    g_clear_pointer (&priv->fb, cogl_object_unref);
+    g_clear_pointer (&priv->fb2, cogl_object_unref);
+
+    g_clear_pointer (&priv->pipeline, cogl_object_unref);
+    g_clear_pointer (&priv->pipeline2, cogl_object_unref);
+    g_clear_pointer (&priv->pl_passthrough, cogl_object_unref);
+    g_clear_pointer (&priv->pl_masked, cogl_object_unref);
 
     g_clear_pointer (&priv->blur_mask, cairo_surface_destroy);
     g_clear_pointer (&priv->blur_mask_texture, cogl_object_unref);
 
+    meta_blurred_background_actor_set_background (self, NULL);
     G_OBJECT_CLASS (meta_blurred_background_actor_parent_class)->dispose (object);
 }
 
