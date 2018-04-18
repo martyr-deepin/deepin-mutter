@@ -768,6 +768,7 @@ static void
 apply_device_settings (MetaInputSettings  *input_settings,
                        ClutterInputDevice *device)
 {
+#if 0
   update_mouse_left_handed (input_settings, device);
   update_device_speed (input_settings, device);
   update_device_natural_scroll (input_settings, device);
@@ -780,6 +781,7 @@ apply_device_settings (MetaInputSettings  *input_settings,
   update_touchpad_click_method (input_settings, device);
 
   update_trackball_scroll_button (input_settings, device);
+#endif
 }
 
 static void
@@ -831,7 +833,9 @@ meta_input_settings_constructed (GObject *object)
   MetaInputSettings *input_settings = META_INPUT_SETTINGS (object);
 
   apply_device_settings (input_settings, NULL);
+#if 0
   update_keyboard_repeat (input_settings);
+#endif
   check_mappable_devices (input_settings);
 }
 
