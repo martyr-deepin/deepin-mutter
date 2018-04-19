@@ -5893,6 +5893,8 @@ update_resize (MetaWindow *window,
   int gravity;
   MetaRectangle old;
   double remaining = 0;
+  gboolean check_counterpart = FALSE;
+  MetaRectangle tile_area;
 
   window->display->grab_latest_motion_x = x;
   window->display->grab_latest_motion_y = y;
@@ -6007,28 +6009,46 @@ update_resize (MetaWindow *window,
                                           snap,
                                           FALSE);
 
+  check_counterpart = META_WINDOW_TILED_SIDE_BY_SIDE (window) && window->tile_counterpart;
+  if (check_counterpart)
+    {
+      MetaWindow *part = window->tile_counterpart; 
+      int tile_monitor_number;
+
+      tile_monitor_number = meta_window_get_current_tile_monitor_number (window);
+      meta_window_get_work_area_for_monitor (window, tile_monitor_number, &tile_area);
+
+      if (!(part->minimized || part->shaded || part->hidden))
+        {
+          MetaRectangle min_rect, max_rect;
+
+          min_rect.width = part->size_hints.min_width;
+          min_rect.height = part->size_hints.min_height;
+          max_rect.width = part->size_hints.max_width;
+          max_rect.height = part->size_hints.max_height;
+
+          meta_window_client_rect_to_frame_rect (part, &min_rect, &min_rect);
+          meta_window_client_rect_to_frame_rect (part, &max_rect, &max_rect);
+
+          //TODOE: new_w could be altered by constriants during resize, this may 
+          //be not accurate
+          if (tile_area.width - new_w < min_rect.width ||
+                  tile_area.width - new_w > max_rect.width)
+            return;
+        }
+    }
+
   meta_window_resize_frame_with_gravity (window, TRUE, new_w, new_h, gravity);
 
   /* Store the latest resize time, if we actually resized. */
   if (window->rect.width != old.width || window->rect.height != old.height)
     g_get_current_time (&window->display->grab_last_moveresize_time);
 
-  if (META_WINDOW_TILED_SIDE_BY_SIDE (window) && window->tile_counterpart)
+  if (check_counterpart)
     {
-      //TODO: improve precodition checks and gravity and min width constriant
-      //and state (minimized, etc)
-      // precondition: new_h should be the same as the old one
-      // new_w should be less or equal to workarea.width
-    
       MetaWindow *part = window->tile_counterpart; 
-      MetaRectangle tile_area;
-      int tile_monitor_number;
-
       if (part->minimized || part->shaded || part->hidden)
         return;
-
-      tile_monitor_number = meta_window_get_current_tile_monitor_number (window);
-      meta_window_get_work_area_for_monitor (window, tile_monitor_number, &tile_area);
 
       if (ABS(part->rect.width + old.width - tile_area.width) >= 8)
         return;

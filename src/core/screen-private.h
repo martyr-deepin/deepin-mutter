@@ -232,5 +232,7 @@ int meta_screen_monitor_index_to_xinerama_index (MetaScreen *screen,
                                                  int         index);
 gboolean meta_screen_has_tiled_window_for_monitor (MetaTileMode tile_mode, 
                                                    MetaWindow* window);
+MetaWindow* meta_screen_get_tiled_window_for_monitor (MetaTileMode tile_mode, 
+                                                      MetaWindow* window);
 
 #endif
