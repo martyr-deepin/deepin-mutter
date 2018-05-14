@@ -1,3 +1,23 @@
+##  3.20.30 (2018-05-14)
+
+
+#### Bug Fixes
+
+*   fix cogl resources leak ([46e8d6de](46e8d6de))
+*   deref texture causes crash when screen changes ([5e736ffc](5e736ffc))
+*   update interactive tile check ([1df8b10d](1df8b10d))
+
+#### Features
+
+*   pair resizing for dual tiling windows ([518648fc](518648fc))
+*   support tile effect ([4524e5a0](4524e5a0))
+*   use flag to control background blurring ([ba57c864](ba57c864))
+* **tile:**
+  *  honor size limits when do tile resizing ([f40bdb6f](f40bdb6f))
+  *  allow directional resize in tiling mode ([b5dd57b6](b5dd57b6))
+
+
+
 ##  3.20.29 (2018-03-22)
 
 
