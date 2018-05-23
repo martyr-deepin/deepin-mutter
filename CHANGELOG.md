@@ -1,3 +1,12 @@
+##  3.20.29.1 (2018-05-23)
+
+
+#### Bug Fixes
+
+*   disable settings update on startup ([bc10b557](bc10b557))
+
+
+
 ##  3.20.29 (2018-03-22)
 
 
