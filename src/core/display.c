@@ -1957,6 +1957,16 @@ meta_display_end_grab_op (MetaDisplay *display,
   meta_topic (META_DEBUG_WINDOW_OPS,
               "Ending grab op %u at time %u\n", grab_op, timestamp);
 
+  meta_topic (META_DEBUG_WINDOW_OPS,
+              "grab_have_pointer %d", display->grab_have_pointer);
+
+  /*if (display->grab_have_pointer)*/
+    {
+      MetaBackend *backend = meta_get_backend ();
+      meta_backend_ungrab_device (backend, META_VIRTUAL_CORE_POINTER_ID, timestamp);
+    }
+
+
   if (display->event_route == META_EVENT_ROUTE_NORMAL ||
       display->event_route == META_EVENT_ROUTE_COMPOSITOR_GRAB)
     return;

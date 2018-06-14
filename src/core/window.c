@@ -6049,6 +6049,7 @@ meta_window_handle_mouse_grab_op_event  (MetaWindow         *window,
              window->display->grab_button != (int) event->button.button) ||
             meta_grab_op_is_keyboard (window->display->grab_op))
           {
+                  meta_verbose("GRAB: %s: CLUTTER_BUTTON_PRESS", __func__);
             end_grab_op (window, event);
             return FALSE;
           }
@@ -6066,22 +6067,28 @@ meta_window_handle_mouse_grab_op_event  (MetaWindow         *window,
           (meta_grab_op_is_mouse (window->display->grab_op) &&
            window->display->grab_button == (int) event->button.button) ||
           event->button.button == (unsigned int) meta_prefs_get_mouse_button_resize ())
+      {
+                  meta_verbose("GRAB: %s: CLUTTER_BUTTON_RELEASE", __func__);
         end_grab_op (window, event);
+      }
 
       return TRUE;
 
     case CLUTTER_TOUCH_BEGIN:
+      meta_verbose ("%s: CLUTTER_TOUCH_BEGIN\n", __func__);
       /* This will only catch the keybinding and menu cases, just deal with this
        * like a CLUTTER_TOUCH_UPDATE rather than a CLUTTER_BUTTON_PRESS, and
        * wait until CLUTTER_TOUCH_END to undo the grab, just so the window
        * doesn't warp below the finger and remain there.
        */
     case CLUTTER_TOUCH_UPDATE:
+      meta_verbose ("%s: CLUTTER_TOUCH_UPDATE\n", __func__);
       if (!meta_display_is_pointer_emulating_sequence (window->display, sequence))
         return FALSE;
 
       /* Fall through */
     case CLUTTER_MOTION:
+      meta_verbose ("%s: CLUTTER_MOTION\n", __func__);
       modifier_state = clutter_event_get_state (event);
       clutter_event_get_coords (event, &x, &y);
 
