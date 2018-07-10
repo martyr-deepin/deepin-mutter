@@ -2910,8 +2910,8 @@ meta_window_is_monitor_sized (MetaWindow *window)
       meta_window_get_frame_rect (window, &window_rect);
       meta_screen_get_monitor_geometry (window->screen, window->monitor->number, &monitor_rect);
 
-      if (meta_rectangle_equal (&window_rect, &monitor_rect))
-        return TRUE;
+      /*if (meta_rectangle_equal (&window_rect, &monitor_rect))*/
+        /*return TRUE;*/
     }
 
   return FALSE;
