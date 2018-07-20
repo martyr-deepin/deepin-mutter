@@ -1,3 +1,13 @@
+<a name=""></a>
+##  3.20.31 (2018-07-20)
+
+
+#### Bug Fixes
+
+*   disable settings update on startup ([906c2310](906c2310))
+* **workaround:**  disable monitor-aware unredirect ([5b6f0364](5b6f0364))
+
+
 ##  3.20.30 (2018-05-14)
 
 
