@@ -1,4 +1,14 @@
 <a name=""></a>
+##  3.20.32 (2018-08-01)
+
+
+#### Bug Fixes
+
+*   better texture error handling ([bb7f60f4](bb7f60f4))
+
+
+
+<a name=""></a>
 ##  3.20.31 (2018-07-20)
 
 
