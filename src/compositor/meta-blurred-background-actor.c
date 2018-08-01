@@ -273,11 +273,13 @@ static void create_texture (MetaBlurredBackgroundActor* self)
     CoglError *error = NULL;
     if (cogl_texture_allocate(priv->fbTex, &error) == FALSE) {
         meta_verbose ("cogl_texture_allocat failed: %s\n", error->message);
+        goto error;
     }
 
     priv->fb = cogl_offscreen_new_with_texture(priv->fbTex);
     if (cogl_framebuffer_allocate(priv->fb, &error) == FALSE) {
         meta_verbose ("cogl_framebuffer_allocate failed: %s\n", error->message);
+        goto error;
     }
 
     cogl_framebuffer_orthographic(priv->fb, 0, 0,
@@ -288,15 +290,24 @@ static void create_texture (MetaBlurredBackgroundActor* self)
 
     if (cogl_texture_allocate(priv->fbTex2, &error) == FALSE) {
         meta_verbose ("cogl_texture_allocat failed: %s\n", error->message);
+        goto error;
     }
 
     priv->fb2 = cogl_offscreen_new_with_texture(priv->fbTex2);
     if (cogl_framebuffer_allocate(priv->fb2, &error) == FALSE) {
         meta_verbose ("cogl_framebuffer_allocate failed: %s\n", error->message);
+        goto error;
     }
 
     cogl_framebuffer_orthographic(priv->fb2, 0, 0,
             width, height, -1., 1.);
+    return;
+
+error:
+    g_clear_pointer (&priv->fbTex, cogl_object_unref);
+    g_clear_pointer (&priv->fbTex2, cogl_object_unref);
+    g_clear_pointer (&priv->fb, cogl_object_unref);
+    g_clear_pointer (&priv->fb2, cogl_object_unref);
 }
 
 static int get_time()
@@ -354,17 +365,20 @@ static void setup_pipeline (MetaBlurredBackgroundActor   *self,
 
     if (priv->changed) {
         CoglPipelineWrapMode wrap_mode;
+        if (priv->pipeline != NULL)
+            cogl_pipeline_set_layer_texture (priv->pipeline, 0, NULL);
 
         priv->texture = meta_background_get_texture (priv->background,
                 priv->monitor,
                 &priv->texture_area,
                 &wrap_mode);
 
+        g_assert (priv->texture != NULL);
         cogl_primitive_texture_set_auto_mipmap (priv->texture, TRUE);
 
         gboolean need_reblur = (priv->changed & (CHANGED_EFFECTS|CHANGED_BACKGROUND));
 
-        if (need_reblur && priv->radius) {
+        if (priv->texture && need_reblur && priv->radius) {
             cogl_pipeline_set_layer_texture (priv->pipeline, 0, priv->texture);
             cogl_pipeline_set_layer_filters (priv->pipeline, 0,
                     COGL_PIPELINE_FILTER_LINEAR_MIPMAP_LINEAR,
@@ -615,6 +629,8 @@ static void meta_blurred_background_actor_init (MetaBlurredBackgroundActor *self
             META_TYPE_BLURRED_BACKGROUND_ACTOR,
             MetaBlurredBackgroundActorPrivate);
 
+    priv->pipeline = priv->pipeline2 = NULL;
+
     priv->radius = 0; // means no blur
     priv->rounds = 1;
     priv->blurred = TRUE;
@@ -672,7 +688,7 @@ static void invalidate_pipeline (MetaBlurredBackgroundActor *self,
 static void on_background_changed (MetaBackground      *background,
         MetaBlurredBackgroundActor *self)
 {
-    invalidate_pipeline (self, CHANGED_ALL);
+    invalidate_pipeline (self, CHANGED_BACKGROUND);
     clutter_actor_queue_redraw (CLUTTER_ACTOR (self));
 }
 
@@ -702,7 +718,7 @@ void meta_blurred_background_actor_set_background (MetaBlurredBackgroundActor *s
                 G_CALLBACK (on_background_changed), self);
     }
 
-    invalidate_pipeline (self, CHANGED_ALL);
+    invalidate_pipeline (self, CHANGED_BACKGROUND);
     clutter_actor_queue_redraw (CLUTTER_ACTOR (self));
 }
 
