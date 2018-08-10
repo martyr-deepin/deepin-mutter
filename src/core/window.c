@@ -3967,19 +3967,8 @@ meta_window_move_resize_now (MetaWindow  *window)
   if (!window->calc_placement && META_WINDOW_TILED_SIDE_BY_SIDE (window))
     {
       MetaRectangle tile_area;
-      int tile_monitor_number;
-
-      tile_monitor_number = meta_window_get_current_tile_monitor_number (window);
-      meta_window_get_work_area_for_monitor (window, tile_monitor_number, &tile_area);
-      rect.width = tile_area.width / 2;
-
-      if (window->tile_counterpart != NULL)
-        {
-          MetaWindow *part = window->tile_counterpart; 
-
-          if (!(part->minimized || part->shaded || part->hidden))
-              rect.width = tile_area.width - part->rect.width;
-        }
+      meta_window_get_current_tile_area (window, &tile_area);
+      rect.width = tile_area.width;
     }
 
   meta_window_move_resize_frame (window, FALSE,
@@ -6009,7 +5998,8 @@ update_resize (MetaWindow *window,
                                           snap,
                                           FALSE);
 
-  check_counterpart = META_WINDOW_TILED_SIDE_BY_SIDE (window) && window->tile_counterpart;
+  // disable it in 15.7
+  /*check_counterpart = META_WINDOW_TILED_SIDE_BY_SIDE (window) && window->tile_counterpart;*/
   if (check_counterpart)
     {
       MetaWindow *part = window->tile_counterpart; 

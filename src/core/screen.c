@@ -1561,7 +1561,7 @@ meta_screen_update_tile_preview_timeout (gpointer data)
       int monitor;
 
       monitor = meta_window_get_current_tile_monitor_number (window);
-      meta_window_get_current_tile_area_constrianted (window, &tile_rect);
+      meta_window_get_current_tile_area (window, &tile_rect);
       meta_compositor_show_tile_preview (screen->display->compositor,
                                          window, &tile_rect, monitor);
     }
