@@ -1,4 +1,14 @@
 <a name=""></a>
+##  3.20.34 (2018-08-10)
+
+
+#### Bug Fixes
+
+*   disable pair resizing for dual-tiling mode ([7ec798d9](7ec798d9))
+
+
+
+<a name=""></a>
 ##  3.20.33 (2018-08-10)
 
 
