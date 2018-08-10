@@ -1,4 +1,14 @@
 <a name=""></a>
+##  3.20.33 (2018-08-10)
+
+
+#### Bug Fixes
+
+* **workaround:**  support drag-to-move by CM ([d010d004](d010d004))
+
+
+
+<a name=""></a>
 ##  3.20.32 (2018-08-01)
 
 
