@@ -1,3 +1,13 @@
+<a name="3.20.35"></a>
+## 3.20.35 (2018-11-09)
+
+
+#### Bug Fixes
+
+*   theme rendering blurry in scaled mode ([fdd731a7](fdd731a7), closes [#99](99))
+
+
+
 <a name=""></a>
 ##  3.20.34 (2018-08-10)
 
