@@ -1086,8 +1086,12 @@ handle_button_press_event (MetaUIFrame *frame,
       event->button == 1 &&
       event->click_count == 2)
     {
+      /* release grab after double click handler to prevent a ungrab enter 
+       * notify send to window behind 
+       */
+      meta_frame_double_click_event (frame, event);
       meta_core_end_grab_op (display, event->time);
-      return meta_frame_double_click_event (frame, event);
+      return TRUE;
     }
 
   if (meta_core_get_grab_op (display) != META_GRAB_OP_NONE)
