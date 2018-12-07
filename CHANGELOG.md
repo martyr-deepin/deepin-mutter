@@ -1,3 +1,13 @@
+<a name="3.20.36"></a>
+## 3.20.36 (2018-12-07)
+
+
+#### Bug Fixes
+
+*   ungrab after double click handler ([aa48d349](aa48d349))
+
+
+
 <a name="3.20.35"></a>
 ## 3.20.35 (2018-11-09)
 
