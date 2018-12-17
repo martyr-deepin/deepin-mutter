@@ -6150,7 +6150,7 @@ meta_window_handle_mouse_grab_op_event  (MetaWindow         *window,
              window->display->grab_button != (int) event->button.button) ||
             meta_grab_op_is_keyboard (window->display->grab_op))
           {
-                  meta_verbose("GRAB: %s: CLUTTER_BUTTON_PRESS", __func__);
+            meta_verbose("GRAB: %s: CLUTTER_BUTTON_PRESS\n", __func__);
             end_grab_op (window, event);
             return FALSE;
           }
@@ -6159,7 +6159,11 @@ meta_window_handle_mouse_grab_op_event  (MetaWindow         *window,
 
     case CLUTTER_TOUCH_END:
       if (meta_display_is_pointer_emulating_sequence (window->display, sequence))
-        end_grab_op (window, event);
+        {
+          meta_verbose("GRAB: %s: CLUTTER_TOUCH_END\n", __func__);
+          if (!meta_grab_op_is_moving(window->display->grab_op))
+            end_grab_op (window, event);
+        }
 
       return TRUE;
 
@@ -6169,7 +6173,7 @@ meta_window_handle_mouse_grab_op_event  (MetaWindow         *window,
            window->display->grab_button == (int) event->button.button) ||
           event->button.button == (unsigned int) meta_prefs_get_mouse_button_resize ())
       {
-                  meta_verbose("GRAB: %s: CLUTTER_BUTTON_RELEASE", __func__);
+        meta_verbose("GRAB: %s: CLUTTER_BUTTON_RELEASE\n", __func__);
         end_grab_op (window, event);
       }
 
