@@ -1,3 +1,13 @@
+<a name=""></a>
+##  3.20.37 (2018-12-17)
+
+
+#### Bug Fixes
+
+* **workaround:**  prevent weird touch end behaviour ([cb910cb4](cb910cb4))
+
+
+
 <a name="3.20.36"></a>
 ## 3.20.36 (2018-12-07)
 
