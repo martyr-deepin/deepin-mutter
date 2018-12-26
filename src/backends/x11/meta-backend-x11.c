@@ -418,6 +418,7 @@ x_event_source_new (MetaBackend *backend)
 static void
 take_touch_grab (MetaBackend *backend)
 {
+#if 0
   MetaBackendX11 *x11 = META_BACKEND_X11 (backend);
   MetaBackendX11Private *priv = meta_backend_x11_get_instance_private (x11);
   unsigned char mask_bits[XIMaskLen (XI_LASTEVENT)] = { 0 };
@@ -431,6 +432,7 @@ take_touch_grab (MetaBackend *backend)
   XIGrabTouchBegin (priv->xdisplay, META_VIRTUAL_CORE_POINTER_ID,
                     DefaultRootWindow (priv->xdisplay),
                     False, &mask, 1, &mods);
+#endif
 }
 
 static void
@@ -838,9 +840,9 @@ meta_backend_x11_select_stage_events (MetaBackend *backend)
        * When we're a nested application, we want to behave like any other
        * application, so select these events like normal apps do.
        */
-      XISetMask (mask.mask, XI_TouchBegin);
-      XISetMask (mask.mask, XI_TouchEnd);
-      XISetMask (mask.mask, XI_TouchUpdate);
+      /*XISetMask (mask.mask, XI_TouchBegin);*/
+      /*XISetMask (mask.mask, XI_TouchEnd);*/
+      /*XISetMask (mask.mask, XI_TouchUpdate);*/
     }
 
   XISelectEvents (priv->xdisplay, xwin, &mask, 1);
