@@ -613,9 +613,13 @@ update_device_display (MetaInputSettings  *input_settings,
   input_settings_class = META_INPUT_SETTINGS_GET_CLASS (input_settings);
   output = meta_input_settings_find_output (input_settings, settings, device);
 
-  if (output)
-    meta_monitor_manager_get_monitor_matrix (priv->monitor_manager,
-                                             output, matrix);
+  // 未找到output设备时不更新输入设备的matrix。因为此设备的matrix可能被其它应用更新
+  // 在未找到output时更新matrix会导致其它应用的行为被覆盖（例如在屏幕旋转时更新了触摸屏设备的matrix）
+  if (!output)
+    return;
+
+  meta_monitor_manager_get_monitor_matrix (priv->monitor_manager,
+                                           output, matrix);
 
   input_settings_class->set_matrix (input_settings, device, matrix);
 }
