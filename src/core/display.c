@@ -1183,7 +1183,7 @@ meta_get_display (void)
 static inline gboolean
 grab_op_is_window (MetaGrabOp op)
 {
-  return GRAB_OP_GET_BASE_TYPE (op) == META_GRAB_OP_WINDOW_BASE;
+  return META_GRAB_OP_GET_BASE_TYPE (op) == META_GRAB_OP_WINDOW_BASE;
 }
 
 gboolean
@@ -1783,7 +1783,7 @@ get_first_freefloating_window (MetaWindow *window)
 static MetaEventRoute
 get_event_route_from_grab_op (MetaGrabOp op)
 {
-  switch (GRAB_OP_GET_BASE_TYPE (op))
+  switch (META_GRAB_OP_GET_BASE_TYPE (op))
     {
     case META_GRAB_OP_NONE:
       /* begin_grab_op shouldn't be called with META_GRAB_OP_NONE. */

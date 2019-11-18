@@ -1740,7 +1740,7 @@ meta_screen_get_monitor_for_point (MetaScreen *screen,
 
   for (i = 0; i < screen->n_monitor_infos; i++)
     {
-      if (POINT_IN_RECT (x, y, screen->monitor_infos[i].rect))
+      if (META_POINT_IN_RECT (x, y, screen->monitor_infos[i].rect))
         return &screen->monitor_infos[i];
     }
 

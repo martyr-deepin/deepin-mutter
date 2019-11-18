@@ -1621,19 +1621,19 @@ get_control (MetaUIFrame *frame, int root_x, int root_y)
   meta_ui_frame_calc_geometry (frame, &fgeom);
   get_client_rect (&fgeom, &client);
 
-  if (POINT_IN_RECT (x, y, client))
+  if (META_POINT_IN_RECT  (x, y, client))
     return META_FRAME_CONTROL_CLIENT_AREA;
 
-  if (POINT_IN_RECT (x, y, fgeom.close_rect.clickable))
+  if (META_POINT_IN_RECT  (x, y, fgeom.close_rect.clickable))
     return META_FRAME_CONTROL_DELETE;
 
-  if (POINT_IN_RECT (x, y, fgeom.min_rect.clickable))
+  if (META_POINT_IN_RECT  (x, y, fgeom.min_rect.clickable))
     return META_FRAME_CONTROL_MINIMIZE;
 
-  if (POINT_IN_RECT (x, y, fgeom.menu_rect.clickable))
+  if (META_POINT_IN_RECT  (x, y, fgeom.menu_rect.clickable))
     return META_FRAME_CONTROL_MENU;
 
-  if (POINT_IN_RECT (x, y, fgeom.appmenu_rect.clickable))
+  if (META_POINT_IN_RECT  (x, y, fgeom.appmenu_rect.clickable))
     return META_FRAME_CONTROL_APPMENU;
 
   flags = meta_frame_get_flags (frame->meta_window->frame);
@@ -1645,7 +1645,7 @@ get_control (MetaUIFrame *frame, int root_x, int root_y)
     (flags & META_FRAME_ALLOWS_TILED_RESIZE_LEFT) != 0 ||
     (flags & META_FRAME_ALLOWS_TILED_RESIZE_RIGHT) != 0;
 
-  if (POINT_IN_RECT (x, y, fgeom.title_rect))
+  if (META_POINT_IN_RECT  (x, y, fgeom.title_rect))
     {
       if (has_vert && y <= TOP_RESIZE_HEIGHT && has_north_resize)
         return META_FRAME_CONTROL_RESIZE_N;
@@ -1653,7 +1653,7 @@ get_control (MetaUIFrame *frame, int root_x, int root_y)
         return META_FRAME_CONTROL_TITLE;
     }
 
-  if (POINT_IN_RECT (x, y, fgeom.max_rect.clickable))
+  if (META_POINT_IN_RECT  (x, y, fgeom.max_rect.clickable))
     {
       if (flags & META_FRAME_MAXIMIZED)
         return META_FRAME_CONTROL_UNMAXIMIZE;
